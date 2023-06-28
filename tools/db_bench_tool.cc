@@ -2543,6 +2543,23 @@ class CombinedStats {
   std::vector<double> throughput_mbs_;
 };
 
+class NanoTimeStampGenerator {
+private: 
+  // std::atomic<uint64_t> timestamp_;
+  const std::shared_ptr<SystemClock> clock_;
+public:
+// env_->GetSystemClock().get()
+  NanoTimeStampGenerator(const std::shared_ptr<SystemClock>& clock) : clock_(clock) {}
+  // uint64_t Get() const { return timestamp_.load(); }
+  Slice Allocate(char* scratch) {
+    assert(FLAGS_user_timestamp_size == 8);
+    assert(scratch);
+    uint64_t ts = clock_->NowNanos();
+    EncodeFixed64(scratch, ts);
+    return Slice(scratch, FLAGS_user_timestamp_size);
+  }
+};
+
 class TimestampEmulator {
  private:
   std::atomic<uint64_t> timestamp_;
