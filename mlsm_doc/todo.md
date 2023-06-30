@@ -71,3 +71,8 @@ CompactionJobStat is a struct we can use to do statistics about lifetime for eac
 in one compaction.
 
 
+What does force threshold mean? 
+Need to figure out how these parameters work.
+
+Trying to figure out how GC can be triggered. 
+Right now I am not seeing GC triggered.

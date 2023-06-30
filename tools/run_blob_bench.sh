@@ -202,13 +202,13 @@ PARAMS_GC="$PARAMS \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size"
 
 # bulk load (using fillrandom) + compact
-# env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh bulkload "$PARAMS"
+env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh bulkload "$PARAMS"
 
 # overwrite + waitforcompaction
 # env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 
 # readwhilewriting
-env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
+# env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
 # echo "$PARAMS_GC"
 
 # fwdrangewhilewriting
