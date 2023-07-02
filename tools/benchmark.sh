@@ -667,9 +667,9 @@ function run_bulkload {
   echo "Compacting..."
   log_file_name=$output_dir/benchmark_bulkload_compact.log
   time_cmd=$( get_cmd $log_file_name.time )
-  cmd="$time_cmd ./db_bench --benchmarks=compact,stats \
+  cmd="$time_cmd  ./db_bench --benchmarks=compact,stats \
        --use_existing_db=1 \
-       --disable_auto_compactions=1 \
+       --disable_auto_compactions=0 \
        --sync=0 \
        $params_w \
        --threads=1 \

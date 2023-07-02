@@ -205,7 +205,7 @@ PARAMS_GC="$PARAMS \
 env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh bulkload "$PARAMS"
 
 # overwrite + waitforcompaction
-# env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
+env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 
 # readwhilewriting
 # env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
