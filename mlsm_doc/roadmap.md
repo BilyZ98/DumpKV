@@ -11,3 +11,13 @@ Implementation -> performance testing
     |                   |
     ----------         \ /
 
+
+
+Metrics to monitor 
+write amplification 
+QPS
+
+Key distribution 
+
+
+Different workload 

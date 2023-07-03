@@ -14,7 +14,7 @@ function call_run_blob() {
    NUM_KEYS=$num_keys DB_DIR=$db_dir \
    OUTPUT_DIR=$output_dir ENABLE_BLOB_FILES=$enable_blob_file \
    ENABLE_BLOB_GC=$enable_blob_gc BLOB_GC_AGE_CUTOFF=$age_cutoff \
-   WRITE_BUFFER_SIZE=$write_buffer_size ./tools/run_blob_bench.sh
+   WRITE_BUFFER_SIZE=$write_buffer_size NUM_THREADS=1 ./tools/run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
  #   NUM_KEYS=5000000 DB_DIR=/tmp/test_blob \
@@ -24,7 +24,7 @@ function call_run_blob() {
 
 
 # with_gc and without_gc
-db_dir=/mnt/d/mlsm/test_blob
+db_dir=/mnt/nvme0n1/mlsm/test_blob
 with_gc_dir=${db_dir}/with_gc
 num_keys=5000000
 enable_blob_file=1
