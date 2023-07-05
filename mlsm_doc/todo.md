@@ -130,3 +130,52 @@ parameter blob_gc_age_cut_off
 
 Also, current solution of garbage collection cannot GC recent hot writing keys
 how can I demonstrate this ?
+
+
+Let's read some paper now .
+
+
+How can I deal with cold start ? 
+Do I need to use offline learning ? 
+
+
+There is difference between cache and the lifetime of keys 
+
+
+So how can we collect the lifetime data to train the model ? 
+What's the most naive way to collect data ? 
+Trace information ?
+
+
+Let's just use offline training now. 
+If we have good results then we can come up with new ways to 
+use online learning .
+
+
+I need to write a script or function to  gather lifetime of each key .
+
+
+If I get the lifetime of the key, what's my strategy to arrange the 
+blob values when GC happens ? And Can I also prioritize the GC time ?
+
+So the model need to learn the lifetime distribution of keys.
+To simplify the prediction task we can do classification of lifetime
+of keys. 
+We can give two classifications which are short and long. How to quantify
+short and long ? 
+
+
+The ideal solution is that model can predict the exact lifetime of 
+keys. 
+
+
+I have a sense of urgency and I need to be fast in case other 
+two APs to whom I share my ideas to working faster..
+
+Find out why trace_analyzer doesn't output time_series data
+
+
+
+Was thinking about adding another trace that can collect what keys 
+are GCed or involved during compaction. 
+

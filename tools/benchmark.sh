@@ -36,6 +36,7 @@ function display_usage() {
   echo -e "\trevrangewhilemerging"
   echo -e "\trandomtransaction"
   echo -e "\tuniversal_compaction"
+  echo -e "\tmixgraph"
   echo -e "\tdebug"
   echo ""
   echo "Generic enviroment Variables:"
@@ -919,6 +920,40 @@ function run_change {
   summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
 }
 
+
+# asume mixgraph workload 
+function run_change_with_trace {
+  output_name=$1
+  grep_name=$2
+  benchmarks=$3
+  op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  echo "Do $num_keys random $output_name"
+  log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
+  time_cmd=$( get_cmd $log_file_name.time )
+  cmd="$time_cmd ./db_bench --benchmarks=$benchmarks,stats \
+       --use_existing_db=1 \
+       --sync=$syncval \
+       $params_w \
+       --threads=$num_threads \
+       --merge_operator=\"put\" \
+       --seed=$( date +%s ) \
+       --report_file=${log_file_name}.r.csv \
+       --trace_file=${op_trace_file_name} \
+       --mix_get_ratio=0.5 \
+       --mix_put_ratio=0.5 \
+       2>&1 | tee -a $log_file_name"
+  if [[ "$job_id" != "" ]]; then
+    echo "Job ID: ${job_id}" > $log_file_name
+    echo $cmd | tee -a $log_file_name
+  else
+    echo $cmd | tee $log_file_name
+  fi
+  start_stats $log_file_name.stats
+  eval $cmd
+  stop_stats $log_file_name.stats
+  summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
+}
+
 function run_filluniquerandom {
   echo "Loading $num_keys unique keys randomly"
   log_file_name=$output_dir/benchmark_filluniquerandom.log
@@ -1109,6 +1144,8 @@ for job in ${jobs[@]}; do
   start=$(now)
   if [ $job = bulkload ]; then
     run_bulkload
+  elif [ $job = mixgraph ]; then
+    run_change_with_trace mixgraph mixgraph mixgraph,waitforcompaction
   elif [ $job = flush_mt_l0 ]; then
     run_lsm flush_mt_l0
   elif [ $job = waitforcompaction ]; then
