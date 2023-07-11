@@ -577,6 +577,14 @@ class DBImpl : public DB {
   using DB::EndBlockCacheTrace;
   Status EndBlockCacheTrace() override;
 
+  using DB::StartCompactionTrace;
+  Status StartCompactionTrace(
+    const TraceOptions& trace_options,
+    std::unique_ptr<TraceWriter>&& trace_writer) override; 
+
+  using DB::EndCompactionTrace;
+  Status EndCompactionTrace() override;
+
   using DB::StartIOTrace;
   Status StartIOTrace(const TraceOptions& options,
                       std::unique_ptr<TraceWriter>&& trace_writer) override;

@@ -1140,6 +1140,7 @@ DEFINE_int64(
     "The maximum block cache trace file size in bytes. Block cache accesses "
     "will not be logged if the trace file size exceeds this threshold. Default "
     "is 64 GB.");
+DEFINE_string(compaction_trace_file, "", "Compaction trace file path.");
 DEFINE_string(block_cache_trace_file, "", "Block cache trace file path.");
 DEFINE_int32(trace_replay_threads, 1,
              "The number of threads to replay, must >=1.");
@@ -2683,6 +2684,7 @@ class Benchmark {
   Options open_options_;  // keep options around to properly destroy db later
   TraceOptions trace_options_;
   TraceOptions block_cache_trace_options_;
+  TraceOptions  compaction_trace_options_;
   int64_t reads_;
   int64_t deletes_;
   double read_random_exp_range_;
@@ -3673,6 +3675,25 @@ class Benchmark {
           fprintf(stdout, "Tracing the workload to: [%s]\n",
                   FLAGS_trace_file.c_str());
         }
+        // Start  compaction tracing 
+        if(!FLAGS_compaction_trace_file.empty()) {
+          std::unique_ptr<TraceWriter> compaction_trace_writer;
+          Status s = NewFileTraceWriter(FLAGS_env, EnvOptions(),
+                                        FLAGS_compaction_trace_file, &compaction_trace_writer);
+          if (!s.ok()) {
+            fprintf(stderr, "Encountered an error starting a compaction trace, %s\n",
+                    s.ToString().c_str());
+            ErrorExit();
+          }
+          s = db_.db->StartCompactionTrace(compaction_trace_options_, std::move(compaction_trace_writer));
+          if (!s.ok()) {
+            fprintf(stderr, "Encountered an error starting a compaction trace, %s\n",
+                    s.ToString().c_str());
+            ErrorExit();
+          }
+          fprintf(stdout, "Tracing the compaction to: [%s]\n",
+                  FLAGS_compaction_trace_file.c_str());
+        }
         // Start block cache tracing.
         if (!FLAGS_block_cache_trace_file.empty()) {
           // Sanity checks.
@@ -3764,6 +3785,14 @@ class Benchmark {
       if (!s.ok()) {
         fprintf(stderr,
                 "Encountered an error ending the block cache tracing, %s\n",
+                s.ToString().c_str());
+      }
+    }
+
+    if(!FLAGS_compaction_trace_file.empty()) {
+      Status s = db_.db->EndCompactionTrace();
+      if (!s.ok()) {
+        fprintf(stderr, "Encountered an error ending the compaction trace, %s\n",
                 s.ToString().c_str());
       }
     }

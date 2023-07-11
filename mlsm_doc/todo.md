@@ -179,3 +179,145 @@ Find out why trace_analyzer doesn't output time_series data
 Was thinking about adding another trace that can collect what keys 
 are GCed or involved during compaction. 
 
+Currently we don't know the when the deleted  keys in LSM-tree are actually 
+removed.
+
+
+Use trace information from mixgraph workload and get that 50% of
+the keys are conly accessed once .
+I will adjust the distribution parameters to get more keys 
+accessed at least twice .
+
+
+So I can add another function in trace_analyzer to gather the lifetime of 
+each time.
+
+Get the avg lifetime statistics histogram, I also need to draw cumulative density
+figure to see the percentage of the low lifetime keys.
+
+Learn one gnuplot command to draw  histogram that counts the occurrences of 
+same x values.
+```
+binwidth = <something>
+bin(val) = binwidth * floor(val/binwidth)
+plot "datafile" using (bin(column(1))):(1.0) smooth frequency 
+
+```
+
+
+Now let's learn how to how probability density funciton from the data.
+Just single column of data. 
+cumulative distribution function 
+https://stackoverflow.com/questions/1730913/gnuplot-cumulative-column-question
+```
+stats file
+plot file using 2:(1.0) smooth cumulative title "cdf "
+plot file using 2:(1.0/STATS_records) smooth cumulative title "cdf"
+```
+
+
+know more about the smooth option in gnuplot to do the filtering and grouping 
+One can also preprocess the data to the format they want and not use these 
+options. But it's convenient. 
+
+
+So I guess now I have to write code to get the time when they key is actually 
+GCed during compaciton. 
+I can add another tracer called compaction tracer.
+
+So where is the key being GCed exactly ? Let's find out .
+CompactionJob::ProcessKeyValueCompaction
+Reading all the code of  ProcessKeyValueCompaction function. 
+Just try to learn something . The C++ standard usage.
+std::optional<>  this is like rust option 
+
+
+Try to know what is CompactionFilter and how CompactionFilter connects with 
+obsolete keys.
+
+I am serching for how keys are dropped by searching the keyword 'num_record_drop_obsolete'
+The effect of dropping keyowrds of This keyword seems only applying to deletion operation,
+how about put operation ? 
+
+
+Seems like this is the part where obsolete put values are discarded
+```
+          } else if (has_outputted_key_ ||
+                     DefinitelyInSnapshot(ikey_.sequence,
+                                          earliest_write_conflict_snapshot_) ||
+                     (earliest_snapshot_ < earliest_write_conflict_snapshot_ &&
+                      DefinitelyInSnapshot(ikey_.sequence,
+                                           earliest_snapshot_))) {
+            // Found a matching value, we can drop the single delete and the
+            // value.  It is safe to drop both records since we've already
+            // outputted a key in this snapshot, or there is no earlier
+            // snapshot (Rule 2 above).
+
+            // Note: it doesn't matter whether the second key is a Put or if it
+            // is an unexpected Merge or Delete.  We will compact it out
+            // either way. We will maintain counts of how many mismatches
+            // happened
+            if (next_ikey.type != kTypeValue &&
+                next_ikey.type != kTypeBlobIndex &&
+                next_ikey.type != kTypeWideColumnEntity) {
+              ++iter_stats_.num_single_del_mismatch;
+            }
+
+            ++iter_stats_.num_record_drop_hidden;
+            ++iter_stats_.num_record_drop_obsolete;
+            // Already called input_.Next() once.  Call it a second time to
+            // skip past the second key.
+            AdvanceInputIter();
+ 
+```
+
+Why does  compaction_iterator use has_current_user_key_ and at_next_ ? 
+What's the difference between AdvanceInputIter() and NextFromInput()?
+
+
+
+So now I will find the place where I can record the obsolete keys and write a new class
+to record these keys.
+
+
+Met a if statement in NextFromInput() of compaction logic that I don't understand
+So I check the logics of comparison of two slice with timestamp and 
+find that two keys a and b with same user key will have the key with 
+younger timestamp(bigger numerically) tagged smaller which means the older time stamp if 
+put ahead of younger timestamp.
+So during compaction the key with older timetamp is fetched first.
+```
+    int Compare(const Slice& a, const Slice& b) const override {
+      int r = CompareWithoutTimestamp(a, b);
+      if (r != 0 || 0 == timestamp_size()) {
+        return r;
+      }
+      return -CompareTimestamp(
+          Slice(a.data() + a.size() - timestamp_size(), timestamp_size()),
+          Slice(b.data() + b.size() - timestamp_size(), timestamp_size()));
+    }
+```
+
+
+Get more knowledge about the key_ fields in CompactionIterator struct 
+so `key_` is 
+
+
+Why current_key_committed_ in compaction process ? I will just skip this for now 
+
+Forget about this, I have spent enough time looking through the very first part of
+the compaction iterator code . Now I will focus on when the key is dropped. 
+
+My progress is slow.
+
+
+So we only need to add the dropped keys to compaction tracer here.
+In CompacitonIterator.
+```
+CompactionIterator {
+private:
+
+  // Processes the input stream to find the next output
+    NextFromInput()
+}
+```

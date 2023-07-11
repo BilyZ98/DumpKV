@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rocksdb/block_cache_trace_writer.h"
+#include "rocksdb/compaction_tracer.h"
 #include "rocksdb/iterator.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/metadata.h"
@@ -1751,6 +1752,19 @@ class DB {
       std::unique_ptr<TraceWriter>&& /*trace_writer*/) {
     return Status::NotSupported("StartBlockCacheTrace() is not implemented.");
   }
+
+
+  virtual Status StartCompactionTrace(
+    const TraceOptions& trace_options,
+    std::unique_ptr<TraceWriter>&& trace_writer){
+    return Status::NotSupported("StartCompactionTrace() is not implemented.");
+  } 
+
+
+  virtual Status EndCompactionTrace() {
+    return Status::NotSupported("EndCompactionTrace() is not implemented.");
+  }
+
 
   virtual Status StartBlockCacheTrace(
       const BlockCacheTraceOptions& /*options*/,

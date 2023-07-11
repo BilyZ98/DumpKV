@@ -866,6 +866,7 @@ set(SOURCES
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
         trace_replay/block_cache_tracer.cc
+        trace_replay/compaction_tracer.cc
         trace_replay/io_tracer.cc
         trace_replay/trace_record_handler.cc
         trace_replay/trace_record_result.cc

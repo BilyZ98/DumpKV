@@ -39,6 +39,7 @@ enum TraceType : char {
   kIOTracer = 12,
   // Query level tracing related trace type.
   kTraceMultiGet = 13,
+  kCompactionDrop = 14,
   // All trace types should be added before kTraceMax
   kTraceMax,
 };

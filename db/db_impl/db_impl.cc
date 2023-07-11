@@ -3768,6 +3768,17 @@ SystemClock* DBImpl::GetSystemClock() const {
 }
 
 
+Status DBImpl::StartCompactionTrace(
+    const TraceOptions& trace_options,
+    std::unique_ptr<TraceWriter>&& trace_writer) {
+  
+  return Status::OK();
+}
+
+Status DBImpl::EndCompactionTrace() {
+  return Status::OK();
+}
+
 Status DBImpl::StartIOTrace(const TraceOptions& trace_options,
                             std::unique_ptr<TraceWriter>&& trace_writer) {
   assert(trace_writer != nullptr);
