@@ -26,6 +26,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
 #include "trace_replay/block_cache_tracer.h"
+#include "trace_replay/compaction_tracer.h"
 #include "util/hash_containers.h"
 #include "util/thread_local.h"
 

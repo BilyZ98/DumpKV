@@ -1,7 +1,7 @@
-#include "trace_replay/compaction_tracer.h"
 
 #include <string>
 
+#include "trace_replay/compaction_tracer.h"
 #include "db/db_impl/db_impl.h"
 #include "db/dbformat.h"
 #include "rocksdb/slice.h"

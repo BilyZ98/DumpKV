@@ -1,5 +1,6 @@
 
 #pragma once
+#include "rocksdb/compaction_trace_writer.h"
 #include "rocksdb/options.h"
 #include "rocksdb/trace_record.h"
 #include "rocksdb/trace_reader_writer.h"
@@ -8,20 +9,6 @@
 
 namespace ROCKSDB_NAMESPACE {
 class SystemClock;
-
-struct CompactionTraceRecord {
-  uint64_t timestamp;
-  std::string drop_key;
-
-  CompactionTraceRecord(uint64_t timestamp, std::string drop_key)
-      : timestamp(timestamp), drop_key(drop_key) {}
-};
-
-class CompactionTraceWriter {
-public:
-  virtual ~CompactionTraceWriter() = default;
-  virtual Status Write(const CompactionTraceRecord& record) = 0;
-};
 
 class CompactionTraceWriterImpl : public CompactionTraceWriter {
 public:
@@ -75,8 +62,5 @@ private:
   std::atomic<CompactionTraceWriter*> trace_writer_;
 };
 
-
-std::unique_ptr<CompactionTraceWriter> NewCompactionTraceWriter(
-  SystemClock* clock, std::unique_ptr<TraceWriter>&& trace_writer );
 
 }

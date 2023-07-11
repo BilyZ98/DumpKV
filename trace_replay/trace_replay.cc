@@ -557,6 +557,7 @@ bool Tracer::ShouldSkipTrace(const TraceType& trace_type) {
     case kBlockTraceDataBlock:
     case kBlockTraceUncompressionDictBlock:
     case kBlockTraceRangeDeletionBlock:
+    case kCompactionDrop:
     case kIOTracer:
       filter_mask = kTraceFilterNone;
       break;

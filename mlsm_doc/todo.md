@@ -321,3 +321,19 @@ private:
     NextFromInput()
 }
 ```
+
+Is the key written in to tracefile internalkey or userkey ?
+If it's a internal key then it is easy to track the lifetime .
+If it's userkey, then we may have to modify op tracer 
+to turn userkey into internal key because internalkey is unique.
+
+
+Write test suite to test compaction tracer by imitate block cache tracer test.
+I will finish compaction tracer test and collect my first drop keys tracer
+information tomorrow. 
+
+
+Also I will do a check about the key type in op trace file.
+Use microsecond as timestamp is enough I think.
+
+
