@@ -337,3 +337,19 @@ Also I will do a check about the key type in op trace file.
 Use microsecond as timestamp is enough I think.
 
 
+Finding a way to insert compaction tracer and collect trace information
+How about insert 
+
+db/db_impl/db_impl_compaction_flush.cc
+    DBImpl::BackgroundCompaction()
+    DBImpl::MaybeScheduleFlushOrCompaction()
+
+compaction_job.cc
+    CompactionJob::Run()
+
+
+I can insert compaction into VersionSet and add another field in options.
+since immutable_db_options is passed to CompactionJob I can add this field to 
+immutable_db_options .
+
+

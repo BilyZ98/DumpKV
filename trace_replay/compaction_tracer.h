@@ -1,5 +1,8 @@
 
 #pragma once
+#include  <atomic>
+#include <fstream>
+
 #include "rocksdb/compaction_trace_writer.h"
 #include "rocksdb/options.h"
 #include "rocksdb/trace_record.h"
@@ -38,6 +41,38 @@ public:
   private:
     std::unique_ptr<TraceReader> trace_reader_;
 };
+
+
+class CompactionHumanReadableTraceWriter   {
+public:
+  ~CompactionHumanReadableTraceWriter()  ;
+  Status NewWritableFile(const std::string& human_readable_trace_file_path,
+                         ROCKSDB_NAMESPACE::Env* env);
+
+  Status WriteHumanReadableTrace(const CompactionTraceRecord& record);
+
+private:
+  char trace_record_buffer_[1024*1024];
+  std::unique_ptr<ROCKSDB_NAMESPACE::WritableFile> human_readable_trace_file_;
+};
+
+class CompactionHumanReadableTraceReader : public CompactionTraceReader {
+public:
+  CompactionHumanReadableTraceReader(const std::string& trace_file_path) ;
+  ~CompactionHumanReadableTraceReader()   ;
+
+  CompactionHumanReadableTraceReader(const CompactionHumanReadableTraceReader&) = delete;
+  CompactionHumanReadableTraceReader& operator=(const CompactionHumanReadableTraceReader&) = delete;
+  CompactionHumanReadableTraceReader(CompactionHumanReadableTraceReader&&) = delete;
+  CompactionHumanReadableTraceReader& operator=(CompactionHumanReadableTraceReader&&) = delete;
+
+
+
+  Status Read(CompactionTraceRecord* record);
+private:
+  std::ifstream human_readable_trace_reader_;
+};
+
 
 
 class CompactionTracer {

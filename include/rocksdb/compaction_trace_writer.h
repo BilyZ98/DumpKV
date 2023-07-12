@@ -6,9 +6,10 @@
 #include "rocksdb/trace_reader_writer.h"
 namespace ROCKSDB_NAMESPACE {
 struct CompactionTraceRecord {
-  uint64_t timestamp;
+  uint64_t timestamp = 0;
   std::string drop_key;
 
+  CompactionTraceRecord() = default;
   CompactionTraceRecord(uint64_t _timestamp, std::string _drop_key)
       : timestamp(_timestamp), drop_key(_drop_key) {}
 };
