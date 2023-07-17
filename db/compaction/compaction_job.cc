@@ -1249,6 +1249,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
       sub_compact->compaction, compaction_filter, shutting_down_,
       db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
       preclude_last_level_min_seqno_);
+  c_iter->SetCompactionTracer(compaction_tracer_);
   c_iter->SeekToFirst();
 
   // Assign range delete aggregator to the target output level, which makes sure
@@ -1968,6 +1969,9 @@ void CompactionJob::UpdateCompactionJobStats(
   }
 }
 
+void CompactionJob::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer){
+    compaction_tracer_ = (tracer);
+  }
 void CompactionJob::LogCompaction() {
   Compaction* compaction = compact_->compaction;
   ColumnFamilyData* cfd = compaction->column_family_data();

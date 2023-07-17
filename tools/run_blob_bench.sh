@@ -99,6 +99,8 @@ db_dir=$DB_DIR
 wal_dir=$WAL_DIR
 output_dir=$OUTPUT_DIR
 
+compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
+
 num_threads=${NUM_THREADS:-16}
 
 compression_type=${COMPRESSION_TYPE:-lz4}
@@ -176,7 +178,8 @@ ENV_VARS="\
   NUM_THREADS=$num_threads \
   COMPRESSION_TYPE=$compression_type \
   VALUE_SIZE=$value_size \
-  NUM_KEYS=$num_keys"
+  NUM_KEYS=$num_keys \
+  COMPACTION_TRACE_FILE=$compaction_trace_file "
 
 ENV_VARS_D="$ENV_VARS DURATION=$duration"
 
@@ -193,7 +196,7 @@ PARAMS="\
   --prepopulate_blob_cache=$prepopulate_blob_cache \
   --write_buffer_size=$write_buffer_size \
   --target_file_size_base=$target_file_size_base \
-  --max_bytes_for_level_base=$max_bytes_for_level_base"
+  --max_bytes_for_level_base=$max_bytes_for_level_base "
 
 PARAMS_GC="$PARAMS \
   --enable_blob_garbage_collection=$enable_blob_garbage_collection \

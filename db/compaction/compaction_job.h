@@ -191,7 +191,9 @@ class CompactionJob {
   // Return the IO status
   IOStatus io_status() const { return io_status_; }
 
+  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer);
  protected:
+  
   void UpdateCompactionStats();
   void LogCompaction();
   virtual void RecordCompactionIOStats();
@@ -201,6 +203,7 @@ class CompactionJob {
   // kv-pairs
   void ProcessKeyValueCompaction(SubcompactionState* sub_compact);
 
+    std::shared_ptr<CompactionTracer> compaction_tracer_;
   CompactionState* compact_;
   InternalStats::CompactionStatsFull compaction_stats_;
   const ImmutableDBOptions& db_options_;

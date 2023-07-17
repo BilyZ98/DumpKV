@@ -165,6 +165,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       fs_(immutable_db_options_.fs, io_tracer_),
       mutable_db_options_(initial_db_options_),
       stats_(immutable_db_options_.stats),
+      compaction_tracer_(std::make_shared<CompactionTracer>()),
 #ifdef COERCE_CONTEXT_SWITCH
       mutex_(stats_, immutable_db_options_.clock, DB_MUTEX_WAIT_MICROS, &bg_cv_,
              immutable_db_options_.use_adaptive_mutex),
@@ -237,6 +238,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       // requires a custom gc for compaction, we use that to set use_custom_gc_
       // as well.
       use_custom_gc_(seq_per_batch),
+
       shutdown_initiated_(false),
       own_sfm_(options.sst_file_manager == nullptr),
       closed_(false),
@@ -3774,12 +3776,12 @@ Status DBImpl::StartCompactionTrace(
   
   std::unique_ptr<CompactionTraceWriter> compaction_trace_writer(
        NewCompactionTraceWriter(env_->GetSystemClock().get(),std::move(trace_writer)));
-  return compaction_tracer_.StartCompactionTrace( std::move(compaction_trace_writer));
+  return compaction_tracer_->StartCompactionTrace( std::move(compaction_trace_writer));
   // return Status::OK();
 }
 
 Status DBImpl::EndCompactionTrace() {
-  compaction_tracer_.EndTrace();
+  compaction_tracer_->EndTrace();
 
   return Status::OK();
 }

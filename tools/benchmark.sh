@@ -172,6 +172,9 @@ compression_type=${COMPRESSION_TYPE:-zstd}
 min_level_to_compress=${MIN_LEVEL_TO_COMPRESS:-"-1"}
 compression_size_percent=${COMPRESSION_SIZE_PERCENT:-"-1"}
 
+
+compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
+echo "Compaction trace file: $compaction_trace_file"
 duration=${DURATION:-0}
 writes=${WRITES:-0}
 
@@ -293,6 +296,7 @@ const_params_base="
   --bloom_bits=10 \
   --open_files=-1 \
   --subcompactions=$subcompactions \
+  --compaction_trace_file=$compaction_trace_file \
   \
   $bench_args"
 
@@ -370,6 +374,7 @@ fi
 if [ $writes -gt 0 ]; then
   const_params="$const_params --writes=$writes"
 fi
+
 
 params_w="$l0_config \
           --max_background_jobs=$max_background_jobs \
@@ -638,6 +643,8 @@ function summarize_result {
     >> "$report"
 }
 
+# can add gdb option to this script  in case we need to know more about 
+# rocksdb internals by debugging db_bench
 function run_bulkload {
   # This runs with a vector memtable and the WAL disabled to load faster. It is still crash safe and the
   # client can discover where to restart a load after a crash. I think this is a good way to load.
@@ -668,7 +675,8 @@ function run_bulkload {
   echo "Compacting..."
   log_file_name=$output_dir/benchmark_bulkload_compact.log
   time_cmd=$( get_cmd $log_file_name.time )
-  cmd="$time_cmd  ./db_bench --benchmarks=compact,stats \
+ # gdb --args 
+  cmd="$time_cmd ./db_bench --benchmarks=compact,stats \
        --use_existing_db=1 \
        --disable_auto_compactions=0 \
        --sync=0 \
@@ -941,6 +949,7 @@ function run_change_with_trace {
        --trace_file=${op_trace_file_name} \
        --mix_get_ratio=0.5 \
        --mix_put_ratio=0.5 \
+       --compaction_trace_file=${compaction_trace_file} \
        2>&1 | tee -a $log_file_name"
   if [[ "$job_id" != "" ]]; then
     echo "Job ID: ${job_id}" > $log_file_name

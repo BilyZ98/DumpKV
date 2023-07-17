@@ -16,6 +16,7 @@
 #include "logging/logging.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
+#include "rocksdb/compaction_trace_writer.h"
 #include "table/internal_iterator.h"
 #include "test_util/sync_point.h"
 
@@ -64,7 +65,9 @@ CompactionIterator::CompactionIterator(
     const std::string* full_history_ts_low,
     const SequenceNumber preserve_time_min_seqno,
     const SequenceNumber preclude_last_level_min_seqno)
-    : input_(input, cmp,
+    : 
+      compaction_tracer_(nullptr),
+    input_(input, cmp,
              !compaction || compaction->DoesInputReferenceBlobFiles()),
       cmp_(cmp),
       merge_helper_(merge_helper),
@@ -222,6 +225,7 @@ void CompactionIterator::Next() {
 bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
                                               Slice* skip_until) {
   // TODO: support compaction filter for wide-column entities
+  assert(!compaction_filter_);
   if (!compaction_filter_ ||
       (ikey_.type != kTypeValue && ikey_.type != kTypeBlobIndex)) {
     return true;
@@ -650,6 +654,8 @@ void CompactionIterator::NextFromInput() {
             "CompactionIterator::NextFromInput:SingleDelete:1",
             const_cast<Compaction*>(c));
         if (last_key_seq_zeroed_) {
+          CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+          compaction_tracer_->WriteDropKey(record);
           ++iter_stats_.num_record_drop_hidden;
           ++iter_stats_.num_record_drop_obsolete;
           assert(bottommost_level_);
@@ -671,6 +677,8 @@ void CompactionIterator::NextFromInput() {
 
             // First SingleDelete has been skipped since we already called
             // input_.Next().
+            CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+            compaction_tracer_->WriteDropKey(record);
             ++iter_stats_.num_record_drop_obsolete;
             ++iter_stats_.num_single_del_mismatch;
           } else if (next_ikey.type == kTypeDeletion) {
@@ -719,7 +727,8 @@ void CompactionIterator::NextFromInput() {
                 next_ikey.type != kTypeWideColumnEntity) {
               ++iter_stats_.num_single_del_mismatch;
             }
-
+            CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+            compaction_tracer_->WriteDropKey(record);
             ++iter_stats_.num_record_drop_hidden;
             ++iter_stats_.num_record_drop_obsolete;
             // Already called input_.Next() once.  Call it a second time to
@@ -766,6 +775,8 @@ void CompactionIterator::NextFromInput() {
             is_timestamp_eligible_for_gc) {
           // Key doesn't exist outside of this range.
           // Can compact out this SingleDelete.
+          CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+          compaction_tracer_->WriteDropKey(record);
           ++iter_stats_.num_record_drop_obsolete;
           ++iter_stats_.num_single_del_fallthru;
           if (!bottommost_level_) {
@@ -775,6 +786,8 @@ void CompactionIterator::NextFromInput() {
           // Skip.
           ++iter_stats_.num_record_drop_hidden;
           ++iter_stats_.num_record_drop_obsolete;
+          CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+          compaction_tracer_->WriteDropKey(record);
           assert(bottommost_level_);
         } else {
           // Output SingleDelete
@@ -804,6 +817,8 @@ void CompactionIterator::NextFromInput() {
                         last_sequence, current_user_key_sequence_);
         assert(false);
       }
+      CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+      compaction_tracer_->WriteDropKey(record);
 
       ++iter_stats_.num_record_drop_hidden;  // rule (A)
       AdvanceInputIter();
@@ -838,6 +853,9 @@ void CompactionIterator::NextFromInput() {
       // will be treated as a different user key unless the timestamp is older
       // than *full_history_ts_low_.
       ++iter_stats_.num_record_drop_obsolete;
+      CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+      compaction_tracer_->WriteDropKey(record);
+
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
       }
@@ -953,6 +971,9 @@ void CompactionIterator::NextFromInput() {
             key_, RangeDelPositioningMode::kForwardTraversal);
       }
       if (should_delete) {
+        CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
+        compaction_tracer_->WriteDropKey(record);
+
         ++iter_stats_.num_record_drop_hidden;
         ++iter_stats_.num_record_drop_range_del;
         AdvanceInputIter();

@@ -353,3 +353,34 @@ since immutable_db_options is passed to CompactionJob I can add this field to
 immutable_db_options .
 
 
+
+Since we have multiple subcompaction I don't know if we can store a pointer 
+to compactiontracer in each subcompaction job .
+I think it can .
+
+
+
+keys dropped reason marked as  `num_record_drop_user` or `num_record_drop_hidden`
+or `num_record_drop_obsolete` should be recorded by compaction_tracer_;
+
+
+I need to run a gdb to see if my assumption that last_snapshot == current_user_key_snapshot_
+is true
+It doesn't make sense to me now. 
+
+
+There is certainly some time we have to spend to deal with system running 
+and code debugging
+
+
+Let's just gather the trace information and then decide how we can use this information 
+to do a better gabarge collectino process. 
+
+There is no compaction trace gathered ! :(
+Let's see why .
+
+
+I see, I did not write the compaction trace by calling Write method of compaction tracer.
+Let's do that now .
+Oh no, just realized that I have called the  WriteDropKey() of compaction_tracer_
+

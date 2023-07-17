@@ -236,6 +236,10 @@ class CompactionIterator {
   // REQUIRED: SeekToFirst() has been called.
   void Next();
 
+  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
+    compaction_tracer_ = tracer;
+  }
+
   // Getters
   const Slice& key() const { return key_; }
   const Slice& value() const { return value_; }
@@ -328,6 +332,7 @@ class CompactionIterator {
   static std::unique_ptr<PrefetchBufferCollection>
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
+  std::shared_ptr<CompactionTracer> compaction_tracer_;
   SequenceIterWrapper input_;
   const Comparator* cmp_;
   MergeHelper* merge_helper_;
