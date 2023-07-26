@@ -36,6 +36,8 @@ public:
   CompactionTraceReader(CompactionTraceReader&&) = delete;
   CompactionTraceReader& operator=(CompactionTraceReader&&) = delete;
 
+  void SetTraceReader(std::unique_ptr<TraceReader>&& trace_reader);
+
 
   Status Read(CompactionTraceRecord* record);
   private:

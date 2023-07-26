@@ -1058,6 +1058,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         sub_compact->compaction->CreateCompactionFilter();
     compaction_filter = compaction_filter_from_factory.get();
   }
+  assert(compaction_filter == nullptr);
   if (compaction_filter != nullptr && !compaction_filter->IgnoreSnapshots()) {
     sub_compact->status = Status::NotSupported(
         "CompactionFilter::IgnoreSnapshots() = false is not supported "

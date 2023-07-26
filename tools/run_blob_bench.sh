@@ -74,6 +74,11 @@ if [ $# -ge 1 ]; then
   fi
 fi
 
+if [ ! -f benchmark.sh ]; then
+  echo "benchmark.sh not found"
+  exit $EXIT_INVALID_ARGS
+fi
+
 # shellcheck disable=SC2153
 if [ -z "$DB_DIR" ]; then
   echo "DB_DIR is not defined"
@@ -205,12 +210,11 @@ PARAMS_GC="$PARAMS \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size"
 
 # bulk load (using fillrandom) + compact
-env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh bulkload "$PARAMS"
-
+env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"
 # overwrite + waitforcompaction
 # env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 
-env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh mixgraph "$PARAMS_GC"
+env -u DURATION -S "$ENV_VARS" .//benchmark.sh mixgraph "$PARAMS_GC"
 # readwhilewriting
 # env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
 # echo "$PARAMS_GC"

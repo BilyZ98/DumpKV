@@ -479,6 +479,7 @@ Status FlushJob::MemPurge() {
         /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, ioptions->info_log, full_history_ts_low);
+    c_iter.SetCompactionTracer(compaction_tracer_);
 
     // Set earliest sequence number in the new memtable
     // to be equal to the earliest sequence number of the
@@ -930,6 +931,7 @@ Status FlushJob::WriteLevel0Table() {
           meta_.fd.GetNumber());
       const SequenceNumber job_snapshot_seq =
           job_context_->GetJobSnapshotSequence();
+      tboptions.compaction_tracer = compaction_tracer_;
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,

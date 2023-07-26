@@ -155,7 +155,12 @@ void CompactionIterator::SeekToFirst() {
 void CompactionIterator::Next() {
   // If there is a merge output, return it before continuing to process the
   // input.
+  if(compaction_tracer_.get() == nullptr) {
+    fprintf(stderr, "compaction_tracer_ is nullptr in compaction iterator\n");
+    assert(false);
+  }
   if (merge_out_iter_.Valid()) {
+    assert(false);
     merge_out_iter_.Next();
 
     // Check if we returned all records of the merge output.
@@ -209,6 +214,7 @@ void CompactionIterator::Next() {
     // Only advance the input iterator if there is no merge output and the
     // iterator is not already at the next record.
     if (!at_next_) {
+      // printf("not at next\n");
       AdvanceInputIter();
     }
     NextFromInput();
@@ -572,6 +578,8 @@ void CompactionIterator::NextFromInput() {
       validity_info_.SetValid(ValidContext::kKeepSDAndClearPut);
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
+      printf("should not be here: single delete\n");
+      assert(false);
       // We can compact out a SingleDelete if:
       // 1) We encounter the corresponding PUT -OR- we know that this key
       //    doesn't appear past this output level
@@ -817,6 +825,8 @@ void CompactionIterator::NextFromInput() {
                         last_sequence, current_user_key_sequence_);
         assert(false);
       }
+      // write to stderr without buffering print 
+      // fprintf(stderr, "Hidden by newer entry for same user key, last_snapshot: %ld, current_user_key_snapshot_: %ld\n", last_snapshot, current_user_key_snapshot_);
       CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
       compaction_tracer_->WriteDropKey(record);
 
@@ -829,6 +839,7 @@ void CompactionIterator::NextFromInput() {
                DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
                compaction_->KeyNotExistsBeyondOutputLevel(ikey_.user_key,
                                                           &level_ptrs_)) {
+      printf("Key deletion & doesn't exist outside of this range\n");
       // TODO(noetzli): This is the only place where we use compaction_
       // (besides the constructor). We should probably get rid of this
       // dependency and find a way to do similar filtering during flushes.
@@ -855,6 +866,7 @@ void CompactionIterator::NextFromInput() {
       ++iter_stats_.num_record_drop_obsolete;
       CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
       compaction_tracer_->WriteDropKey(record);
+      printf("Obsolete due to earlier  delete\n");
 
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
@@ -864,6 +876,7 @@ void CompactionIterator::NextFromInput() {
                 (ikey_.type == kTypeDeletionWithTimestamp &&
                  cmp_with_history_ts_low_ < 0)) &&
                bottommost_level_) {
+      printf("bottom level delete\n");
       // Handle the case where we have a delete key at the bottom most level
       // We can skip outputting the key iff there are no subsequent puts for
       // this key
@@ -903,6 +916,7 @@ void CompactionIterator::NextFromInput() {
         at_next_ = true;
       }
     } else if (ikey_.type == kTypeMerge) {
+      assert(false);
       if (!merge_helper_->HasOperator()) {
         status_ = Status::InvalidArgument(
             "merge_operator is not properly initialized.");
@@ -957,6 +971,7 @@ void CompactionIterator::NextFromInput() {
         }
       }
     } else {
+      // printf("new user key \n");
       // 1. new user key -OR-
       // 2. different snapshot stripe
       // If user-defined timestamp is enabled, we consider keys for GC if they
@@ -971,6 +986,7 @@ void CompactionIterator::NextFromInput() {
             key_, RangeDelPositioningMode::kForwardTraversal);
       }
       if (should_delete) {
+        printf("should  delete \n");
         CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
         compaction_tracer_->WriteDropKey(record);
 
@@ -983,6 +999,7 @@ void CompactionIterator::NextFromInput() {
     }
 
     if (need_skip) {
+      assert(false);
       SkipUntil(skip_until);
     }
   }

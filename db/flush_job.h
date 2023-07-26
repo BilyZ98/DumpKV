@@ -80,6 +80,9 @@ class FlushJob {
 
   ~FlushJob();
 
+  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
+    compaction_tracer_ = tracer;
+  }
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
@@ -127,6 +130,7 @@ class FlushJob {
   Env::IOPriority GetRateLimiterPriorityForWrite();
   std::unique_ptr<FlushJobInfo> GetFlushJobInfo() const;
 
+  std::shared_ptr<CompactionTracer> compaction_tracer_;
   const std::string& dbname_;
   const std::string db_id_;
   const std::string db_session_id_;

@@ -265,6 +265,7 @@ Status DBImpl::FlushMemTableToOutputFile(
   // and EventListener callback will be called when the db_mutex
   // is unlocked by the current thread.
   if (s.ok()) {
+    flush_job.SetCompactionTracer(compaction_tracer_);
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
     need_cancel = false;
@@ -529,6 +530,8 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
            static_cast<long unsigned int>(num_cfs));
     // TODO (yanqin): parallelize jobs with threads.
     for (int i = 1; i != num_cfs; ++i) {
+
+      jobs[i]->SetCompactionTracer(compaction_tracer_);
       exec_status[i].second =
           jobs[i]->Run(&logs_with_prep_tracker_, &file_meta[i],
                        &(switched_to_mempurge.at(i)));
@@ -542,6 +545,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     }
     assert(exec_status.size() > 0);
     assert(!file_meta.empty());
+    jobs[0]->SetCompactionTracer(compaction_tracer_);
     exec_status[0].second = jobs[0]->Run(
         &logs_with_prep_tracker_, file_meta.data() /* &file_meta[0] */,
         switched_to_mempurge.empty() ? nullptr : &(switched_to_mempurge.at(0)));
@@ -1452,6 +1456,7 @@ Status DBImpl::CompactFilesImpl(
   TEST_SYNC_POINT("CompactFilesImpl:0");
   TEST_SYNC_POINT("CompactFilesImpl:1");
   // Ignore the status here, as it will be checked in the Install down below...
+  compaction_job.SetCompactionTracer(compaction_tracer_);
   compaction_job.Run().PermitUncheckedError();
   TEST_SYNC_POINT("CompactFilesImpl:2");
   TEST_SYNC_POINT("CompactFilesImpl:3");
@@ -3494,6 +3499,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         db_id_, db_session_id_, c->column_family_data()->GetFullHistoryTsLow(),
         c->trim_ts(), &blob_callback_, &bg_compaction_scheduled_,
         &bg_bottom_compaction_scheduled_);
+    assert(compaction_tracer_.get() != nullptr);
     compaction_job.SetCompactionTracer(compaction_tracer_);
     compaction_job.Prepare();
 

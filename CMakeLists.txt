@@ -33,7 +33,6 @@
 # 4. make -j
 
 cmake_minimum_required(VERSION 3.10)
-
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules/")
 include(ReadVersion)
@@ -865,6 +864,7 @@ set(SOURCES
         tools/ldb_tool.cc
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
+        tools/compaction_trace_analyzer_tool.cc
         trace_replay/block_cache_tracer.cc
         trace_replay/compaction_tracer.cc
         trace_replay/io_tracer.cc
@@ -1558,6 +1558,12 @@ if(WITH_BENCHMARK_TOOLS)
   target_link_libraries(db_bench${ARTIFACT_SUFFIX}
     ${ROCKSDB_LIB} ${THIRDPARTY_LIBS})
 
+  add_custom_command(TARGET db_bench${ARTIFACT_SUFFIX} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${CMAKE_BINARY_DIR}/db_bench
+    ${PROJECT_SOURCE_DIR}/tools
+    )
+
   add_executable(cache_bench${ARTIFACT_SUFFIX}
     cache/cache_bench.cc
     cache/cache_bench_tool.cc)
@@ -1600,6 +1606,11 @@ if(WITH_TRACE_TOOLS)
   add_executable(trace_analyzer${ARTIFACT_SUFFIX}
     tools/trace_analyzer.cc)
   target_link_libraries(trace_analyzer${ARTIFACT_SUFFIX}
+    ${ROCKSDB_LIB} ${GFLAGS_LIB} ${FOLLY_LIBS})
+
+  add_executable(compaction_analyzer${ARTIFACT_SUFFIX}
+    tools/compaction_analyzer.cc)
+  target_link_libraries(compaction_analyzer${ARTIFACT_SUFFIX}
     ${ROCKSDB_LIB} ${GFLAGS_LIB} ${FOLLY_LIBS})
 
 endif()

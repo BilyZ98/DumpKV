@@ -21,9 +21,12 @@
 #include "file/writable_file_writer.h"
 #include "options/cf_options.h"
 #include "rocksdb/options.h"
+#include "rocksdb/compaction_trace_writer.h"
 #include "rocksdb/table_properties.h"
 #include "table/unique_id_impl.h"
 #include "trace_replay/block_cache_tracer.h"
+
+#include "trace_replay/compaction_tracer.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -144,6 +147,7 @@ struct TableBuilderOptions {
   // in the table options of the ioptions.table_factory
   bool skip_filters = false;
   const uint64_t cur_file_num;
+  std::shared_ptr<CompactionTracer> compaction_tracer = nullptr;
 };
 
 // TableBuilder provides the interface used to build a Table

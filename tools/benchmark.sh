@@ -6,6 +6,7 @@
 EXIT_INVALID_ARGS=1
 EXIT_NOT_COMPACTION_TEST=2
 EXIT_UNKNOWN_JOB=3
+EXIT_INVALID_BENCH_PATH=4
 
 # Size Constants
 K=1024
@@ -126,6 +127,11 @@ fi
 if [ -z $DB_DIR ]; then
   echo "DB_DIR is not defined"
   exit $EXIT_INVALID_ARGS
+fi
+
+if [ ! -x ./db_bench ]; then
+  echo "db_bench not found"
+  exit $EXIT_INVALID_BENCH_PATH
 fi
 
 if [ -z $WAL_DIR ]; then
@@ -529,8 +535,10 @@ function summarize_result {
   stall_pct=$( grep "^Cumulative stall" $test_out| tail -1  | awk '{  print $5 }' )
   nstall=$( grep ^Stalls\(count\):  $test_out | tail -1 | awk '{ print $2 + $6 + $10 + $14 + $18 + $20 }' )
 
+  echo " test_out: $test_out, bench_name: $bench_name, test_name: $test_name, version: $version, git_hash: $git_hash, date: $date, my_date: $my_date, uptime: $uptime, stall_pct: $stall_pct, nstall: $nstall"
   if ! grep ^"$bench_name" "$test_out" > /dev/null 2>&1 ; then
     echo -e "failed\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t$test_name\t$my_date\t$version\t$job_id\t$git_hash"
+    exit 1
     return
   fi
 
@@ -641,11 +649,15 @@ function summarize_result {
 
   echo -e "$ops_sec\t$mb_sec\t$lsm_size\t$blob_size\t$sum_wgb\t$wamp\t$cmb_ps\t$c_wsecs\t$c_csecs\t$b_rgb\t$b_wgb\t$usecs_op\t$p50\t$p99\t$p999\t$p9999\t$pmax\t$uptime\t$stall_pct\t$nstall\t$u_cpu\t$s_cpu\t$rss\t$test_name\t$my_date\t$version\t$job_id\t$git_hash" \
     >> "$report"
+
+  echo "report file name is ${report}"
 }
 
+db_bench_dir=/home/zt/rocksdb_kv_sep/build
 # can add gdb option to this script  in case we need to know more about 
 # rocksdb internals by debugging db_bench
 function run_bulkload {
+  echo "current path is $(pwd)"
   # This runs with a vector memtable and the WAL disabled to load faster. It is still crash safe and the
   # client can discover where to restart a load after a crash. I think this is a good way to load.
   echo "Bulk loading $num_keys random keys"
@@ -690,6 +702,7 @@ function run_bulkload {
     echo $cmd | tee $log_file_name
   fi
   eval $cmd
+
 }
 
 #

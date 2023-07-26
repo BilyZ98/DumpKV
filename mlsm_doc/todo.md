@@ -384,3 +384,22 @@ I see, I did not write the compaction trace by calling Write method of compactio
 Let's do that now .
 Oh no, just realized that I have called the  WriteDropKey() of compaction_tracer_
 
+
+Debug the code for three days and now I realize that I didn't not pass the compaction tracer pointer to compaction job as it seems.
+Let's do it now .
+It's that the flush job that doesn't get a compaction tracer but uses compaction iterator that 
+causes the nullptr reference error.
+Fixing it. 
+
+
+Found it , the old version of the same key will be dropped by compaction iterator 
+and marked as hidden drop.
+
+
+
+I get the human readable trace file for dropped keys during compaction which means 
+I get the timestamp for the dropped keys but I don't get the timestamp when keys
+are flushed to LSM-tree.
+
+I think I need to combine compaction trace and the op trace together to get the 
+insert timestamp and the dropped timestamp.

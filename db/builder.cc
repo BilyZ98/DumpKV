@@ -77,6 +77,10 @@ Status BuildTable(
   assert((tboptions.column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          tboptions.column_family_name.empty());
+  if(tboptions.compaction_tracer.get() == nullptr) {
+    fprintf(stderr, "compaction_tracer is null in table builder\n");
+    assert(false);
+  }
   auto& mutable_cf_options = tboptions.moptions;
   auto& ioptions = tboptions.ioptions;
   // Reports the IOStats for flush for every following bytes.
@@ -204,6 +208,7 @@ Status BuildTable(
         /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
+    c_iter.SetCompactionTracer(tboptions.compaction_tracer);
 
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {
