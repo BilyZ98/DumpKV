@@ -105,6 +105,7 @@ wal_dir=$WAL_DIR
 output_dir=$OUTPUT_DIR
 
 compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
+op_trace_file=${OP_TRACE_FILE:-""}
 
 num_threads=${NUM_THREADS:-16}
 
@@ -184,7 +185,8 @@ ENV_VARS="\
   COMPRESSION_TYPE=$compression_type \
   VALUE_SIZE=$value_size \
   NUM_KEYS=$num_keys \
-  COMPACTION_TRACE_FILE=$compaction_trace_file "
+  COMPACTION_TRACE_FILE=$compaction_trace_file\
+  OP_TRACE_FILE=$op_trace_file "
 
 ENV_VARS_D="$ENV_VARS DURATION=$duration"
 
@@ -210,7 +212,7 @@ PARAMS_GC="$PARAMS \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size"
 
 # bulk load (using fillrandom) + compact
-env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"
+# env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"
 # overwrite + waitforcompaction
 # env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 

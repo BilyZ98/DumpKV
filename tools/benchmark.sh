@@ -180,6 +180,8 @@ compression_size_percent=${COMPRESSION_SIZE_PERCENT:-"-1"}
 
 
 compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
+op_trace_file=${OP_TRACE_FILE:-""}
+echo "Operation trace file: $op_trace_file"
 echo "Compaction trace file: $compaction_trace_file"
 duration=${DURATION:-0}
 writes=${WRITES:-0}
@@ -952,7 +954,7 @@ function run_change_with_trace {
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
   cmd="$time_cmd ./db_bench --benchmarks=$benchmarks,stats \
-       --use_existing_db=1 \
+       --use_existing_db=0 \
        --sync=$syncval \
        $params_w \
        --threads=$num_threads \

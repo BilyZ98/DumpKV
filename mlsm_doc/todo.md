@@ -403,3 +403,41 @@ are flushed to LSM-tree.
 
 I think I need to combine compaction trace and the op trace together to get the 
 insert timestamp and the dropped timestamp.
+Let's do it.
+
+
+Four steps in  op trace analyzer.
+1. preparprocessing -> open output file
+2. start processing read all the trace records into memory
+3. make statistics, assign key id to each key and get the access count 
+4. reprocessing 
+4. endprocessing , close output file
+
+
+I can do a simple check to see if keys recorded in op trace file is the 
+same as internal keys which is checking the length of the keys.
+If the length of the keys from both trace files are the same, then 
+they are the same type of keys
+I can use gdb for this check.. 
+
+
+Then, how can I combine trace information of compaction and op.
+I will do most easy ways. Just insert the code in to the trace analyzer.
+
+
+
+Let's check if startTracer will overwrite existing trace file.
+Check the code. db_bench doesn't check use_existing_db flag when 
+start trace which means it will overwrites previous file.
+I don't know if I should raise a pr about this.
+Because users can put all the methods they want to call in benchmark flags.
+
+Turns out it's user key that trace analyzer records.
+The benefit of this is that we can get the exact time the same key is rewriteen
+The downside is that we can't get the exact time when this key is garbage collected
+in the compaction or garbage collection process.
+
+
+How about we rewrite trace collection logics so that internal keys will be 
+rewritten to op trace file and we can further get user key from internal key
+later in the processing pipeline..
