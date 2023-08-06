@@ -43,7 +43,9 @@ struct TraceUnit {
   uint32_t type;
   uint32_t cf_id;
   size_t value_size;
+  uint64_t sequence_number =0;
   std::string key;
+  
 };
 
 struct TypeCorrelation {
@@ -147,6 +149,7 @@ struct TypeUnit {
   uint64_t total_access;
   uint64_t total_succ_access;
   uint32_t sample_count;
+  // for each key we have a TraceStats
   std::map<uint32_t, TraceStats> stats;
   TypeUnit() = default;
   ~TypeUnit() = default;
@@ -200,6 +203,10 @@ class TraceAnalyzer : private TraceRecord::Handler,
   using WriteBatch::Handler::PutCF;
   Status PutCF(uint32_t column_family_id, const Slice& key,
                const Slice& value) override;
+
+  using WriteBatch::Handler::PutCFWithStartSequence;
+  Status PutCFWithStartSequence(uint32_t column_family_id,
+                                const Slice& key, const Slice& value, uint64_t seq) override;
 
   using WriteBatch::Handler::PutEntityCF;
   Status PutEntityCF(uint32_t column_family_id, const Slice& key,
@@ -258,7 +265,19 @@ class TraceAnalyzer : private TraceRecord::Handler,
                               std::vector<uint32_t> cf_ids,
                               std::vector<Slice> keys,
                               std::vector<size_t> value_sizes);
+  Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
+                              std::vector<uint32_t> cf_ids,
+                              std::vector<Slice> keys,
+                              std::vector<size_t> value_sizes,
+                              std::vector<uint64_t> sequence_numbers);
 
+
+
+    // for write op specifically
+  Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
+                              uint32_t cf_id, const Slice& key,
+                              size_t value_size,
+                              uint64_t sequence_number );
   Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
                               uint32_t cf_id, const Slice& key,
                               size_t value_size);
@@ -301,7 +320,8 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status ReadTraceRecord(Trace* trace);
   Status KeyStatsInsertion(const uint32_t& type, const uint32_t& cf_id,
                            const std::string& key, const size_t value_size,
-                           const uint64_t ts);
+                           const uint64_t ts,
+                           const uint64_t sequence_number = 0);
   Status StatsUnitCorrelationUpdate(StatsUnit& unit, const uint32_t& type,
                                     const uint64_t& ts, const std::string& key);
   Status OpenStatsOutputFiles(const std::string& type, TraceStats& new_stats);
@@ -317,7 +337,12 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
                             const Slice& key, const size_t value_size,
                             const uint64_t ts);
+  Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
+                            const Slice& key, const size_t value_size,
+                            const uint64_t ts, const uint64_t seq);
+
   Status MakeStatisticKeyStatsOrPrefix(TraceStats& stats);
+
   Status MakeStatisticCorrelation(TraceStats& stats, StatsUnit& unit);
   Status MakeStatisticQPS();
   int db_version_;

@@ -60,6 +60,7 @@ struct Trace {
   // payload.
   std::string payload;
 
+
   void reset() {
     ts = 0;
     type = kTraceMax;
@@ -82,6 +83,7 @@ enum TracePayloadType : char {
   kMultiGetSize = 8,
   kMultiGetCFIDs = 9,
   kMultiGetKeys = 10,
+  kWriteBatchStartSequence = 11
 };
 
 class TracerHelper {
@@ -125,6 +127,8 @@ class Tracer {
 
   // Trace all write operations -- Put, Merge, Delete, SingleDelete, Write
   Status Write(WriteBatch* write_batch);
+
+  Status WriteWithStartSequence(WriteBatch* write_batch, uint64_t start_seq);
 
   // Trace Get operations.
   Status Get(ColumnFamilyHandle* cfname, const Slice& key);

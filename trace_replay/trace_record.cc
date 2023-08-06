@@ -35,6 +35,12 @@ WriteQueryTraceRecord::WriteQueryTraceRecord(PinnableSlice&& write_batch_rep,
                                              uint64_t timestamp)
     : QueryTraceRecord(timestamp), rep_(std::move(write_batch_rep)) {}
 
+WriteQueryTraceRecord::WriteQueryTraceRecord(PinnableSlice&& write_batch_rep,
+                                             uint64_t timestamp,
+                                             uint64_t start_sequence) 
+    : QueryTraceRecord(timestamp), 
+      rep_(std::move(write_batch_rep)), 
+      start_sequence_(start_sequence) {}
 WriteQueryTraceRecord::WriteQueryTraceRecord(const std::string& write_batch_rep,
                                              uint64_t timestamp)
     : QueryTraceRecord(timestamp) {

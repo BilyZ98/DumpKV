@@ -441,3 +441,35 @@ in the compaction or garbage collection process.
 How about we rewrite trace collection logics so that internal keys will be 
 rewritten to op trace file and we can further get user key from internal key
 later in the processing pipeline..
+
+
+Need to figure out a plan to get the time when user key is obsolete and when this 
+user key is actually garbage collected.
+
+
+I will do the statistics of the lifetime now. I think I've done it before.
+
+Let me try different workload.
+[Highlight]
+### And then I can get the data about the garbage collection performance of different strategies for different workload.
+
+
+How does sequence number work with operations other than put suchs as delete and deleterange.
+Looks like it's basically the same for put, delete and singledelete except for deleterange
+Two sequence numbers are used for begin and end of the range key for deleterange
+
+
+Advacement of sequence is done by MemTableInserter. However, we've already know that in
+advance that how many sequence  number will be used before memtable inserter isused.
+
+Since we only use benchmarks without deleterange, it ok to have the assumption that we have 
+one sequence number for each op or key in the writebatch trace
+
+
+So now let's change the code about reading trace and do some test.
+ I will continue this after I finish my texas holdem game.
+
+After spent long time(1hr to 2hrs) checking the trace_analyzer code , figure out 
+how put op trace information is written to final output files.
+
+Need to implement DeleteCFWithStartSequence()

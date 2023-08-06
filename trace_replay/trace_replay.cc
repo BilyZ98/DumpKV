@@ -135,6 +135,39 @@ Status TracerHelper::DecodeTraceRecord(Trace* trace, int trace_file_version,
   }
 
   switch (trace->type) {
+    case kTraceWriteWithStartSequence: {
+      PinnableSlice rep;
+      uint64_t start_sequence = 0;
+      if(trace_file_version < 2) {
+        rep.PinSelf(trace->payload);
+      } else {
+        Slice buf(trace->payload);
+        GetFixed64(&buf, &trace->payload_map);
+        GetFixed64(&buf, &start_sequence);
+        int64_t payload_map = static_cast<int64_t>(trace->payload_map);
+        Slice write_batch_data;
+        while(payload_map) {
+          uint32_t set_pos = static_cast<uint32_t>(log2(payload_map & -payload_map));
+          switch(set_pos) {
+            case TracePayloadType::kWriteBatchStartSequence: {
+              GetLengthPrefixedSlice(&buf, &write_batch_data);
+              break;
+            }
+            default: {
+              assert(false);
+            }
+          }
+          payload_map &= (payload_map - 1);
+        }
+        rep.PinSelf(write_batch_data);
+
+      }
+      if (record != nullptr) {
+        record->reset(new WriteQueryTraceRecord(std::move(rep), trace->ts, start_sequence) );
+      }
+      return Status::OK();
+
+    }
     // Write
     case kTraceWrite: {
       PinnableSlice rep;
@@ -352,6 +385,23 @@ Tracer::Tracer(SystemClock* clock, const TraceOptions& trace_options,
 
 Tracer::~Tracer() { trace_writer_.reset(); }
 
+Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq) {
+  TraceType trace_type = kTraceWriteWithStartSequence;
+  if (ShouldSkipTrace(trace_type)) {
+    return Status::OK();
+  }
+  Trace trace;
+  trace.ts = clock_->NowMicros();
+  trace.type = trace_type;
+  TracerHelper::SetPayloadMap(trace.payload_map,
+                                  TracePayloadType::kWriteBatchStartSequence);
+  PutFixed64(&trace.payload, trace.payload_map);
+  PutFixed64(&trace.payload, start_seq);
+  PutLengthPrefixedSlice(&trace.payload, Slice(write_batch->Data()));
+
+  return WriteTrace(trace);
+}
+
 Status Tracer::Write(WriteBatch* write_batch) {
   TraceType trace_type = kTraceWrite;
   if (ShouldSkipTrace(trace_type)) {
@@ -364,6 +414,7 @@ Status Tracer::Write(WriteBatch* write_batch) {
                               TracePayloadType::kWriteBatchData);
   PutFixed64(&trace.payload, trace.payload_map);
   PutLengthPrefixedSlice(&trace.payload, Slice(write_batch->Data()));
+
   return WriteTrace(trace);
 }
 
@@ -541,6 +592,9 @@ bool Tracer::ShouldSkipTrace(const TraceType& trace_type) {
       filter_mask = kTraceFilterNone;
       break;
     case kTraceWrite:
+      filter_mask = kTraceFilterWrite;
+      break;
+    case kTraceWriteWithStartSequence:
       filter_mask = kTraceFilterWrite;
       break;
     case kTraceGet:

@@ -223,6 +223,11 @@ class WriteBatch : public WriteBatchBase {
     // All handler functions in this class provide default implementations so
     // we won't break existing clients of Handler on a source code level when
     // adding a new member function.
+    virtual Status PutCFWithStartSequence(uint32_t column_family_id, const Slice& key,
+                         const Slice& value, uint64_t start_sequence) {
+      return Status::InvalidArgument(
+          "non-default column family and PutCFWithStartSequence not implemented");
+    }
 
     // default implementation will just call Put without column family for
     // backwards compatibility. If the column family is not default,
@@ -351,6 +356,8 @@ class WriteBatch : public WriteBatchBase {
       return OptionState::kUnknown;
     }
   };
+
+  Status IterateWithStartSequence(Handler* hander) const;
   Status Iterate(Handler* handler) const;
 
   // Retrieve the serialized version of this batch.
@@ -425,6 +432,9 @@ class WriteBatch : public WriteBatchBase {
   // Constructor with a serialized string object
   explicit WriteBatch(const std::string& rep);
   explicit WriteBatch(std::string&& rep);
+  explicit WriteBatch(std::string&& rep, uint64_t start_sequence);
+
+  uint64_t GetStartSequence() const { return start_sequence_; }
 
   WriteBatch(const WriteBatch& src);
   WriteBatch(WriteBatch&& src) noexcept;
@@ -489,6 +499,7 @@ class WriteBatch : public WriteBatchBase {
 
  protected:
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
+  uint64_t start_sequence_=0;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

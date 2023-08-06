@@ -339,6 +339,12 @@ TEST_F(TraceAnalyzerTest, Put) {
   file_path = output_path + "/test-qps_stats.txt";
   CheckFileContent(all_qps, file_path, true);
 
+  // check sequence of put op
+  // std::vector<std::string>  seqs = {"1"};
+  // file_path = output_path + "/test-put-0-sequence.txt";
+  // CheckFileContent(seqs, file_path, false);
+  // 
+
   /*
   // Check the qps of Put
   std::vector<std::string> get_qps = {"1"};

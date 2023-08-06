@@ -40,6 +40,7 @@ enum TraceType : char {
   // Query level tracing related trace type.
   kTraceMultiGet = 13,
   kCompactionDrop = 14,
+  kTraceWriteWithStartSequence = 15,
   // All trace types should be added before kTraceMax
   kTraceMax,
 };
@@ -103,11 +104,14 @@ class WriteQueryTraceRecord : public QueryTraceRecord {
  public:
   WriteQueryTraceRecord(PinnableSlice&& write_batch_rep, uint64_t timestamp);
 
+  WriteQueryTraceRecord(PinnableSlice&& write_batch_rep, uint64_t timestamp, uint64_t start_sequence);
+
   WriteQueryTraceRecord(const std::string& write_batch_rep, uint64_t timestamp);
 
   virtual ~WriteQueryTraceRecord() override;
 
   TraceType GetTraceType() const override { return kTraceWrite; }
+  uint64_t GetStartSequence() const { return start_sequence_; }
 
   // rep string for the WriteBatch.
   virtual Slice GetWriteBatchRep() const;
@@ -117,6 +121,7 @@ class WriteQueryTraceRecord : public QueryTraceRecord {
 
  private:
   PinnableSlice rep_;
+  uint64_t start_sequence_;
 };
 
 // Trace record for DB::Get() operation

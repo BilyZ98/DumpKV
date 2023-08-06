@@ -210,18 +210,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     return Status::InvalidArgument(
         "`WriteOptions::protection_bytes_per_key` must be zero or eight");
   }
-  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
-  // grabs but does not seem thread-safe.
-  if (tracer_) {
-    InstrumentedMutexLock lock(&trace_mutex_);
-    if (tracer_ && !tracer_->IsWriteOrderPreserved()) {
-      // We don't have to preserve write order so can trace anywhere. It's more
-      // efficient to trace here than to add latency to a phase of the log/apply
-      // pipeline.
-      // TODO: maybe handle the tracing status?
-      tracer_->Write(my_batch).PermitUncheckedError();
-    }
-  }
+
   if (write_options.sync && write_options.disableWAL) {
     return Status::InvalidArgument("Sync writes has to enable WAL.");
   }
@@ -390,7 +379,20 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 
     PERF_TIMER_START(write_pre_and_post_process_time);
   }
-
+  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
+  // grabs but does not seem thread-safe.
+  if (tracer_) {
+    InstrumentedMutexLock lock(&trace_mutex_);
+    if (tracer_ && !tracer_->IsWriteOrderPreserved()) {
+      // We don't have to preserve write order so can trace anywhere. It's more
+      // efficient to trace here than to add latency to a phase of the log/apply
+      // pipeline.
+      // TODO: maybe handle the tracing status?
+      // tracer_->Write(my_batch).PermitUncheckedError();
+      tracer_->WriteWithStartSequence(my_batch, last_sequence + 1)
+          .PermitUncheckedError();
+    }
+  }
   // Add to log and apply to memtable.  We can release the lock
   // during this phase since &w is currently responsible for logging
   // and protects against concurrent loggers and concurrent writes
