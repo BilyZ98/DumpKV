@@ -473,3 +473,22 @@ After spent long time(1hr to 2hrs) checking the trace_analyzer code , figure out
 how put op trace information is written to final output files.
 
 Need to implement DeleteCFWithStartSequence()
+
+
+I need to write a test to verify that sequence number extracted from op trace 
+and compaction trace is the same.
+
+
+~~I just realize that compaction_trace_analyzer does not map key to key_id like op_trace_analyzer 
+does.~~ 
+Human readable file contains original key slice trace information instead of key_ids recorded in time_series 
+file. However, keys are shown in hex format in human readable trace file of op trace analyzer.
+
+
+phew, pass the compaction_op_trace_analyzer test.
+So this proves that our compaction tracer collects the same user key and sequcen number 
+as our op tracer.
+
+Our next step is to get the lifetime of userkey and lifetime of internal key.
+
+

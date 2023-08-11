@@ -515,7 +515,10 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
   uint32_t column_family = 0;  // default
   bool last_was_try_again = false;
   bool handler_continue = true;
+  uint64_t start_sequence = wb->GetStartSequence();
+  uint64_t cur_sequence = start_sequence;;
   while (((s.ok() && !input.empty()) || UNLIKELY(s.IsTryAgain()))) {
+  
     handler_continue = handler->Continue();
     if (!handler_continue) {
       break;
@@ -549,7 +552,8 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
         assert(wb->content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
 
-        s = handler->PutCFWithStartSequence(column_family, key, value, wb->GetStartSequence());
+        // s = handler->PutCFWithStartSequence(column_family, key, value, wb->GetStartSequence());
+        s = handler->PutCFWithStartSequence(column_family, key, value, cur_sequence);
         if (LIKELY(s.ok())) {
           empty_batch = false;
           found++;
@@ -559,7 +563,9 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
       case kTypeDeletion:
         assert(wb->content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_DELETE));
-        s = handler->DeleteCF(column_family, key);
+        // s = handler->DeleteCF(column_family, key);
+        // s = handler->DeleteCFWithStartSequence(column_family, key, wb->GetStartSequence());
+        s = handler->DeleteCFWithStartSequence(column_family, key, cur_sequence);
         if (LIKELY(s.ok())) {
           empty_batch = false;
           found++;
@@ -567,6 +573,7 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
         break;
       case kTypeColumnFamilySingleDeletion:
       case kTypeSingleDeletion:
+        // assert(false);
         assert(wb->content_flags_.load(std::memory_order_relaxed) &
                (ContentFlags::DEFERRED | ContentFlags::HAS_SINGLE_DELETE));
         s = handler->SingleDeleteCF(column_family, key);
@@ -717,6 +724,7 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
       default:
         return Status::Corruption("unknown WriteBatch tag");
     }
+    cur_sequence++;
   }
   if (!s.ok()) {
     return s;

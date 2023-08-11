@@ -229,6 +229,28 @@ class WriteBatch : public WriteBatchBase {
           "non-default column family and PutCFWithStartSequence not implemented");
     }
 
+
+    virtual Status PutCFWithSequence(uint32_t column_family_id, const Slice& key,
+                         const Slice& value, uint64_t sequence) {
+      return Status::InvalidArgument(
+          "non-default column family and PutCFWithSequence not implemented");
+    }
+
+    virtual Status DeleteCFWithSequence(uint32_t column_family_id,
+                                        const Slice& key, uint64_t sequence) {
+      return Status::InvalidArgument(
+          "non-default column family and DeleteCFWithSequence not implemented");
+    }
+
+
+    virtual Status DeleteCFWithStartSequence(uint32_t column_family_id,
+                                             const Slice& key,
+                                             uint64_t start_sequence) {
+      return Status::InvalidArgument(
+          "non-default column family and DeleteCFWithStartSequence not "
+          "implemented");
+    }
+
     // default implementation will just call Put without column family for
     // backwards compatibility. If the column family is not default,
     // the function is noop

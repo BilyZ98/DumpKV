@@ -215,6 +215,9 @@ class TraceAnalyzer : private TraceRecord::Handler,
   using WriteBatch::Handler::DeleteCF;
   Status DeleteCF(uint32_t column_family_id, const Slice& key) override;
 
+  using WriteBatch::Handler::DeleteCFWithStartSequence;
+  Status DeleteCFWithStartSequence(uint32_t column_family_id, const Slice& key, uint64_t seq) override;
+
   using WriteBatch::Handler::SingleDeleteCF;
   Status SingleDeleteCF(uint32_t column_family_id, const Slice& key) override;
 

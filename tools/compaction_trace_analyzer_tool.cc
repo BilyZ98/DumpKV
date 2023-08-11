@@ -1,4 +1,6 @@
+#include "rocksdb/utilities/ldb_cmd.h"
 #include <inttypes.h>
+#include "db/dbformat.h"
 #include "rocksdb/db.h"
 #include "tools/compaction_tracer_analyzer_tool.h"
 #include "rocksdb/env.h"
@@ -16,9 +18,9 @@ using GFLAGS_NAMESPACE::ParseCommandLineFlags;
 
 
 
-DEFINE_string(trace_path, "", "Path to the trace file");
-DEFINE_string(output_dir, "", "Path to the output directory");
-DEFINE_bool(convert_to_human_readable, true,
+DEFINE_string(compaction_trace_path, "", "Path to the trace file");
+DEFINE_string(compaction_output_dir, "", "Path to the output directory");
+DEFINE_bool(compaction_convert_to_human_readable, true,
             "Convert the trace file to human readable format");
 
 
@@ -53,8 +55,8 @@ Status CompactionTraceAnalyzerTool::PreProcessing() {
   
 
 
-  if(FLAGS_convert_to_human_readable) {
-    std::string human_readable_output = output_path_ + "/human_readable_trace";
+  if(FLAGS_compaction_convert_to_human_readable) {
+    std::string human_readable_output = output_path_ + "/compaction_human_readable_trace.txt";
     s = env_->NewWritableFile(human_readable_output, &trace_sequence_f_, env_options_);
     if(!s.ok()) {
       return s;
@@ -77,14 +79,23 @@ Status CompactionTraceAnalyzerTool::StartPorcessing() {
     if(!s.ok()) {
       break;
     }
-    if(FLAGS_convert_to_human_readable && trace_sequence_f_ != nullptr) {
+    if(FLAGS_compaction_convert_to_human_readable && trace_sequence_f_ != nullptr) {
       int ret;
-      ret = snprintf(buffer, sizeof(buffer), "%" PRIu64 "\n", record.timestamp);
+
+      Slice ikey(record.drop_key);
+      ParsedInternalKey parsed_key;
+      s = ParseInternalKey(ikey, &parsed_key, true);
+      if(!s.ok()) {
+        return s;
+      }
+      std::string hex_user_key = ROCKSDB_NAMESPACE::LDBCommand::StringToHex(parsed_key.user_key.ToString()); 
+      ret = snprintf(buffer, sizeof(buffer), "%" PRIu64 " %" PRIu64"\n",  parsed_key.sequence, record.timestamp);
       if(ret < 0) {
         return Status::IOError("cannot write to the human readable trace file");
       }
       std::string printout(buffer);
-      printout = record.drop_key + " "+ printout    ;
+
+      printout = hex_user_key  + " "+ printout    ;
       s = trace_sequence_f_->Append(printout);
     } else {
       fprintf(stderr, "convert_to_human_readable is false or trace output file is null\n");
@@ -103,7 +114,7 @@ int compaction_tracer_analyzer_main(int argc, char** argv) {
   std::string output_dir ;
   ParseCommandLineFlags(&argc, &argv, true);
 
-  CompactionTraceAnalyzerTool compaction_trace_analyzer_tool(FLAGS_trace_path, FLAGS_output_dir);
+  CompactionTraceAnalyzerTool compaction_trace_analyzer_tool(FLAGS_compaction_trace_path, FLAGS_compaction_output_dir);
   Status s;
   s = compaction_trace_analyzer_tool.PreProcessing();
   if(!s.ok()) {
@@ -120,6 +131,9 @@ int compaction_tracer_analyzer_main(int argc, char** argv) {
   }
   return 0;
 }
+
+
+
 
 
 }

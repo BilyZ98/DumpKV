@@ -1015,7 +1015,7 @@ Status TraceAnalyzer::ReProcessing() {
             key_id = found->second.key_id;
           }
           if(stat.time_series.front().sequence_number != 0 ) {
-            assert(stat.time_series.front().type == TraceOperationType::kPut );
+            assert(stat.time_series.front().type == TraceOperationType::kPut || stat.time_series.front().type == TraceOperationType::kDelete);
             ret = snprintf(buffer_, sizeof(buffer_), "%u %" PRIu64 " %" PRIu64 " %" PRIu64 "\n",
                            stat.time_series.front().type,
                            stat.time_series.front().ts,
@@ -1616,6 +1616,14 @@ Status TraceAnalyzer::DeleteCF(uint32_t column_family_id, const Slice& key) {
                               column_family_id, key, 0);
 }
 
+
+Status TraceAnalyzer::DeleteCFWithStartSequence(uint32_t column_family_id,
+                                const Slice& key, uint64_t seq)  {
+  assert(seq != 0);
+  return OutputAnalysisResult(TraceOperationType::kDelete, write_batch_ts_,
+                              column_family_id, key, 0, seq);
+}
+
 // Handle the SingleDelete request in the write batch of the trace
 Status TraceAnalyzer::SingleDeleteCF(uint32_t column_family_id,
                                      const Slice& key) {
@@ -1698,7 +1706,7 @@ Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
   assert(!cf_ids.empty());
   assert(cf_ids.size() == keys.size());
   assert(cf_ids.size() == value_sizes.size());
-  assert(op_type == TraceOperationType::kPut);
+  assert(op_type == TraceOperationType::kPut || op_type == TraceOperationType::kDelete);
 
   Status s;
 
@@ -1733,7 +1741,7 @@ Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
     // calculation.
     s = KeyStatsInsertion(
         op_type, cf_ids[i], keys[i].ToString(),
-        value_sizes[i] == 0 ? kShadowValueSize : value_sizes[i], timestamp);
+        value_sizes[i] == 0 ? kShadowValueSize : value_sizes[i], timestamp, seq_nums[i]);
     if (!s.ok()) {
       return Status::Corruption("Failed to insert key statistics");
     }

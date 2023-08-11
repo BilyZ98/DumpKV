@@ -145,6 +145,29 @@ class TraceAnalyzerTest : public testing::Test {
     ASSERT_EQ(0, ROCKSDB_NAMESPACE::trace_analyzer_tool(argc, argv));
   }
 
+  void GetFileContent(std::string file_path, std::vector<std::string> &results) {
+    const auto& fs = env_->GetFileSystem();
+    FileOptions fopts(env_options_);
+
+    ASSERT_OK(fs->FileExists(file_path, fopts.io_options, nullptr));
+    std::unique_ptr<FSSequentialFile> file;
+    ASSERT_OK(fs->NewSequentialFile(file_path, fopts, &file, nullptr));
+
+    LineFileReader lf_reader(std::move(file), file_path,
+                             4096 /* filereadahead_size */);
+
+    // std::vector<std::string> result;
+    std::string line;
+    while (
+        lf_reader.ReadLine(&line, Env::IO_TOTAL /* rate_limiter_priority */)) {
+        results.push_back(line);
+    }
+
+    ASSERT_OK(lf_reader.GetStatus());
+
+
+  }
+
   void CheckFileContent(const std::vector<std::string>& cnt,
                         std::string file_path, bool full_content) {
     const auto& fs = env_->GetFileSystem();
@@ -262,6 +285,7 @@ TEST_F(TraceAnalyzerTest, Get) {
   file_path = output_path + "/test-get-0-whole_key_prefix_cut.txt";
   CheckFileContent(k_whole_prefix, file_path, true);
 
+ 
   /*
   // Check the overall qps
   std::vector<std::string> all_qps = {"1 0 0 0 0 0 0 0 0 1"};
@@ -319,10 +343,16 @@ TEST_F(TraceAnalyzerTest, Put) {
   CheckFileContent(k_prefix, file_path, true);
 
   // Check the time series
-  std::vector<std::string> k_series = {"1 1533056278 0"};
-  file_path = output_path + "/test-put-0-time_series.txt";
-  CheckFileContent(k_series, file_path, false);
+  {
+    std::vector<std::string> k_series = {"1 1533056278 0"};
+    std::vector<std::string> results;
+    file_path = output_path + "/test-put-0-time_series.txt";
+    CheckFileContent(k_series, file_path, false);
+    GetFileContent(file_path, results);
 
+
+
+  }
   // Check the accessed key in whole key space
   std::vector<std::string> k_whole_access = {"0 1"};
   file_path = output_path + "/test-put-0-whole_key_stats.txt";
@@ -339,6 +369,13 @@ TEST_F(TraceAnalyzerTest, Put) {
   file_path = output_path + "/test-qps_stats.txt";
   CheckFileContent(all_qps, file_path, true);
 
+  std::vector<std::string> results;
+  file_path = output_path + "/test-human_readable_trace.txt";
+  GetFileContent(file_path, results);
+  std::string seq = "1";
+  ASSERT_EQ(results[0].back(), '1');
+
+ 
   // check sequence of put op
   // std::vector<std::string>  seqs = {"1"};
   // file_path = output_path + "/test-put-0-sequence.txt";
@@ -418,6 +455,14 @@ TEST_F(TraceAnalyzerTest, Delete) {
                                              "3 0x64", "4 0x65", "5 0x66"};
   file_path = output_path + "/test-delete-0-whole_key_prefix_cut.txt";
   CheckFileContent(k_whole_prefix, file_path, true);
+
+
+  {
+    std::vector<std::string> results;
+    file_path = output_path + "/test-human_readable_trace.txt";
+    GetFileContent(file_path, results);
+    ASSERT_EQ(results[2].back(), '3');
+  }
 
   /*
   // Check the overall qps
