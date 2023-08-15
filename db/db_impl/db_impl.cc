@@ -3774,6 +3774,7 @@ Status DBImpl::StartCompactionTrace(
     const TraceOptions& trace_options,
     std::unique_ptr<TraceWriter>&& trace_writer) {
   
+  InstrumentedMutexLock lock(&compaction_trace_mutex_);
   std::unique_ptr<CompactionTraceWriter> compaction_trace_writer(
        NewCompactionTraceWriter(env_->GetSystemClock().get(),std::move(trace_writer)));
   return compaction_tracer_->StartCompactionTrace( std::move(compaction_trace_writer));
@@ -3781,6 +3782,7 @@ Status DBImpl::StartCompactionTrace(
 }
 
 Status DBImpl::EndCompactionTrace() {
+  InstrumentedMutexLock lock(&compaction_trace_mutex_);
   compaction_tracer_->EndTrace();
 
   return Status::OK();

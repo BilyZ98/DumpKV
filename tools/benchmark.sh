@@ -304,8 +304,6 @@ const_params_base="
   --bloom_bits=10 \
   --open_files=-1 \
   --subcompactions=$subcompactions \
-  --compaction_trace_file=$compaction_trace_file \
-  \
   $bench_args"
 
 level_const_params="
@@ -950,10 +948,13 @@ function run_change_with_trace {
   grep_name=$2
   benchmarks=$3
   op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  if [ ! -z $op_trace_file ]; then
+    op_trace_file_name=$op_trace_file
+  fi
   echo "Do $num_keys random $output_name"
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
-  cmd="$time_cmd ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd ./db_bench --benchmarks=$benchmarks,compact,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \
@@ -1169,7 +1170,7 @@ for job in ${jobs[@]}; do
   if [ $job = bulkload ]; then
     run_bulkload
   elif [ $job = mixgraph ]; then
-    run_change_with_trace mixgraph mixgraph mixgraph,waitforcompaction
+    run_change_with_trace mixgraph mixgraph mixgraph
   elif [ $job = flush_mt_l0 ]; then
     run_lsm flush_mt_l0
   elif [ $job = waitforcompaction ]; then

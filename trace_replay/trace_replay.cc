@@ -368,8 +368,11 @@ Status TracerHelper::DecodeTraceRecord(Trace* trace, int trace_file_version,
 
       return Status::OK();
     }
-    default:
+    default: {
+
+      fprintf(stderr, "trace type is :%d\n", trace->type);
       return Status::NotSupported("Unsupported trace type.");
+    }
   }
 }
 

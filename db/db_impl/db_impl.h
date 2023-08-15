@@ -1274,6 +1274,7 @@ class DBImpl : public DB {
   BlockCacheTracer block_cache_tracer_;
    // compaction_tracer_;
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+  InstrumentedMutex compaction_trace_mutex_;
 
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};

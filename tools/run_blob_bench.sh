@@ -216,7 +216,7 @@ PARAMS_GC="$PARAMS \
 # overwrite + waitforcompaction
 # env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 
-env -u DURATION -S "$ENV_VARS" .//benchmark.sh mixgraph "$PARAMS_GC"
+env -u DURATION -S "$ENV_VARS" ./benchmark.sh mixgraph "$PARAMS_GC"
 # readwhilewriting
 # env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
 # echo "$PARAMS_GC"

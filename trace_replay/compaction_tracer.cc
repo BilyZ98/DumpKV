@@ -147,7 +147,7 @@ Status CompactionHumanReadableTraceReader::Read(CompactionTraceRecord* record) {
 
 
 
-CompactionTracer::CompactionTracer() : trace_writer_(nullptr) {}
+CompactionTracer::CompactionTracer()  {trace_writer_.store(nullptr); }
 
 CompactionTracer::~CompactionTracer() {
   EndTrace(); 

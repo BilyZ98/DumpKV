@@ -492,3 +492,25 @@ as our op tracer.
 Our next step is to get the lifetime of userkey and lifetime of internal key.
 
 
+Write another test for compaction_op_trace_analyzer test suite which introudces put and delete ops.
+It passes .
+
+So now I guess it's time to do statistics about the lifetime and then I can start 
+test the model prediction accuracy and performance.
+
+I am getting excited about this move after spending such long time writing trace 
+collection module..
+
+
+
+
+Considering adding a new flag to db_bench to let users of db_bench decide if they want a trace file 
+for all benchmarks or they want a single trace file for each benchmark.
+
+Fix the db_bench_tool.cc so that tracer use the same file for all benchmark methods 
+in one command line instead of create a new file for each method. 
+I can submit a pr to rocksdb based on my current solution.
+
+
+
+

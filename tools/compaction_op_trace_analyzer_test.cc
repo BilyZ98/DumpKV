@@ -1,6 +1,7 @@
 
 
 #include <gtest/gtest.h>
+#include <functional>
 #ifndef GFLAGS
 #include <cstdio>
 int main() {
@@ -9,6 +10,7 @@ int main() {
 }
 #else
 
+#include <functional>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -38,16 +40,67 @@ static const size_t kArgBufferSize = 100000;
 class CompactionOpTraceAnalyzerTest : public testing::Test {
 public:
   CompactionOpTraceAnalyzerTest() : env_(Env::Default()) {
+    // test_path_ = test::PerThreadDBPath("compaction_op_trace_analyzer_test");
+    // dbname_ = test_path_ + "/db";
+    // env_ = Env::Default();
+    // env_->CreateDir(test_path_).PermitUncheckedError();
+    GenTestPath();
+
+  }
+
+  void GenTestPath() {
     test_path_ = test::PerThreadDBPath("compaction_op_trace_analyzer_test");
     dbname_ = test_path_ + "/db";
     env_ = Env::Default();
     env_->CreateDir(test_path_).PermitUncheckedError();
-
   }
 
   ~CompactionOpTraceAnalyzerTest() override {
     // env_->DeleteDir(test_path_);
   }
+  void GenerateTraceWithDelete(std::string op_trace_path, std::string compaction_trace) {
+    Options options;
+    options.create_if_missing = true;
+    WriteOptions wo;
+    TraceOptions trace_opt;
+    DB* db_ =  nullptr;
+    std::string value;
+    std::unique_ptr<TraceWriter> trace_writer_;
+    std::unique_ptr<TraceWriter> compaction_trace_writer_;
+
+    ASSERT_OK(NewFileTraceWriter(env_, env_options_, op_trace_path, &trace_writer_));
+    ASSERT_OK(NewFileTraceWriter(env_, env_options_, compaction_trace, &compaction_trace_writer_));
+
+    ASSERT_OK(DB::Open(options, dbname_, &db_));
+    ASSERT_OK(db_->StartTrace(trace_opt, std::move(trace_writer_)));
+    ASSERT_OK(db_->StartCompactionTrace(trace_opt, std::move(compaction_trace_writer_)));
+
+    for (int i = 0; i < 100; i++) {
+      ASSERT_OK(db_->Put(wo,   std::to_string(i),  std::to_string(i)));
+    }
+
+
+    for (int i = 0; i < 100; i++) {
+      ASSERT_OK(db_->Get(ReadOptions(), std::to_string(i), &value));
+    }
+
+    for(int i = 0; i < 100; i++) {
+      // ASSERT_OK(db_->Put(wo,   std::to_string(i),  std::to_string(i)));
+      ASSERT_OK(db_->Delete(wo, std::to_string(i)));
+    }
+
+    CompactRangeOptions co;
+    ASSERT_OK(db_->CompactRange(co, nullptr, nullptr));
+
+
+    ASSERT_OK(db_->EndTrace());
+    ASSERT_OK(db_->EndCompactionTrace());
+
+    delete db_;
+    ASSERT_OK(DestroyDB(dbname_, options));
+
+  }
+
 
   void GenerateTrace(std::string op_trace_path, std::string compaction_trace) {
     Options options;
@@ -71,6 +124,10 @@ public:
     }
 
 
+    for (int i = 0; i < 100; i++) {
+      ASSERT_OK(db_->Get(ReadOptions(), std::to_string(i), &value));
+    }
+
     for(int i = 0; i < 100; i++) {
       ASSERT_OK(db_->Put(wo,   std::to_string(i),  std::to_string(i)));
     }
@@ -83,7 +140,7 @@ public:
     ASSERT_OK(db_->EndCompactionTrace());
 
     delete db_;
-    // ASSERT_OK(DestroyDB(dbname_, options));
+    ASSERT_OK(DestroyDB(dbname_, options));
 
   }
 
@@ -123,7 +180,7 @@ public:
   void AnalyzeTrace(std::vector<std::string>& op_paras_diff,
                       std::string op_output_path, std::string op_trace_path,
                     std::vector<std::string>& comp_paras_diff,
-                    std::string comp_output_path, std::string comp_trace_path) {
+                    std::string comp_output_path, std::string comp_trace_path, bool is_delete_trace=false) {
     std::vector<std::string> op_paras = {"./trace_analyzer",
                                        "-convert_to_human_readable_trace",
                                         "-output_key_stats",
@@ -147,7 +204,12 @@ public:
 
     Status s = env_->FileExists(op_trace_path);
     if(!s.ok()) {
-      GenerateTrace(op_trace_path, comp_trace_path);
+      if(!is_delete_trace) {
+        GenerateTrace(op_trace_path, comp_trace_path);
+      }
+      else {
+        GenerateTraceWithDelete(op_trace_path, comp_trace_path);
+      }
     }
 
     ASSERT_OK(env_->CreateDir(op_output_path));
@@ -191,6 +253,12 @@ public:
     for(auto& line: human_trace) {
       std::vector<std::string> line_result;
       SplitString(line, ' ', &line_result);
+      std::string op_type= line_result[1];
+      if(!(op_type == "1" or op_type == "2"))  {
+        continue;
+
+      }
+
       if(line_result.size() != 6) {
         return Status::Corruption("bad human trace");
       }
@@ -245,7 +313,7 @@ TEST_F(CompactionOpTraceAnalyzerTest, Test1) {
   std::vector<std::string> comp_paras_diff = {"-compaction_trace_path="+comp_trace_path,
                                             "-compaction_output_dir="+output_path};
 
-  AnalyzeTrace(op_paras_diff, output_path, op_trace_path, comp_paras_diff,  output_path, comp_trace_path);
+  AnalyzeTrace(op_paras_diff, output_path, op_trace_path, comp_paras_diff,  output_path, comp_trace_path, false);
   std::vector<std::string> op_results;
   std::vector<std::string> comp_results;
   std::string op_human_file_path = output_path + "/test-human_readable_trace.txt";
@@ -271,6 +339,50 @@ TEST_F(CompactionOpTraceAnalyzerTest, Test1) {
 
   }
 
+
+}
+
+
+
+TEST_F(CompactionOpTraceAnalyzerTest, TestDelete) {
+  
+  GenTestPath();
+  std::string op_trace_path = test_path_ + "/trace";
+  std::string output_path = test_path_ + "/output";
+  std::string comp_trace_path = test_path_ + "/compaction_trace";
+  std::vector<std::string> op_paras_diff = {"-analyze_put=true",
+                                        "-analyze_delete=true",
+                                       "-trace_path=" + op_trace_path,
+                                         "-output_dir=" + output_path};
+
+  std::vector<std::string> comp_paras_diff = {"-compaction_trace_path="+comp_trace_path,
+                                            "-compaction_output_dir="+output_path};
+
+  AnalyzeTrace(op_paras_diff, output_path, op_trace_path, comp_paras_diff,  output_path, comp_trace_path, true);
+  std::vector<std::string> op_results;
+  std::vector<std::string> comp_results;
+  std::string op_human_file_path = output_path + "/test-human_readable_trace.txt";
+  GetFileContent(op_human_file_path, op_results);
+  std::string comp_human_file_path = output_path + "/compaction_human_readable_trace.txt";
+  GetFileContent(comp_human_file_path, comp_results);
+  
+  std::vector<std::string> comp_userkey;
+  std::vector<SequenceNumber> comp_seqs;
+  ExtractCompactionKeyAndSequence(comp_results, comp_userkey, comp_seqs);
+
+  std::unordered_map<std::string, std::set<SequenceNumber>> op_userkey;
+  ExtractOpKeyandSequence(op_results, op_userkey);
+
+  for(size_t i = 0; i < comp_userkey.size(); i++) {
+    std::string key = comp_userkey[i];
+    SequenceNumber seq = comp_seqs[i];
+    
+    ASSERT_TRUE(op_userkey.find(key) != op_userkey.end());
+    ASSERT_TRUE(op_userkey[key].find(seq) != op_userkey[key].end()); 
+    EXPECT_TRUE(op_userkey[key].size() == 2);
+    // ASSERT_TRUE(op_userkey[key].size() == 2);
+
+  }
 
 }
 

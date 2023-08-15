@@ -1909,6 +1909,8 @@ static void AppendWithSpace(std::string* str, Slice msg) {
 struct DBWithColumnFamilies {
   std::vector<ColumnFamilyHandle*> cfh;
   DB* db;
+  bool trace_started = false;
+  bool compaction_trace_started = false;
   OptimisticTransactionDB* opt_txn_db;
   std::atomic<size_t> num_created;  // Need to be updated after all the
                                     // new entries in cfh are set.
@@ -3658,6 +3660,10 @@ class Benchmark {
         // the same time, for now. So, start tracing only when it is not a
         // replay.
         if (FLAGS_trace_file != "" && name != "replay") {
+
+          if(!db_.trace_started) {
+            db_.trace_started = true;
+          
           std::unique_ptr<TraceWriter> trace_writer;
           Status s = NewFileTraceWriter(FLAGS_env, EnvOptions(),
                                         FLAGS_trace_file, &trace_writer);
@@ -3674,27 +3680,11 @@ class Benchmark {
           }
           fprintf(stdout, "Tracing the workload to: [%s]\n",
                   FLAGS_trace_file.c_str());
-        }
-        // Start  compaction tracing 
-        if(!FLAGS_compaction_trace_file.empty()) {
-          std::unique_ptr<TraceWriter> compaction_trace_writer;
-          Status s = NewFileTraceWriter(FLAGS_env, EnvOptions(),
-                                        FLAGS_compaction_trace_file, &compaction_trace_writer);
-          if (!s.ok()) {
-            fprintf(stderr, "Encountered an error starting a compaction trace, %s\n",
-                    s.ToString().c_str());
-            ErrorExit();
+          } else {
+            fprintf(stdout, "trace has already started\n");
           }
-          s = db_.db->StartCompactionTrace(compaction_trace_options_, std::move(compaction_trace_writer));
-          if (!s.ok()) {
-            fprintf(stderr, "Encountered an error starting a compaction trace, %s\n",
-                    s.ToString().c_str());
-            ErrorExit();
-          }
-          fprintf(stdout, "Tracing the compaction to: [%s]\n",
-                  FLAGS_compaction_trace_file.c_str());
         }
-        // Start block cache tracing.
+       // Start block cache tracing.
         if (!FLAGS_block_cache_trace_file.empty()) {
           // Sanity checks.
           if (FLAGS_block_cache_trace_sampling_frequency <= 0) {
@@ -3735,6 +3725,34 @@ class Benchmark {
           fprintf(stdout, "Tracing block cache accesses to: [%s]\n",
                   FLAGS_block_cache_trace_file.c_str());
         }
+        // Start  compaction tracing 
+        if(!FLAGS_compaction_trace_file.empty() ) {
+          if(!db_.compaction_trace_started) {
+            db_.compaction_trace_started = true;
+            fprintf(stderr, "benchmark name : %s\n", name.c_str());
+            std::unique_ptr<TraceWriter> compaction_trace_writer;
+            Status s = NewFileTraceWriter(FLAGS_env, EnvOptions(),
+                                          FLAGS_compaction_trace_file, &compaction_trace_writer);
+            if (!s.ok()) {
+            fprintf(stderr, "Encountered an error starting a compaction trace, new file trace writer faile, %s\n",
+                      s.ToString().c_str());
+              ErrorExit();
+            }
+            s = db_.db->StartCompactionTrace(compaction_trace_options_, std::move(compaction_trace_writer));
+            if (!s.ok()) {
+              fprintf(stderr, "Encountered an error starting a compaction tracehh, %s\n",
+                      s.ToString().c_str());
+              ErrorExit();
+            }
+            fprintf(stdout, "Tracing the compaction to: [%s]\n",
+                    FLAGS_compaction_trace_file.c_str());
+
+
+          } else {
+            fprintf(stdout, "Compaction trace already started\n");
+          }
+        }
+ 
 
         if (num_warmup > 0) {
           printf("Warming up benchmark by running %d times\n", num_warmup);
