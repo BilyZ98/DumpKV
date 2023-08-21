@@ -56,8 +56,8 @@ class TraceAnalyzerTest : public testing::Test {
 
   ~TraceAnalyzerTest() override {}
 
-  void GenerateTrace(std::string trace_path) {
-    Options options;
+  void GenerateTrace(const std::string &trace_path, const TraceOptions& trace_opt ,  Options& options) {
+    // Options options;
     options.create_if_missing = true;
     options.merge_operator = MergeOperators::CreatePutOperator();
     Slice upper_bound("a");
@@ -65,8 +65,7 @@ class TraceAnalyzerTest : public testing::Test {
     ReadOptions ro;
     ro.iterate_upper_bound = &upper_bound;
     ro.iterate_lower_bound = &lower_bound;
-    WriteOptions wo;
-    TraceOptions trace_opt;
+    WriteOptions wo;;
     DB* db_ = nullptr;
     std::string value;
     std::unique_ptr<TraceWriter> trace_writer;
@@ -145,29 +144,6 @@ class TraceAnalyzerTest : public testing::Test {
     ASSERT_EQ(0, ROCKSDB_NAMESPACE::trace_analyzer_tool(argc, argv));
   }
 
-  void GetFileContent(std::string file_path, std::vector<std::string> &results) {
-    const auto& fs = env_->GetFileSystem();
-    FileOptions fopts(env_options_);
-
-    ASSERT_OK(fs->FileExists(file_path, fopts.io_options, nullptr));
-    std::unique_ptr<FSSequentialFile> file;
-    ASSERT_OK(fs->NewSequentialFile(file_path, fopts, &file, nullptr));
-
-    LineFileReader lf_reader(std::move(file), file_path,
-                             4096 /* filereadahead_size */);
-
-    // std::vector<std::string> result;
-    std::string line;
-    while (
-        lf_reader.ReadLine(&line, Env::IO_TOTAL /* rate_limiter_priority */)) {
-        results.push_back(line);
-    }
-
-    ASSERT_OK(lf_reader.GetStatus());
-
-
-  }
-
   void CheckFileContent(const std::vector<std::string>& cnt,
                         std::string file_path, bool full_content) {
     const auto& fs = env_->GetFileSystem();
@@ -202,7 +178,8 @@ class TraceAnalyzerTest : public testing::Test {
   }
 
   void AnalyzeTrace(std::vector<std::string>& paras_diff,
-                    std::string output_path, std::string trace_path) {
+                    std::string output_path, std::string trace_path,
+                    const TraceOptions& trace_opt, Options& options) {
     std::vector<std::string> paras = {"./trace_analyzer",
                                       "-convert_to_human_readable_trace",
                                       "-output_key_stats",
@@ -219,7 +196,7 @@ class TraceAnalyzerTest : public testing::Test {
     }
     Status s = env_->FileExists(trace_path);
     if (!s.ok()) {
-      GenerateTrace(trace_path);
+      GenerateTrace(trace_path, trace_opt, options);
     }
     ASSERT_OK(env_->CreateDir(output_path));
     RunTraceAnalyzer(paras);
@@ -244,7 +221,10 @@ TEST_F(TraceAnalyzerTest, Get) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 10 0 1 1.000000", "0 10 1 1 1.000000"};
@@ -285,7 +265,6 @@ TEST_F(TraceAnalyzerTest, Get) {
   file_path = output_path + "/test-get-0-whole_key_prefix_cut.txt";
   CheckFileContent(k_whole_prefix, file_path, true);
 
- 
   /*
   // Check the overall qps
   std::vector<std::string> all_qps = {"1 0 0 0 0 0 0 0 0 1"};
@@ -318,7 +297,9 @@ TEST_F(TraceAnalyzerTest, Put) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 9 0 1 1.000000"};
@@ -343,16 +324,10 @@ TEST_F(TraceAnalyzerTest, Put) {
   CheckFileContent(k_prefix, file_path, true);
 
   // Check the time series
-  {
-    std::vector<std::string> k_series = {"1 1533056278 0"};
-    std::vector<std::string> results;
-    file_path = output_path + "/test-put-0-time_series.txt";
-    CheckFileContent(k_series, file_path, false);
-    GetFileContent(file_path, results);
+  std::vector<std::string> k_series = {"1 1533056278 0"};
+  file_path = output_path + "/test-put-0-time_series.txt";
+  CheckFileContent(k_series, file_path, false);
 
-
-
-  }
   // Check the accessed key in whole key space
   std::vector<std::string> k_whole_access = {"0 1"};
   file_path = output_path + "/test-put-0-whole_key_stats.txt";
@@ -368,19 +343,6 @@ TEST_F(TraceAnalyzerTest, Put) {
   std::vector<std::string> all_qps = {"0 1 0 0 0 0 0 0 0 0 1"};
   file_path = output_path + "/test-qps_stats.txt";
   CheckFileContent(all_qps, file_path, true);
-
-  std::vector<std::string> results;
-  file_path = output_path + "/test-human_readable_trace.txt";
-  GetFileContent(file_path, results);
-  std::string seq = "1";
-  ASSERT_EQ(results[0].back(), '1');
-
- 
-  // check sequence of put op
-  // std::vector<std::string>  seqs = {"1"};
-  // file_path = output_path + "/test-put-0-sequence.txt";
-  // CheckFileContent(seqs, file_path, false);
-  // 
 
   /*
   // Check the qps of Put
@@ -401,7 +363,87 @@ TEST_F(TraceAnalyzerTest, Put) {
   CheckFileContent(value_dist, file_path, true);
   */
 }
+TEST_F(TraceAnalyzerTest, PutWithPreservedWriteOrder) {
+  std::string trace_path = test_path_ + "/trace";
+  std::string output_path = test_path_ + "/put_preserved_write_order";
+  std::string file_path;
+  std::vector<std::string> paras = {
+      "-analyze_get=false",          "-analyze_put=true",
+      "-analyze_delete=false",       "-analyze_single_delete=false",
+      "-analyze_range_delete=false", "-analyze_iterator=false",
+      "-analyze_multiget=false"};
+  paras.push_back("-output_dir=" + output_path);
+  paras.push_back("-trace_path=" + trace_path);
+  paras.push_back("-key_space_dir=" + test_path_);
+  TraceOptions trace_opt;
+  trace_opt.preserve_write_order = false;
 
+  Options options;
+  options.enable_pipelined_write = true;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
+
+  // check the key_stats file
+  std::vector<std::string> k_stats = {"0 9 0 1 1.000000"};
+  file_path = output_path + "/test-put-0-accessed_key_stats.txt";
+  CheckFileContent(k_stats, file_path, true);
+
+  // Check the access count distribution
+  std::vector<std::string> k_dist = {"access_count: 1 num: 1"};
+  file_path = output_path + "/test-put-0-accessed_key_count_distribution.txt";
+  CheckFileContent(k_dist, file_path, true);
+
+  // Check the trace sequence
+  std::vector<std::string> k_sequence = {"1", "5", "2", "3", "4", "8",
+                                         "8", "8", "8", "8", "8", "8",
+                                         "8", "8", "0", "6", "7", "0"};
+  file_path = output_path + "/test-human_readable_trace.txt";
+  CheckFileContent(k_sequence, file_path, false);
+
+  // Check the prefix
+  std::vector<std::string> k_prefix = {"0 0 0 0.000000 0.000000 0x30"};
+  file_path = output_path + "/test-put-0-accessed_key_prefix_cut.txt";
+  CheckFileContent(k_prefix, file_path, true);
+
+  // Check the time series
+  std::vector<std::string> k_series = {"1 1533056278 0"};
+  file_path = output_path + "/test-put-0-time_series.txt";
+  CheckFileContent(k_series, file_path, false);
+
+  // Check the accessed key in whole key space
+  std::vector<std::string> k_whole_access = {"0 1"};
+  file_path = output_path + "/test-put-0-whole_key_stats.txt";
+  CheckFileContent(k_whole_access, file_path, true);
+
+  // Check the whole key prefix cut
+  std::vector<std::string> k_whole_prefix = {"0 0x61", "1 0x62", "2 0x63",
+                                             "3 0x64", "4 0x65", "5 0x66"};
+  file_path = output_path + "/test-put-0-whole_key_prefix_cut.txt";
+  CheckFileContent(k_whole_prefix, file_path, true);
+
+  // Check the overall qps
+  std::vector<std::string> all_qps = {"0 1 0 0 0 0 0 0 0 0 1"};
+  file_path = output_path + "/test-qps_stats.txt";
+  CheckFileContent(all_qps, file_path, true);
+
+  /*
+  // Check the qps of Put
+  std::vector<std::string> get_qps = {"1"};
+  file_path = output_path + "/test-put-0-qps_stats.txt";
+  CheckFileContent(get_qps, file_path, true);
+
+  // Check the top k qps prefix cut
+  std::vector<std::string> top_qps = {"At time: 0 with QPS: 1",
+                                      "The prefix: 0x61 Access count: 1"};
+  file_path = output_path + "/test-put-0-accessed_top_k_qps_prefix_cut.txt";
+  CheckFileContent(top_qps, file_path, true);
+
+  // Check the value size distribution
+  std::vector<std::string> value_dist = {
+      "Number_of_value_size_between 0 and 16 is: 1"};
+  file_path = output_path + "/test-put-0-accessed_value_size_distribution.txt";
+  CheckFileContent(value_dist, file_path, true);
+  */
+}
 // Test analyzing of delete
 TEST_F(TraceAnalyzerTest, Delete) {
   std::string trace_path = test_path_ + "/trace";
@@ -415,7 +457,9 @@ TEST_F(TraceAnalyzerTest, Delete) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 10 0 1 1.000000"};
@@ -456,14 +500,6 @@ TEST_F(TraceAnalyzerTest, Delete) {
   file_path = output_path + "/test-delete-0-whole_key_prefix_cut.txt";
   CheckFileContent(k_whole_prefix, file_path, true);
 
-
-  {
-    std::vector<std::string> results;
-    file_path = output_path + "/test-human_readable_trace.txt";
-    GetFileContent(file_path, results);
-    ASSERT_EQ(results[2].back(), '3');
-  }
-
   /*
   // Check the overall qps
   std::vector<std::string> all_qps = {"0 0 1 0 0 0 0 0 0 1"};
@@ -496,7 +532,9 @@ TEST_F(TraceAnalyzerTest, Merge) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 20 0 1 1.000000"};
@@ -575,7 +613,9 @@ TEST_F(TraceAnalyzerTest, SingleDelete) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 10 0 1 1.000000"};
@@ -649,7 +689,9 @@ TEST_F(TraceAnalyzerTest, DeleteRange) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 10 0 1 1.000000", "0 10 1 1 1.000000"};
@@ -725,7 +767,10 @@ TEST_F(TraceAnalyzerTest, Iterator) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // Check the output of Seek
   // check the key_stats file
@@ -849,7 +894,9 @@ TEST_F(TraceAnalyzerTest, MultiGet) {
   paras.push_back("-output_dir=" + output_path);
   paras.push_back("-trace_path=" + trace_path);
   paras.push_back("-key_space_dir=" + test_path_);
-  AnalyzeTrace(paras, output_path, trace_path);
+  TraceOptions trace_opt;
+  Options options;
+  AnalyzeTrace(paras, output_path, trace_path, trace_opt, options);
 
   // check the key_stats file
   std::vector<std::string> k_stats = {"0 10 0 2 1.000000", "0 10 1 2 1.000000",

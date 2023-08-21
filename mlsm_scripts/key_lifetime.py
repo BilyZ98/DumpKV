@@ -1,5 +1,7 @@
 
 input_file="/tmp/mlsm/with_gc/trace/trace-put-0-time_series.txt"
+        
+
 
 # Read the file
 with open(input_file, 'r') as f:

@@ -513,4 +513,21 @@ I can submit a pr to rocksdb based on my current solution.
 
 
 
+What's PipelinedWriteImpl()? 
+There is no !write_order_preserved option in PipelinedWriteImpl() which is
+different than that in WriteImpl() .
+
+
+How can I get the sequence number for tracer before WriteMemtable or WriteImplWALOnly()?
+Maybe I should just skip this part ? 
+This is not so important compared to my research project.
+
+
+Spend all whole day reading garbage collection code logic because I have a question when I was
+writing scripts to calculate the lifetime of each key. I was thinking about if there is difference 
+between actual lifetime and actual gc time for each value in blob files.
+Because values in blob files are rewritten to new blob files when corresponding keys in sst
+files are traversed.
+So it can happen that values stay much longer although it is gced during compaction process.
+Those values are not gced actually because the corresponding blob files are not deleted.
 

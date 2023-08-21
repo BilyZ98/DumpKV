@@ -212,7 +212,7 @@ public:
       }
     }
 
-    ASSERT_OK(env_->CreateDir(op_output_path));
+    ASSERT_OK(env_->CreateDirIfMissing(op_output_path));
 
     ASSERT_OK(env_->CreateDirIfMissing(comp_output_path));
     RunTraceAnalyzer(op_paras, &ROCKSDB_NAMESPACE::trace_analyzer_tool);

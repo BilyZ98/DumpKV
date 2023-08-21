@@ -954,7 +954,8 @@ function run_change_with_trace {
   echo "Do $num_keys random $output_name"
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
-  cmd="$time_cmd ./db_bench --benchmarks=$benchmarks,compact,stats \
+# gdb --args
+  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,compact,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \

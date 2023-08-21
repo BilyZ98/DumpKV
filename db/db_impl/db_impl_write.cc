@@ -210,6 +210,27 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
     return Status::InvalidArgument(
         "`WriteOptions::protection_bytes_per_key` must be zero or eight");
   }
+  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
+  // grabs but does not seem thread-safe.
+  SequenceNumber pre_last_sequence = rocksdb::kMaxSequenceNumber; 
+  if (!two_write_queues_) {
+  // Assign it after ::PreprocessWrite since the sequence might advance
+  // inside it by WriteRecoverableState
+     pre_last_sequence = versions_->LastSequence();
+  }
+  if (tracer_) {
+    InstrumentedMutexLock lock(&trace_mutex_);
+    if (tracer_ && !tracer_->IsWriteOrderPreserved()) {
+      // We don't have to preserve write order so can trace anywhere. It's more
+      // efficient to trace here than to add latency to a phase of the log/apply
+      // pipeline.
+      // TODO: maybe handle the tracing status?
+      // tracer_->Write(my_batch).PermitUncheckedError();
+
+      tracer_->WriteWithStartSequence(my_batch, pre_last_sequence + 1)
+          .PermitUncheckedError();
+    }
+  }
 
   if (write_options.sync && write_options.disableWAL) {
     return Status::InvalidArgument("Sync writes has to enable WAL.");
@@ -375,23 +396,10 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       // Assign it after ::PreprocessWrite since the sequence might advance
       // inside it by WriteRecoverableState
       last_sequence = versions_->LastSequence();
+      assert(last_sequence == pre_last_sequence);
     }
 
     PERF_TIMER_START(write_pre_and_post_process_time);
-  }
-  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
-  // grabs but does not seem thread-safe.
-  if (tracer_) {
-    InstrumentedMutexLock lock(&trace_mutex_);
-    if (tracer_ && !tracer_->IsWriteOrderPreserved()) {
-      // We don't have to preserve write order so can trace anywhere. It's more
-      // efficient to trace here than to add latency to a phase of the log/apply
-      // pipeline.
-      // TODO: maybe handle the tracing status?
-      // tracer_->Write(my_batch).PermitUncheckedError();
-      tracer_->WriteWithStartSequence(my_batch, last_sequence + 1)
-          .PermitUncheckedError();
-    }
   }
   // Add to log and apply to memtable.  We can release the lock
   // during this phase since &w is currently responsible for logging
@@ -412,7 +420,8 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       if (tracer_ && tracer_->IsWriteOrderPreserved()) {
         for (auto* writer : write_group) {
           // TODO: maybe handle the tracing status?
-          tracer_->Write(writer->batch).PermitUncheckedError();
+          // tracer_->Write(writer->batch).PermitUncheckedError();
+          tracer_->WriteWithStartSequence(writer->batch, pre_last_sequence+1);
         }
       }
     }
@@ -695,7 +704,8 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
         if (tracer_ != nullptr && tracer_->IsWriteOrderPreserved()) {
           for (auto* writer : wal_write_group) {
             // TODO: maybe handle the tracing status?
-            tracer_->Write(writer->batch).PermitUncheckedError();
+            // tracer_->Write(writer->batch).PermitUncheckedError();
+            tracer_->WriteWithStartSequence(writer->batch, current_sequence).PermitUncheckedError();
           }
         }
       }
@@ -941,18 +951,6 @@ Status DBImpl::WriteImplWALOnly(
   write_thread->EnterAsBatchGroupLeader(&w, &write_group);
   // Note: no need to update last_batch_group_size_ here since the batch writes
   // to WAL only
-  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
-  // grabs but does not seem thread-safe.
-  if (tracer_) {
-    InstrumentedMutexLock lock(&trace_mutex_);
-    if (tracer_ != nullptr && tracer_->IsWriteOrderPreserved()) {
-      for (auto* writer : write_group) {
-        // TODO: maybe handle the tracing status?
-        tracer_->Write(writer->batch).PermitUncheckedError();
-      }
-    }
-  }
-
   size_t pre_release_callback_cnt = 0;
   size_t total_byte_size = 0;
   for (auto* writer : write_group) {
@@ -1019,6 +1017,21 @@ Status DBImpl::WriteImplWALOnly(
     // Otherwise we inc seq number to do solely the seq allocation
     last_sequence = versions_->FetchAddLastAllocatedSequence(seq_inc);
   }
+  // TODO: this use of operator bool on `tracer_` can avoid unnecessary lock
+  // grabs but does not seem thread-safe.
+  if (tracer_) {
+    InstrumentedMutexLock lock(&trace_mutex_);
+    if (tracer_ != nullptr && tracer_->IsWriteOrderPreserved()) {
+      for (auto* writer : write_group) {
+        // TODO: maybe handle the tracing status?
+        tracer_->WriteWithStartSequence(writer->batch, last_sequence+1).PermitUncheckedError();
+        // tracer_->Write(writer->batch).PermitUncheckedError();
+        
+      }
+    }
+  }
+
+
 
   size_t memtable_write_cnt = 0;
   auto curr_seq = last_sequence + 1;
