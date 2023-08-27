@@ -311,7 +311,7 @@ level_const_params="
   --compaction_style=0 \
   --num_levels=8 \
   --min_level_to_compress=$min_level_to_compress \
-  --level_compaction_dynamic_level_bytes=true \
+  --level_compaction_dynamic_level_bytes=false \
   --pin_l0_filter_and_index_blocks_in_cache=1 \
   $soft_pending_arg \
   $hard_pending_arg \
@@ -500,6 +500,12 @@ function units_as_gb {
   units=$2
 
   case $units in
+    B)
+      echo "$size" | awk '{ printf "%.1f", $1 / (1024.0 * 1024.0 * 1024.0) }'
+      ;;
+    KB)
+      echo "$size" | awk '{ printf "%.1f", $1 / (1024.0 * 1024.0) }'
+      ;;
     MB)
       echo "$size" | awk '{ printf "%.1f", $1 / 1024.0 }'
       ;;
@@ -576,6 +582,8 @@ function summarize_result {
   sum_wgb_orig=$( grep "^Cumulative compaction" "$test_out" | tail -1 | awk '{ printf "%.1f", $3 }' )
   sum_wgb_units=$( grep "^Cumulative compaction" "$test_out" | tail -1 | awk '{ print $4 }' )
   sum_wgb=$( units_as_gb "$sum_wgb_orig" "$sum_wgb_units" )
+  dir_size_without_trace=$( du --bytes -s $output_dir --exclude='*trace*' | awk '{ print $1 }' )
+  dir_size_without_trace_gb=$( units_as_gb "$dir_size_without_trace"  "B" )
 
   # Flush(GB): cumulative 97.193, interval 1.247
   flush_wgb=$( grep "^Flush(GB)" "$test_out" | tail -1 | awk '{ print $3 }' | tr ',' ' ' | awk '{ print $1 }' )
@@ -586,8 +594,11 @@ function summarize_result {
         -z "$cum_writes_gb_orig" || \
         -z "$flush_wgb" ]]; then
     wamp="NA"
+    space_amp="NA"
   else
     wamp=$( echo "( $sum_wgb + $flush_wgb ) / $cum_writes_gb" | bc -l | awk '{ printf "%.1f", $1 }' )
+    space_amp=$( echo "$dir_size_without_trace_gb / $cum_writes_gb" | bc -l | awk '{ printf "%.1f", $1 }' )
+
   fi
 
   c_wsecs=$( grep "^ Sum" $test_out | tail -1 | awk '{ printf "%.0f", $15 }' )
@@ -644,10 +655,13 @@ function summarize_result {
     echo -e "# version - RocksDB version" >> "$report"
     echo -e "# job_id - User-provided job ID" >> "$report"
     echo -e "# githash - git hash at which db_bench was compiled" >> "$report"
+    echo -e "# space_amp - Space amplification" >> "$report"
     echo -e $tsv_header >> "$report"
   fi
 
-  echo -e "$ops_sec\t$mb_sec\t$lsm_size\t$blob_size\t$sum_wgb\t$wamp\t$cmb_ps\t$c_wsecs\t$c_csecs\t$b_rgb\t$b_wgb\t$usecs_op\t$p50\t$p99\t$p999\t$p9999\t$pmax\t$uptime\t$stall_pct\t$nstall\t$u_cpu\t$s_cpu\t$rss\t$test_name\t$my_date\t$version\t$job_id\t$git_hash" \
+  echo "dir_size_without_trace is ${dir_size_without_trace_gb}, cumulative writes $cum_writes_gb"
+  echo "space_amp is ${space_amp}"
+  echo -e "$ops_sec\t$mb_sec\t$lsm_size\t$blob_size\t$sum_wgb\t$wamp\t$cmb_ps\t$c_wsecs\t$c_csecs\t$b_rgb\t$b_wgb\t$usecs_op\t$p50\t$p99\t$p999\t$p9999\t$pmax\t$uptime\t$stall_pct\t$nstall\t$u_cpu\t$s_cpu\t$rss\t$test_name\t$my_date\t$version\t$job_id\t$git_hash\t$space_amp" \
     >> "$report"
 
   echo "report file name is ${report}"
@@ -955,7 +969,7 @@ function run_change_with_trace {
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
 # gdb --args
-  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,compact,stats \
+  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \

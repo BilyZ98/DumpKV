@@ -531,3 +531,43 @@ files are traversed.
 So it can happen that values stay much longer although it is gced during compaction process.
 Those values are not gced actually because the corresponding blob files are not deleted.
 
+So I guess I need to write code to treat keys differently with respect to 
+which blob files they come from. If keys gced come from blob files being gced, then 
+these kvs are gced actually, otherwise, there will be garbage in blob files that are not involved in
+gc process.
+However, this is not important for now. What we care is the lifetime of obsolete keys. 
+
+What else information I need to gather ? 
+Write amplification, space amplification.
+Average lifetime ?  Mean lifetime, lifetime variance.  
+
+
+
+
+Two ways to show current gc is not efficient enough
+1. From user perspective , lifetime difference between actual lifetime and valid lifetime
+    1.2. Write amplification, space amplification,  
+    Hot user keys usually come with short lifetime.
+    Cold user keys can have different lifetime. The interval between two puts of the same user key
+    determines the lifetime of the user key. 
+    So there can be huge lifetime difference in cold keys.
+    This is different than cache problem which usually considers hotness.
+    For cache problem, we need to put keys that are hot into cache and evict the cold ones. There is limited space, we need to
+    allocate precious space to imporant ones.
+    For lifetime problem, all keys share same importance in terms of storage space. 
+    The ideal situation is that we put keys with short lifetime together and we 
+    put keys with long lifetime together. And then we can schedule gc with trigger based method 
+    or some other methods.
+
+    One quesiton, can we really learn the short lifetime of keys that are cold? 
+    It's easy to learn the lifetime of hot keys . It will still be good if we can 
+    get a high prediction acc in hot keys..
+
+3. From internal perspective,we can get a holistic view of statistics of internal obsolete keys
+    to show that each compaction or gc only pick up small propotion of obsolete keys.
+
+
+
+I need to show that this is a big problem.  So now I am running workload with different 
+gc parameters in rocksdb. 
+

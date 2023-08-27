@@ -296,7 +296,7 @@ DEFINE_int32(duration, 0,
              " When 0 then num & reads determine the test duration");
 
 DEFINE_string(value_size_distribution_type, "fixed",
-              "Value size distribution type: fixed, uniform, normal");
+              "Value size distribution type: fixed, uniform, normal, mixgraph");
 
 DEFINE_int32(value_size, 100, "Size of each value in fixed distribution");
 static unsigned int value_size = 100;
@@ -1760,7 +1760,7 @@ static Status CreateMemTableRepFactory(
 
 }  // namespace
 
-enum DistributionType : unsigned char { kFixed = 0, kUniform, kNormal };
+enum DistributionType : unsigned char { kFixed = 0, kUniform, kNormal, kMixGraph };
 
 static enum DistributionType FLAGS_value_size_distribution_type_e = kFixed;
 
@@ -1773,6 +1773,8 @@ static enum DistributionType StringToDistributionType(const char* ctype) {
     return kUniform;
   else if (!strcasecmp(ctype, "normal"))
     return kNormal;
+  else if(!strcasecmp(ctype, "mixgraph"))
+    return kMixGraph;
 
   fprintf(stdout, "Cannot parse distribution type '%s'\n", ctype);
   exit(1);
@@ -1830,6 +1832,21 @@ class NormalDistribution : public BaseDistribution,
   std::mt19937 gen_;
 };
 
+
+// class ParetoDistribution : public BaseDistribution {
+//  public:
+//   ParetoDistribution(unsigned int _min, unsigned int _max)
+//       : BaseDistribution(_min, _max),
+//         gen_(rd_()),
+//         distribution_(1.0) {}
+
+//  private:
+//   virtual unsigned int Get() override {
+//     return static_cast<unsigned int>(distribution_(gen_));
+//   }
+//   virtual bool NeedTruncate() override { return false; }
+// };
+
 class UniformDistribution : public BaseDistribution,
                             public std::uniform_int_distribution<unsigned int> {
  public:
@@ -1865,6 +1882,7 @@ class RandomGenerator {
             new NormalDistribution(FLAGS_value_size_min, FLAGS_value_size_max));
         break;
       case kFixed:
+      case kMixGraph:
       default:
         dist_.reset(new FixedDistribution(value_size));
         max_value_size = value_size;
@@ -2318,6 +2336,10 @@ class Stats {
               if (db->GetProperty("rocksdb.stats", &stats)) {
                 fprintf(stderr, "%s", stats.c_str());
               }
+              if(db->GetProperty("rocksdb.blob-stats ", &stats)){
+                fprintf(stderr, "%s", stats.c_str());
+              } 
+
               if (db->GetProperty("rocksdb.num-running-compactions", &stats)) {
                 fprintf(stderr, "num-running-compactions: %s\n", stats.c_str());
               }
@@ -2774,7 +2796,7 @@ class Benchmark {
     auto avg_value_size = FLAGS_value_size;
     if (FLAGS_value_size_distribution_type_e == kFixed) {
       fprintf(stdout,
-              "Values:     %d bytes each (%d bytes after compression)\n",
+              "Values:     %d bytes each (%d bytes after compression), undetermined for mixgraph workload\n",
               avg_value_size,
               static_cast<int>(avg_value_size * FLAGS_compression_ratio + 0.5));
     } else {
@@ -2794,7 +2816,7 @@ class Benchmark {
             ((static_cast<int64_t>(FLAGS_key_size + avg_value_size) * num_) /
              1048576.0));
     fprintf(
-        stdout, "FileSize:   %.1f MB (estimated)\n",
+        stdout, "FileSize:   %.1f MB (estimated)\n, undetermined for mixgraph workload",
         (((FLAGS_key_size + avg_value_size * FLAGS_compression_ratio) * num_) /
          1048576.0));
     fprintf(stdout, "Write rate: %" PRIu64 " bytes/second\n",
@@ -6564,8 +6586,11 @@ class Benchmark {
       } else if (query_type == 1) {
         // the Put query
         puts++;
-        int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
-                                              FLAGS_value_k, FLAGS_value_sigma);
+        // if(FLAGS_)
+        // int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
+        //                                       FLAGS_value_k, FLAGS_value_sigma);
+
+        int64_t val_size = FLAGS_value_size;
         if (val_size < 10) {
           val_size = 10;
         } else if (val_size > value_max) {
