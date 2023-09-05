@@ -571,6 +571,13 @@ function summarize_result {
     mb_sec=$( grep ^"$bench_name" "$test_out" | awk '{ print $11 }' )
   fi
 
+  blob_space_amps=$( grep ^"Blob file count:" "$test_out" | awk '{ print $15 }' )
+  blob_space_amp_file=${DB_DIR}/blob_space_amp.txt
+  echo "blob_space_amps: $blob_space_amps"  
+  echo "$blob_space_amps" >   $blob_space_amp_file
+  
+
+
   # For RocksDB version 4.x there are fewer fields but this still parses correctly
   # Cumulative writes: 242M writes, 242M keys, 18M commit groups, 12.9 writes per commit group, ingest: 95.96 GB, 54.69 MB/s
   cum_writes_gb_orig=$( grep "^Cumulative writes" "$test_out" | tail -1 | awk '{ for (x=1; x<=NF; x++) { if ($x == "ingest:") { printf "%.1f", $(x+1) } } }' )

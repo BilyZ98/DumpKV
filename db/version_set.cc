@@ -3528,9 +3528,9 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC(
   // file mapping is as follows:
   //
   // SST file number               Oldest blob file number
-  // 1                             10
-  // 2                             10
-  // 3                             12
+  // 1                             10,
+  // 2                             10,14
+  // 3                             12,14
   //
   // This is what the same thing looks like from the blob files' POV. (Note that
   // the linked SSTs simply denote the inverse mapping of the above.)

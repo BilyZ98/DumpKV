@@ -571,3 +571,63 @@ Two ways to show current gc is not efficient enough
 I need to show that this is a big problem.  So now I am running workload with different 
 gc parameters in rocksdb. 
 
+
+Current space amplification calculation is not accurate. I need to use space amplificaiton
+metrics of blob files to show that current param based garbage collection method is not efficient 
+
+Let's check how db_bench  get space amplification for blob files
+
+
+Again as I say,  current space calculation method in rocksdb db can not reflect the true space amplification
+of the  whole db. Because it does not know whether the valid ones in blob files 
+are obsolete or not. 
+
+
+So I have two main work items now. 
+1. continue with adding new metrics and code to gather this metrics to evalute write amplification, space amplification
+, and key lifetime of all keys.
+2. Train model to predict the lifetime . Come up with solution to predict lifetime of keys.
+    Where does data come from?
+    What kind of model should we use ? 
+    How can we evalute the performance of the model?
+    How does the model interact with LSM-tree?
+
+
+
+internal_key_lifetime.py
+How about running another workload. I learn that I can use sysbench yesterday 
+to create skewed workload.
+Currently the mixgraph workload generate the key lifetime distribution in which 
+60% of keys have lifetime 1.2e8 which is 25% of the longest lifetime.
+Current valid_duration is calculated for each internal key instead of user key.
+However, I don't do statistics for each user key now. It's worth doing. 
+It may happen that for the same user key, the lifetime for each put is different. 
+So then it comes to the question that how can we train the model to predict the
+
+
+Let's try the LightGBM model mentioned in the Learper paper.
+The output of the model will be the approximation lifetime of this key.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

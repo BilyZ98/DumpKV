@@ -10,6 +10,7 @@ function call_run_blob() {
   age_cutoff=${7:-1.0}
   compaction_trace_file=${8:-""}
   op_trace_file=${9:-""}
+  local force_gc_threshold=${10:-"1.0"}
   local write_buffer_size=$((100 * 1024 * 1024))
   # echo "db_dir: $db_dir"
   COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=$wal_dir \
@@ -18,7 +19,8 @@ function call_run_blob() {
    ENABLE_BLOB_GC=$enable_blob_gc BLOB_GC_AGE_CUTOFF=$age_cutoff \
    WRITE_BUFFER_SIZE=$write_buffer_size NUM_THREADS=1 \
    COMPACTION_TRACE_FILE=$compaction_trace_file \
-   OP_TRACE_FILE=$op_trace_file ./run_blob_bench.sh
+   OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
+   ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
  #   NUM_KEYS=5000000 DB_DIR=/tmp/test_blob \
@@ -38,18 +40,19 @@ op_trace_analyzer_exe=/home/zt/rocksdb_kv_sep/build/trace_analyzer
 compaction_trace_analyzer_exe=/home/zt/rocksdb_kv_sep/build/compaction_analyzer
 
 gc_threshold_gap='0.2'
-gc_threshold=0
 
-for age_cutoff_i in $(seq 0 $gc_threshold_gap 1.0 ) ; do
-  echo $age_cutoff_i
+for force_gc_threshold in $(seq 0 $gc_threshold_gap 1.0 ) ; do
+  echo $force_gc_threshold
 
 
-with_gc_dir=${db_dir}/with_gc_${age_cutoff_i}
+with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${force_gc_threshold}
 with_gc_compaction_trace_file=${with_gc_dir}/compaction_trace.txt
 with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
-output_text=with_gc_${age_cutoff_i}.txt
+output_text=with_gc_${age_cutoff}_${force_gc_threshold}.txt
 
-call_run_blob  $with_gc_dir $num_keys $with_gc_dir $with_gc_dir $enable_blob_file $enable_blob_gc $age_cutoff_i $with_gc_compaction_trace_file $with_gc_op_trace_file | tee $output_text
+call_run_blob  $with_gc_dir $num_keys $with_gc_dir $with_gc_dir $enable_blob_file \
+  $enable_blob_gc $age_cutoff $with_gc_compaction_trace_file \
+  $with_gc_op_trace_file $force_gc_threshold | tee $output_text
 
 trace_analye_output_dir=${with_gc_dir}/trace_analyzer
 if [ ! -d $trace_analye_output_dir ]; then
