@@ -610,11 +610,50 @@ The output of the model will be the approximation lifetime of this key.
 
 
 
+Read a Learned cache paper called GLCache which group cached object into level.
+I learn what features DumpLSM can use to predict the lifetime of keys.
+Here's the following features DumpLSM can use.
+1. Write time
+2. Key size 
+3. Content type? 
+4. Read/Write ratio
+
+GLCache also shows a coefficient between objects for different group size. 
+I wonder how does it do the calculation. It would be helpful if I do this too.
 
 
 
 
 
+
+# Model
+LightGBM 
+## Parameter tuning 
+https://lightgbm.readthedocs.io/en/stable/Parameters-Tuning.html
+What's the approach to tune parameters used in Leaper paper? 
+I remember that Leapers uses automatic paramter searching.
+GridSearchCV from scikit-learn 
+New area to dive in. Whoo ray!
+https://github.com/microsoft/FLAML for auto matic parameter searching
+
+XGBoost , CatBoost, 
+
+LRB model to do object level learning 
+github: https://github.com/sunnyszy/lrb
+
+Learned index for variable lenght input
+https://dspace.mit.edu/bitstream/handle/1721.1/144902/Spector-spectorb-meng-eecs-2022-thesis.pdf?sequence=1&isAllowed=y
+
+
+So for this task we focus on fixed size integer input. And I will convert 
+input key to integer.
+
+
+- Todo: get valid duration for keys that are not in compaction but is overwritten.
+
+
+There is sequence number 0 in compaction trace file which is not supposed to show up.
+I need to do some check to see if this is normal.
 
 
 

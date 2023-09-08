@@ -1,13 +1,18 @@
 import bisect
 op_trace_file="/mnt/nvme0n1/mlsm/test_blob/with_gc/trace-human_readable_trace.txt"
-compaction_trace_file="/mnt/nvme0n1/mlsm/test_blob/with_gc/compaction_human_readable_trace.txt"
+# compaction_trace_file="/mnt/nvme0n1/mlsm/test_blob/with_gc/compaction_human_readable_trace.txt"
+compaction_trace_file = "/mnt/nvme0n1/mlsm/test_blob/with_gc/compaction_human_readable_trace.txt"
 
+# op_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc/"
+# compaction_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc/"
 
 
 
 op_keys_access_info = {}
 op_keys_with_sequence_info = {}
 compaction_keys_access_info = {}
+int_key_id = 0
+uniq_key_map = {}
 with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compaction:
     lines = f.readlines()
     compaction_lines = f_compaction.readlines()
@@ -16,8 +21,11 @@ with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compac
         key = compaction_trace_infos[0]
         sequence_number = compaction_trace_infos[1]
         compaction_time = compaction_trace_infos[2]
+        int_seq = int(sequence_number)
+        assert(int_seq > 0)
         internal_key = key + "_" + sequence_number
-        compaction_keys_access_info[internal_key] = {'compaction_time': int(compaction_time), 'insert_time': None, 'invalid_time': None, 'valid_duration': None, 'actual_lifetime': None }
+
+        compaction_keys_access_info[internal_key] = {'compaction_time': int(compaction_time), 'insert_time': None, 'invalid_time': None, 'valid_duration': None, 'actual_lifetime': None , 'uniq_key_id': None}
 
 
     print("The number of keys in compaction trace: ", len(compaction_keys_access_info))
@@ -30,17 +38,22 @@ with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compac
             key = trace_infos[0]
             access_time = trace_infos[4]
             sequence_number = trace_infos[5]
+            int_seq_num = int(sequence_number)
+            assert(int_seq_num > 0)
             key_with_seq = key + "_" + sequence_number
             if key_with_seq in compaction_keys_access_info:
                 compaction_keys_access_info[key_with_seq]['insert_time'] = int(access_time)
 
             if key not in op_keys_access_info:
                 op_keys_access_info[key] = []
-            op_keys_access_info[key].append([int(sequence_number), int(access_time)])
+                int_key_id += 1
+                uniq_key_map[key] = int_key_id
+            op_keys_access_info[key].append([int_seq_num, int(access_time)])
             # if key_with_seq not in op_keys_with_sequence_info:
             #     op_keys_with_sequence_info[key_with_seq] = {'insert_time': int(access_time), 'compaction_time': None, }
             #     keys_access_info[key_with_seq] = {'insert_time': int(access_time), 'compaction_time': None, }
 
+    # Todo: get valid duration for keys that are not in compaction but is overwritten.
     print("The number of keys in op trace: ", len(op_keys_access_info))
     for key, access_infos in op_keys_access_info.items():
         # print('key: {}, access_infos: {}'.format(key, access_infos))
@@ -61,6 +74,11 @@ with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compac
                 compaction_keys_access_info[internal_key]['valid_duration'] = valid_duration
                 actual_lifetime = compaction_keys_access_info[internal_key]['compaction_time'] - compaction_keys_access_info[internal_key]['insert_time']
                 compaction_keys_access_info[internal_key]['actual_lifetime'] = actual_lifetime
+                assert(uniq_key_map.get(key) != None)
+                compaction_keys_access_info[internal_key]['uniq_key_id'] = uniq_key_map[key]
+            # else:
+                # print("something wrong!")
+                # assert(False)
             
 
 valid_durations = []
@@ -68,21 +86,28 @@ actual_lifetimes = []
 lifetime_gap = []
 lifetime_ratios = []
 
-for key, infos in compaction_keys_access_info.items():
+output_file_name = "internal_key_lifetime.txt"
+with open(output_file_name, 'w') as f:
+    f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime\n')
+    for key, infos in compaction_keys_access_info.items():
 
+        if infos['uniq_key_id'] != None:
+            f.write('{} {} {} {} {} {} {}\n'.format(infos['uniq_key_id'], key.split('_')[1], infos['insert_time'], infos['compaction_time'], infos['invalid_time'], infos['valid_duration'], infos['actual_lifetime']))
+        else:
+            print('key: ', key)
+            # assert(False)
+        # assert(infos['valid_duration'] != None)
+        if infos['valid_duration'] != None and infos['actual_lifetime'] != None:
+            lifetime_gap.append(infos['actual_lifetime'] - infos['valid_duration'])
+            # ratio = (infos['actual_lifetime']) / (infos['valid_duration'])
+            ratio = (infos['valid_duration']) / (infos['actual_lifetime'])
+            lifetime_ratios.append(ratio )
 
-    # assert(infos['valid_duration'] != None)
-    if infos['valid_duration'] != None and infos['actual_lifetime'] != None:
-        lifetime_gap.append(infos['actual_lifetime'] - infos['valid_duration'])
-        # ratio = (infos['actual_lifetime']) / (infos['valid_duration'])
-        ratio = (infos['valid_duration']) / (infos['actual_lifetime'])
-        lifetime_ratios.append(ratio )
+        if infos['valid_duration'] != None:
+            valid_durations.append(infos['valid_duration'])
 
-    if infos['valid_duration'] != None:
-        valid_durations.append(infos['valid_duration'])
-
-    if infos['actual_lifetime'] != None:
-        actual_lifetimes.append(infos['actual_lifetime'])
+        if infos['actual_lifetime'] != None:
+            actual_lifetimes.append(infos['actual_lifetime'])
 
 # print('lifetime ratio: ', lifetime_ratios)
 print('len of lifetime ratio: ', len(lifetime_ratios))
