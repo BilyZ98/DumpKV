@@ -1,4 +1,5 @@
 import lightgbm as lgb
+import numpy as np
 # from sklearn.datasets import load_boston
 from sklearn.datasets import fetch_california_housing
 from sklearn.metrics import mean_squared_error
@@ -8,6 +9,8 @@ from sklearn.model_selection import train_test_split
 # boston = load_boston()
 
 housing = fetch_california_housing()
+std_dev = np.std(housing.target)
+print('std_dev: ', std_dev)
 X_train, X_test, y_train, y_test = train_test_split(housing.data, housing.target, test_size=0.2, random_state=0)
 
 # Create dataset for LightGBM

@@ -656,10 +656,98 @@ There is sequence number 0 in compaction trace file which is not supposed to sho
 I need to do some check to see if this is normal.
 
 
+Current compaction tracer writes internal key at compaction_iterator.cc
+I don't think I make any changes to the internal keys during write or read time.
+But why does zero sequence number show up? 
 
 
 
+https://groups.google.com/g/rocksdb/c/iLy38REYWtY?pli=1
+This discussion give explanation why zero sequence number shows up in
+internal keys. However, there is no compacting to bottommost levels .
 
+
+I see, it looks like  that the sequence number may be set to zero during 
+compaction or during put operation.
+If rocksdb makes sure that there is no such key in the higher level then it
+can set sequence number to zero during compaction process.
+
+I am not sure about this.
+How can I verify this ?
+
+
+So now I am checking the Write() and PipelinedWriteImpl() in db_impl_write.cc 
+to see what's wrong.  It may be that the sequence number is zero in Write().
+The op tracer assumes that each key in put has a unique asscendent sequence number.
+This assumption may be not correct.
+
+Run my first machine learning model prediction using only key and insertion time
+The prediction target is the lifetime of each key.
+So we ahve only two features for this regression task. 
+The regression task is hard.
+
+Here's result
+```
+
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.091627 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 510
+[LightGBM] [Info] Number of data points in the train set: 213626, number of used features: 2
+[LightGBM] [Info] Start training from score 24491986.889803
+Starting predicting...
+The rmse of prediction is: 19275429.20166085
+```
+std of california housing price? 
+```
+std_dev:  1.1539282040412253
+Starting training...
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.084580 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 1838
+[LightGBM] [Info] Number of data points in the train set: 16512, number of used features: 8
+[LightGBM] [Info] Start training from score 2.072499
+Starting predicting...
+The rmse of prediction is: 0.7133873256387498
+```
+std of housing price drops about 40% after training
+
+std of lifetime of keys drops about 13% after training
+
+Can't say this is a good regression model
+The bing chat tells me that I can assess the model regression performance by 
+checking if the rmse is lower than std of the dataset.
+The std of the dataset is :std_dev:  22298492.15679915 
+So the regression model do have some help in terms of lifetime regression but not so impressive.
+The goal of this task is to reduce write amplification and space amplification.
+
+
+So I have two direction to optimize this task.
+1. From the features side
+    Use more features such as read/write rate. rocksdb information of different levels
+
+2. From task side
+    Change the task from regression to classification.
+    We need to more data engineering such that we need to give a classification 
+    to each lifetime in the dataset we collect.
+
+
+
+I need to build a evaluation pipeline to test how the model affect the write
+amplification and space amplification.
+But before that we need to integrate the model into the rocksdb.
+
+rmse of model perfomrance :https://datascience.stackexchange.com/questions/9167/what-does-rmse-points-about-performance-of-a-model-in-machine-learning
+LightGBM model have function to calculate the importance of each feature.
+
+
+What should I do now?
+
+Read write rate  should be given a try.
+We can just collect write arribal rate for now due to our task attribute..
+
+I need to make sure current sequence number collectoion logics is correct.
+The sequence number in op tracer should be exactly what it is of the actual 
+internal key.
 
 
 

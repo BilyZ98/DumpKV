@@ -1580,6 +1580,8 @@ Status MemTable::UpdateCallback(SequenceNumber seq, const Slice& key,
         auto status = moptions_.inplace_callback(prev_buffer, &new_prev_size,
                                                  delta, &str_value);
         if (status == UpdateStatus::UPDATED_INPLACE) {
+          fprintf(stderr,"update inplace is not allowed under current assumption");
+          assert(false);
           // Value already updated by callback.
           assert(new_prev_size <= prev_size);
           if (new_prev_size < prev_size) {

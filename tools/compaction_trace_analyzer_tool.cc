@@ -86,7 +86,12 @@ Status CompactionTraceAnalyzerTool::StartPorcessing() {
       ParsedInternalKey parsed_key;
       s = ParseInternalKey(ikey, &parsed_key, true);
       if(!s.ok()) {
+        assert(false);
         return s;
+      }
+      if(parsed_key.sequence == 0) {
+        fprintf(stderr, "key: %s, sequence number is 0\n", parsed_key.user_key.ToString().c_str());
+        assert(false);
       }
       std::string hex_user_key = ROCKSDB_NAMESPACE::LDBCommand::StringToHex(parsed_key.user_key.ToString()); 
       ret = snprintf(buffer, sizeof(buffer), "%" PRIu64 " %" PRIu64"\n",  parsed_key.sequence, record.timestamp);
