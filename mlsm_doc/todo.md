@@ -749,8 +749,111 @@ I need to make sure current sequence number collectoion logics is correct.
 The sequence number in op tracer should be exactly what it is of the actual 
 internal key.
 
+compaction_outputs.cc
+```
+Status CompactionOutputs::AddToOutput(
+    const CompactionIterator& c_iter,
+    const CompactionFileOpenFunc& open_file_func,
+    const CompactionFileCloseFunc& close_file_func) {
+ 
+```
+In this function num_output_records is changed when there is new output
+to be added to new files..
+
+CompactionIterator decides whether the key should be dropped.
+Looks like the drop type is drop_hidden. The location of drop is at line 834 
+in file compaction_iterator.cc
 
 
+Understand how keys are dropped during compaction. Snapshot number is used
+to drop the internal key that share same user key but with smaller sequence number.
+
+Internal keys with zero sequence numer are observed  during compaction.
+I don't think the sequence number of internal keys are changed during 
+the compaction process. So it's very likely that the sequence number is zero 
+when it is first written to MemTable or duing Flush process.
+But why ?
+
+This is important . Becuase if sequence numbers in op trace and compaction does not align
+then we can't get the true lifetime data.
+
+Now I know that there is  mempurge process when Flush happens.
+The mempurge process will do a garbage collection during Flush in memory .
+Does this affect the sequencen number of internal keys?
+
+
+flush_job.cc
+line:817
+```
+Status FlushJob::WriteLevel0Table() {
+    s = BuildTable()
+```
+
+
+builder.cc
+```
+Status BuildTable(
+    const std::string& dbname, VersionSet* versions,
+    const ImmutableDBOptions& db_options, const TableBuilderOptions& tboptions,
+    const FileOptions& file_options, TableCache* table_cache,
+    InternalIterator* iter,
+    std::vector<std::unique_ptr<FragmentedRangeTombstoneIterator>>
+        range_del_iters,
+    FileMetaData* meta, std::vector<BlobFileAddition>* blob_file_additions,
+    std::vector<SequenceNumber> snapshots,
+    SequenceNumber earliest_write_conflict_snapshot,
+    SequenceNumber job_snapshot, SnapshotChecker* snapshot_checker,
+    bool paranoid_file_checks, InternalStats* internal_stats,
+    IOStatus* io_status, const std::shared_ptr<IOTracer>& io_tracer,
+    BlobFileCreationReason blob_creation_reason,
+    const SeqnoToTimeMapping& seqno_to_time_mapping, EventLogger* event_logger,
+    int job_id, const Env::IOPriority io_priority,
+    TableProperties* table_properties, Env::WriteLifeTimeHint write_hint,
+    const std::string* full_history_ts_low,
+    BlobFileCompletionCallback* blob_callback, Version* version,
+    uint64_t* num_input_entries, uint64_t* memtable_payload_bytes,
+    uint64_t* memtable_garbage_bytes) {
+
+```
+
+Find the place where sequence number of internal key is set to zero.
+It's in compaction_iterator.cc
+```
+void CompactionIterator::PrepareOutput() {
+```
+It says that zeroing out the sequence number leads to better compression.
+If current compaction level is the bottommost_level_ which means there is 
+no files at levels higher than current level
+
+This sequence zero feature affects my compaction tracer.
+Because compaction tracer need to align with op trace on sequence number.
+
+
+I can submit a pr about compaction tracer later with another option of 
+not zeoring sequence number.
+
+But I need to make sure sequence number align with each other both in
+op trace file and compaction trace file.
+I can write the trace to the op trace file during MemtableInserter iteration.
+
+
+So sequence number is integrated into internal key at PutCFImpl()  of 
+MemTableInserter
+like this at write_batch.cc 
+```
+mem->Add(sequence_, value_tyep, key, value,...)
+
+```
+MemTable is incharge of put user key and sequence number together.
+
+
+It looks like the sequence number in op trace file may not align with that in 
+compaction trace file. Because in pipelined write implementation WAL group
+and memtable group is not necessary has the same order of keys.
+
+
+But since we are only writing in one thread so the sequence number should align
+in op trace file and compaction trace file
 
 
 

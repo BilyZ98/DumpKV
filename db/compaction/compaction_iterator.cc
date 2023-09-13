@@ -234,8 +234,10 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
   assert(!compaction_filter_);
   if (!compaction_filter_ ||
       (ikey_.type != kTypeValue && ikey_.type != kTypeBlobIndex)) {
+
     return true;
   }
+  fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
   bool error = false;
   // If the user has specified a compaction filter and the sequence
   // number is greater than any external snapshot, then invoke the
@@ -543,6 +545,11 @@ void CompactionIterator::NextFromInput() {
     current_user_key_sequence_ = ikey_.sequence;
     SequenceNumber last_snapshot = current_user_key_snapshot_;
     SequenceNumber prev_snapshot = 0;  // 0 means no previous snapshot
+    if(ikey_.sequence ==0 ){
+      // fprintf(stdout, " ikey_.sequence ==0 \n");
+      assert(false);
+
+    }
     current_user_key_snapshot_ =
         visible_at_tip_
             ? earliest_snapshot_
@@ -578,7 +585,7 @@ void CompactionIterator::NextFromInput() {
       validity_info_.SetValid(ValidContext::kKeepSDAndClearPut);
       clear_and_output_next_key_ = false;
     } else if (ikey_.type == kTypeSingleDeletion) {
-      printf("should not be here: single delete\n");
+      fprintf(stderr,"should not be here: single delete\n");
       assert(false);
       // We can compact out a SingleDelete if:
       // 1) We encounter the corresponding PUT -OR- we know that this key
@@ -809,6 +816,10 @@ void CompactionIterator::NextFromInput() {
     } else if (last_snapshot == current_user_key_snapshot_ ||
                (last_snapshot > 0 &&
                 last_snapshot < current_user_key_snapshot_)) {
+      // if last_snapshot > 0 && last_snapshot < kMaxSequenceNumber, then
+      // current user key is the same as previous one.
+      //  So key with smaller snapshot should be preserved.
+      //   
       // If the earliest snapshot is which this key is visible in
       // is the same as the visibility of a previous instance of the
       // same key, then this kv is not visible in any snapshot.
@@ -866,7 +877,7 @@ void CompactionIterator::NextFromInput() {
       ++iter_stats_.num_record_drop_obsolete;
       CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
       compaction_tracer_->WriteDropKey(record);
-      printf("Obsolete due to earlier  delete\n");
+      fprintf(stdout,"Obsolete due to earlier  delete\n");
 
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
@@ -986,7 +997,8 @@ void CompactionIterator::NextFromInput() {
             key_, RangeDelPositioningMode::kForwardTraversal);
       }
       if (should_delete) {
-        printf("should  delete \n");
+        // printf("should  delete \n");
+        fprintf(stdout, "should delete \n");
         CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
         compaction_tracer_->WriteDropKey(record);
 
@@ -1213,6 +1225,9 @@ void CompactionIterator::PrepareOutput() {
       DecideOutputLevel();
     }
 
+    // no zeroing sequence number
+    return;
+
     // Zeroing out the sequence number leads to better compression.
     // If this is the bottommost level (no files in lower levels)
     // and the earliest snapshot is larger than this seqno
@@ -1250,6 +1265,9 @@ void CompactionIterator::PrepareOutput() {
       }
       ikey_.sequence = 0;
       last_key_seq_zeroed_ = true;
+      fprintf(stdout, "PrepareOutput: zero seq, current level is %d\n",
+              level_);
+      assert(false);
       TEST_SYNC_POINT_CALLBACK("CompactionIterator::PrepareOutput:ZeroingSeq",
                                &ikey_);
       if (!timestamp_size_) {

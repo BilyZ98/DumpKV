@@ -2277,6 +2277,9 @@ class MemTableInserter : public WriteBatch::Handler {
 
     MemTable* mem = cf_mems_->GetMemTable();
     auto* moptions = mem->GetImmutableMemTableOptions();
+    if(sequence_ == 0) {
+      fprintf(stderr, "MemtableInserter::PutCFImpl: sequence_ == 0\n");
+    }
     assert(sequence_ != 0 || !moptions->inplace_update_support);
     // inplace_update_support is inconsistent with snapshots, and therefore with
     // any kind of transactions including the ones that use seq_per_batch
@@ -3149,6 +3152,10 @@ Status WriteBatchInternal::InsertInto(
       continue;
     }
     w->sequence = inserter.sequence();
+    if(w->sequence == 0){
+      fprintf(stderr, "Inserter sequence is 0\n");
+      assert(false);
+    }
     if (!w->ShouldWriteToMemtable()) {
       // In seq_per_batch_ mode this advances the seq by one.
       inserter.MaybeAdvanceSeq(true);
@@ -3160,6 +3167,9 @@ Status WriteBatchInternal::InsertInto(
     w->status = w->batch->Iterate(&inserter);
     if (!w->status.ok()) {
       return w->status;
+    }
+    if(seq_per_batch) {
+      fprintf(stdout,"seq per batch\n");
     }
     assert(!seq_per_batch || w->batch_cnt != 0);
     assert(!seq_per_batch || inserter.sequence() - w->sequence == w->batch_cnt);
@@ -3211,6 +3221,10 @@ Status WriteBatchInternal::InsertInto(
   Status s = batch->Iterate(&inserter);
   if (next_seq != nullptr) {
     *next_seq = inserter.sequence();
+    if(inserter.sequence() == 0){
+      fprintf(stderr, "InsertInto: Inserter sequence is 0\n");
+      assert(false);
+    }
   }
   if (concurrent_memtable_writes) {
     inserter.PostProcess();

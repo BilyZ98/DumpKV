@@ -495,6 +495,10 @@ Status FlushJob::MemPurge() {
     // Key transfer
     for (; c_iter.Valid(); c_iter.Next()) {
       const ParsedInternalKey ikey = c_iter.ikey();
+      if(ikey.sequence == 0) {
+        fprintf(stderr, "Flushjob ikey.sequence == 0\n");
+        assert(false);
+      }
       const Slice value = c_iter.value();
       new_first_seqno =
           ikey.sequence < new_first_seqno ? ikey.sequence : new_first_seqno;

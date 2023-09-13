@@ -215,6 +215,11 @@ Status BuildTable(
       const Slice& key = c_iter.key();
       const Slice& value = c_iter.value();
       const ParsedInternalKey& ikey = c_iter.ikey();
+      if(ikey.sequence == 0){
+        fprintf(stderr, "BuildTable: sequence number is 0\n");
+        assert(false);
+      }
+
       // Generate a rolling 64-bit hash of the key and values
       // Note :
       // Here "key" integrates 'sequence_number'+'kType'+'user key'.
