@@ -456,6 +456,27 @@ function month_to_num() {
     echo $date_str
 }
 
+function monitor_kv_storage {
+  output=$1
+  pspid=$!
+  while :; do
+    file_size=$( du -sh $output | awk '{print $1}' )
+    ts=$( date +%H%M%S )
+    echo -e "${file_size}\t${ts}"
+    sleep 10
+  done >& $output.storage &
+  szpid=$!
+}
+function stop_monitor {
+  output=$1
+  kill $pspid
+  kill $szpid
+  killall du
+  sleep 1
+  # gzip $output.storage
+}
+
+
 function start_stats {
   output=$1
   iostat -y -mx 1  >& $output.io &
@@ -1001,6 +1022,45 @@ function run_change_with_trace {
   summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
 }
 
+function run_change_with_trace_monitor {
+  output_name=$1
+  grep_name=$2
+  benchmarks=$3
+  op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  if [ ! -z $op_trace_file ]; then
+    op_trace_file_name=$op_trace_file
+  fi
+  echo "Do $num_keys random $output_name"
+  log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
+  time_cmd=$( get_cmd $log_file_name.time )
+# gdb --args
+  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,stats \
+       --use_existing_db=0 \
+       --sync=$syncval \
+       $params_w \
+       --threads=$num_threads \
+       --merge_operator=\"put\" \
+       --seed=$( date +%s ) \
+       --report_file=${log_file_name}.r.csv \
+       --trace_file=${op_trace_file_name} \
+       --mix_get_ratio=0.5 \
+       --mix_put_ratio=0.5 \
+       --compaction_trace_file=${compaction_trace_file} \
+       2>&1 | tee -a $log_file_name"
+  if [[ "$job_id" != "" ]]; then
+    echo "Job ID: ${job_id}" > $log_file_name
+    echo $cmd | tee -a $log_file_name
+  else
+    echo $cmd | tee $log_file_name
+  fi
+  start_stats $log_file_name.stats
+  monitor_kv_storage $output_dir
+  eval $cmd
+  stop_monitor $output_dir
+  stop_stats $log_file_name.stats
+  summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
+}
+
 function run_filluniquerandom {
   echo "Loading $num_keys unique keys randomly"
   log_file_name=$output_dir/benchmark_filluniquerandom.log
@@ -1192,7 +1252,7 @@ for job in ${jobs[@]}; do
   if [ $job = bulkload ]; then
     run_bulkload
   elif [ $job = mixgraph ]; then
-    run_change_with_trace mixgraph mixgraph mixgraph
+    run_change_with_trace_monitor mixgraph mixgraph mixgraph
   elif [ $job = flush_mt_l0 ]; then
     run_lsm flush_mt_l0
   elif [ $job = waitforcompaction ]; then
