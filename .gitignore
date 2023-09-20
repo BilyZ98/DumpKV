@@ -98,3 +98,7 @@ cmake-build-*
 third-party/folly/
 .cache/
 mlsm_data/
+mlsm_scripts/with_gc*
+tools/with_gc*.txt
+tools/without_gc.*
+mlsm_scripts/*.png

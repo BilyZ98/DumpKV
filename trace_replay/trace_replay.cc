@@ -388,7 +388,7 @@ Tracer::Tracer(SystemClock* clock, const TraceOptions& trace_options,
 
 Tracer::~Tracer() { trace_writer_.reset(); }
 
-Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq) {
+Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq, uint64_t write_rate=1) {
   TraceType trace_type = kTraceWriteWithStartSequence;
   if (ShouldSkipTrace(trace_type)) {
     return Status::OK();
@@ -400,6 +400,7 @@ Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_se
                                   TracePayloadType::kWriteBatchStartSequence);
   PutFixed64(&trace.payload, trace.payload_map);
   PutFixed64(&trace.payload, start_seq);
+  PutFixed64(&trace.payload, write_rate);
   PutLengthPrefixedSlice(&trace.payload, Slice(write_batch->Data()));
 
   return WriteTrace(trace);

@@ -856,7 +856,77 @@ But since we are only writing in one thread so the sequence number should align
 in op trace file and compaction trace file
 
 
+Can we get read write ratio in rocksdb statistics module?
 
+Let's check the code tomorrow.
+
+Let's check it  now.
+
+In file db.h
+```
+  virtual bool GetProperty(const Slice& property, std::string* value) {
+    return GetProperty(DefaultColumnFamily(), property, value);
+  }
+
+
+```
+
+We can call GetProperty() function to get write ratio and 
+other db statistics.
+Let's see if we can get write ratio in a period of time
+
+Find it. We can call GerProperty() 
+to get DB Stats and Interval writes
+
+
+So now let's run our internal_key_lifetime script to get lifetime .
+We need to make changes to our current internal_key_lifetime script to 
+see how many keys are still alive. Maybe not now. 
+I need to use gxr's script to gather true lifetime of all keys instead of
+keys that are involved in compaction.
+
+DB stats example
+
+```
+** DB Stats **
+Uptime(secs): 180.1 total, 60.1 interval
+Cumulative writes: 1714K writes, 1714K keys, 1714K commit groups, 1.0 writes per commit group, ingest: 1.69 GB, 9.62 MB/s
+Cumulative WAL: 1714K writes, 1714K syncs, 1.00 writes per sync, written: 1.69 GB, 9.62 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 557K writes, 557K keys, 557K commit groups, 1.0 writes per commit group, ingest: 563.20 MB, 9.38 MB/s
+Interval WAL: 557K writes, 557K syncs, 1.00 writes per sync, written: 0.55 GB, 9.38 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+num-running-compactions: 0
+num-running-flushes: 0
+
+
+```
+
+Maybe we don't need key's id as feature for model  . 
+Let's use it for now. 
+
+
+Two work items
+1. Get internal key lifetime for different paramters and different worklaod
+2. Write write rate to op trace to gather more feature for training
+
+
+Let's run the workload first.
+
+I will integrate the model into the rocksdb after I add the write ratio 
+features into data.
+
+Classify lifetime into different categories ? Difinitely good idea.
+Will do it after I get the write ratio features.
+
+Maybe I can come up with algorithm to classify lifetime into different categories.
+Let's make the assumption that we've already have a algorithm to know 
+how many classes should have for all keys. 
+
+Third work item
+3. Integrate the model intor rocksdb 
+
+I will do integration after get the write rate features into trace file as train data
 
 
 

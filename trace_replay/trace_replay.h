@@ -128,7 +128,7 @@ class Tracer {
   // Trace all write operations -- Put, Merge, Delete, SingleDelete, Write
   Status Write(WriteBatch* write_batch);
 
-  Status WriteWithStartSequence(WriteBatch* write_batch, uint64_t start_seq);
+  Status WriteWithStartSequence(WriteBatch* write_batch, uint64_t start_seq, uint64_t write_rate=1);
 
   // Trace Get operations.
   Status Get(ColumnFamilyHandle* cfname, const Slice& key);
