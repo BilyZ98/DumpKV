@@ -928,6 +928,61 @@ Third work item
 
 I will do integration after get the write rate features into trace file as train data
 
+Scripts to be run after the db_bench  to evalute the metrics
+mlsm_scripts/internal_key_lifetime.py:  get lifetime
+tools/calculate_user_data.py:  get space amplification 
+tools/mlsm_plot_metrics.py: get write amplification and space amplificaiton for blob 
+file
 
 
+Need to update mlsm_plot_metrics so that it accepts the single file from command
+line as input instead of traversing all folders holding data from multiple run 
+of db_bench
+
+
+Let's get the write rate tomorrow 
+
+
+Need to set up periodic scheduler to get the db stats 
+Let's learn how to use the PeriodicTaskScheduler
+
+Know how to use PeriodicTaskScheduler now.
+But I don't know where is the db stats stored and how can I get the write rate.
+
+db_impl.cc
+void DBImpl::DumpStats()
+I can modify GetProperty() function to get the write rate and store it  in DBImpl class
+So now I know how to get interval write rate , I can just modify the DumpStats() function ? 
+DBImpl::DumpStats() is registered to periodic_task_functions 
+```
+  periodic_task_functions_.emplace(PeriodicTaskType::kDumpStats,
+                                   [this]() { this->DumpStats(); });
+```
+It really takes time to figure out how to get write rate data
+This can help me get other interval db data if  I want more.
+18
+
+Need to change how compactiontrace reader read payload
+
+
+Updating tracer to write write rate data for each trace record .
+
+After this feature is obtained. I will first test the prediction or classification accuracy.
+And then I will integrate the model into rocksdb .
+
+Let's get the whole system running. 
+
+Let's assume that we already know what's the perfect classfication for lifetime distribution. 
+
+Machine leanring model choice
+1. LightGBM
+2. Q-learning ( reinforcment learning )
+
+
+Read papers about meachine learing for storage system or machine learning for system
+if we want to geta sense of broad view in this area.
+
+
+Finally get the periodic num writes to the trace file. 
+So now let's run python model training to do some validataion. 
 

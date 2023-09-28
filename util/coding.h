@@ -152,6 +152,8 @@ inline void PutFixed64(std::string* dst, uint64_t value) {
   }
 }
 
+// inline void PutFloat32(std::string* dst, uint64_t value)
+
 inline void PutVarint32(std::string* dst, uint32_t v) {
   char buf[5];
   char* ptr = EncodeVarint32(buf, v);

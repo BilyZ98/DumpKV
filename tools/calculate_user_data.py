@@ -11,7 +11,7 @@ user_space=[]
 
 with open(human_readable_trace) as f:
     first_line=f.readline()
-    start_ts=first_line.split()[4]
+    start_ts=int(first_line.split()[4])
     end_ts=start_ts+1.0e7 
 
     initial_size=0.0
@@ -19,7 +19,8 @@ with open(human_readable_trace) as f:
     lines = f.readlines()
     for line in lines:
         words=line.split()
-        if words[4]>end_ts: 
+        cur_time = int(words[4])
+        if cur_time>end_ts: 
             #统计当前10s内用户写数据大小
             total=0
             for value in my_dict.values():
@@ -28,10 +29,11 @@ with open(human_readable_trace) as f:
             initial_size+=total
             user_space.append(initial_size)
             #存储时间戳和用户数据大小
-            print(initial_size,words[4])
+            # print(initial_size,words[4])
+            f.write(str(initial_size)+' '+words[4]+'\n')
             #处理下一个10s间隔
             my_dict.clear()
-            start_ts=words[4]
+            start_ts=int(words[4])
             end_ts=start_ts+1.0e7
             
         if(words[1]==1):
@@ -43,7 +45,7 @@ with open(human_readable_trace) as f:
             global_dict[cur_key]=cur_value_size
             my_dict[cur_key] = cur_value_size
 
-with open(output_storage) as f:
+with open(output_storage, 'w') as f:
     lines=f.readlines()
     i=0
     for line in lines:

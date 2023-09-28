@@ -1515,7 +1515,9 @@ Status TraceAnalyzer::Handle(const WriteQueryTraceRecord& record,
   // will be two records if it is in a transaction. Here, we only
   // process the reord that is committed. If write is non-transaction,
   // HasBeginPrepare()==false, so we process it normally.
-  WriteBatch batch(record.GetWriteBatchRep().ToString(), record.GetStartSequence() );
+  // Need to move sequence, write rate and other features into struct
+  WriteBatch batch(record.GetWriteBatchRep().ToString(), record.GetStartSequence(), record.GetWriteRateMBPerSec() );
+
   if (batch.Count() == 0 || (batch.HasBeginPrepare() && !batch.HasCommit())) {
     return Status::OK();
   }
@@ -1602,6 +1604,14 @@ Status TraceAnalyzer::PutCFWithStartSequence(uint32_t column_family_id,
 
 }
 
+Status TraceAnalyzer::PutCFWithFeatures(uint32_t column_family_id,
+                                const Slice& key, const Slice& value, const KeyFeatures& features)  {
+  assert(features.sequence != 0);
+
+  return OutputAnalysisResult(TraceOperationType::kPut, write_batch_ts_,
+                              column_family_id, key, value.size(), features);
+
+}
 
 
 Status TraceAnalyzer::PutEntityCF(uint32_t column_family_id, const Slice& key,
@@ -1697,6 +1707,63 @@ Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
 
   return Status::OK();
 }
+
+Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
+                                           uint64_t timestamp,
+                                           std::vector<uint32_t> cf_ids,
+                                           std::vector<Slice> keys,
+                                           std::vector<size_t> value_sizes,
+                                           std::vector<KeyFeatures> features) {
+  assert(!cf_ids.empty());
+  assert(cf_ids.size() == keys.size());
+  assert(cf_ids.size() == value_sizes.size());
+  assert(op_type == TraceOperationType::kPut || op_type == TraceOperationType::kDelete);
+
+  Status s;
+
+  if (FLAGS_convert_to_human_readable_trace && trace_sequence_f_) {
+    // DeleteRane only writes the begin_key.
+    size_t cnt =
+        op_type == TraceOperationType::kRangeDelete ? 1 : cf_ids.size();
+    for (size_t i = 0; i < cnt; i++) {
+      s = WriteTraceSequence(op_type, cf_ids[i], keys[i], value_sizes[i],
+                             timestamp, features[i]);
+      if (!s.ok()) {
+        return Status::Corruption("Failed to write the trace sequence to file");
+      }
+    }
+  }
+
+  if (ta_[op_type].sample_count >= sample_max_) {
+    ta_[op_type].sample_count = 0;
+  }
+  if (ta_[op_type].sample_count > 0) {
+    ta_[op_type].sample_count++;
+    return Status::OK();
+  }
+  ta_[op_type].sample_count++;
+
+  if (!ta_[op_type].enabled) {
+    return Status::OK();
+  }
+
+  for (size_t i = 0; i < cf_ids.size(); i++) {
+    // Get query does not have value part, just give a fixed value 10 for easy
+    // calculation.
+    s = KeyStatsInsertion(
+        op_type, cf_ids[i], keys[i].ToString(),
+        value_sizes[i] == 0 ? kShadowValueSize : value_sizes[i], timestamp, features[i].sequence );
+    if (!s.ok()) {
+      return Status::Corruption("Failed to insert key statistics");
+    }
+  }
+
+  return Status::OK();
+
+
+
+}
+
 Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
                                            uint64_t timestamp,
                                            std::vector<uint32_t> cf_ids,
@@ -1749,6 +1816,18 @@ Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
 
   return Status::OK();
 }
+
+Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
+                                           uint64_t timestamp, uint32_t cf_id,
+                                           const Slice& key,
+                                           size_t value_size,
+                                           const KeyFeatures& key_features) {
+  return OutputAnalysisResult(
+      op_type, timestamp, std::vector<uint32_t>({cf_id}),
+      std::vector<Slice>({key}), std::vector<size_t>({value_size}), std::vector<KeyFeatures>({key_features}));
+}
+
+
 Status TraceAnalyzer::OutputAnalysisResult(TraceOperationType op_type,
                                            uint64_t timestamp, uint32_t cf_id,
                                            const Slice& key,
@@ -1945,6 +2024,26 @@ Status TraceAnalyzer::WriteTraceSequence(const uint32_t& type,
   int ret;
   ret = snprintf(buffer_, sizeof(buffer_), "%u %u %zu %" PRIu64 "\n", type,
                  cf_id, value_size, ts);
+  if (ret < 0) {
+    return Status::IOError("failed to format the output");
+  }
+  std::string printout(buffer_);
+  if (!FLAGS_no_key) {
+    printout = hex_key + " " + printout;
+  }
+  return trace_sequence_f_->Append(printout);
+}
+Status TraceAnalyzer::WriteTraceSequence(const uint32_t& type,
+                                         const uint32_t& cf_id,
+                                         const Slice& key,
+                                         const size_t value_size,
+                                         const uint64_t ts,
+                                         const KeyFeatures& features) {
+  std::string hex_key =
+      ROCKSDB_NAMESPACE::LDBCommand::StringToHex(key.ToString());
+  int ret;
+  ret = snprintf(buffer_, sizeof(buffer_), "%u %u %zu %" PRIu64 " %" PRIu64 " %" PRIu64 "\n", type,
+                 cf_id, value_size, ts, features.sequence, features.write_rate_mb_per_sec);
   if (ret < 0) {
     return Status::IOError("failed to format the output");
   }

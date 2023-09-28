@@ -1358,6 +1358,10 @@ DEFINE_int64(stats_interval_seconds, 0,
              "Report stats every N seconds. This overrides stats_interval when"
              " both are > 0.");
 
+DEFINE_uint64(db_stats_interval_seconds, 1,
+              "Report DB stats every N seconds. This overrides stats_interval "
+              "when both are > 0.");
+
 DEFINE_int32(stats_per_interval, 0,
              "Reports additional stats per interval when this is greater than "
              "0.");
@@ -3347,6 +3351,9 @@ class Benchmark {
       max_num_range_tombstones_ = FLAGS_max_num_range_tombstones;
       write_options_ = WriteOptions();
       read_random_exp_range_ = FLAGS_read_random_exp_range;
+      if(FLAGS_db_stats_interval_seconds > 0){
+        open_options_.stats_dump_period_sec = FLAGS_db_stats_interval_seconds;
+      }
       if (FLAGS_sync) {
         write_options_.sync = true;
       }
@@ -3654,6 +3661,7 @@ class Benchmark {
             db_.DeleteDBs();
             DestroyDB(FLAGS_db, open_options_);
           }
+          // open_options_.
           Options options = open_options_;
           for (size_t i = 0; i < multi_dbs_.size(); i++) {
             delete multi_dbs_[i].db;
@@ -3900,6 +3908,7 @@ class Benchmark {
 
   Stats RunBenchmark(int n, Slice name,
                      void (Benchmark::*method)(ThreadState*)) {
+    fprintf(stdout, "value theta is %f\n", FLAGS_value_theta);
     SharedState shared;
     shared.total = n;
     shared.num_initialized = 0;
@@ -4719,6 +4728,10 @@ class Benchmark {
 
     if (FLAGS_sine_write_rate) {
       FLAGS_benchmark_write_rate_limit = static_cast<uint64_t>(SineRate(0));
+    }
+    if(FLAGS_db_stats_interval_seconds > 0){
+      options.stats_dump_period_sec = FLAGS_db_stats_interval_seconds;
+      fprintf(stdout, "statsd dump period sec is %d", options.stats_dump_period_sec);
     }
 
     if (options.rate_limiter == nullptr) {
@@ -6587,10 +6600,10 @@ class Benchmark {
         // the Put query
         puts++;
         // if(FLAGS_)
-        // int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
-        //                                       FLAGS_value_k, FLAGS_value_sigma);
+        int64_t val_size = ParetoCdfInversion(u, FLAGS_value_theta,
+                                              FLAGS_value_k, FLAGS_value_sigma);
 
-        int64_t val_size = FLAGS_value_size;
+        // int64_t val_size = FLAGS_value_size;
         if (val_size < 10) {
           val_size = 10;
         } else if (val_size > value_max) {
@@ -8656,6 +8669,8 @@ int db_bench_tool(int argc, char** argv) {
     // at which the timer is checked for FLAGS_stats_interval_seconds
     FLAGS_stats_interval = 1000;
   }
+
+
 
   if (FLAGS_seek_missing_prefix && FLAGS_prefix_size <= 8) {
     fprintf(stderr, "prefix_size > 8 required by --seek_missing_prefix\n");

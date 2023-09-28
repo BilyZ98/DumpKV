@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import bisect
+import sys
 op_trace_file="/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.2/trace-human_readable_trace.txt"
 # compaction_trace_file="/mnt/nvme0n1/mlsm/test_blob/with_gc/compaction_human_readable_trace.txt"
 compaction_trace_file = "/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.2/compaction_human_readable_trace.txt"
@@ -9,12 +10,17 @@ op_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_"
 compaction_trace_dir_prefix= op_trace_dir_prefix
 
 
-op_trace_files = []
-compaction_trace_files = []
 
 
+def callGetInternalKeyLifetime(op_trace_file, compaction_trace_file, output_dir):
 
-def GetInteralKeyLifetime(op_trace_file, compaction_trace_file):
+    cur_push_dir = os.getcwd()
+    os.chdir(output_dir)
+    GetInternalKeyLifetime(op_trace_file, compaction_trace_file )
+    os.chdir(cur_push_dir)
+
+
+def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
 
     op_keys_access_info = {}
     op_keys_with_sequence_set = set()
@@ -190,21 +196,29 @@ def GetInteralKeyLifetime(op_trace_file, compaction_trace_file):
     # with open(output_file, 'w') as f:
 
 
-for i in np.arange(0.0, 1.2, 0.2):
-    gc_threshold = round(i,2)
-    cur_dir = op_trace_dir_prefix + str(gc_threshold)
-    cur_op_trace_file = cur_dir + "/trace-human_readable_trace.txt"
-    cur_compaction_trace_file = cur_dir + "/compaction_human_readable_trace.txt"
-    cur_output_data_dir = './with_gc_1.0_' + str(gc_threshold) + '/'
-    print('cur_op_trace_file: ', cur_op_trace_file)
-    print('cur_compaction_trace_file: ', cur_compaction_trace_file)
-    print('cur_output_data_dir: ', cur_output_data_dir)
-    cur_push_dir = os.getcwd()
-    os.mkdir(cur_output_data_dir ) 
-    os.chdir(cur_output_data_dir)
+op_trace = sys.argv[1]
+compaction_trace = sys.argv[2]
+output_dir = sys.argv[3]
+if __name__  == "__main__":
+    callGetInternalKeyLifetime(op_trace, compaction_trace, output_dir)
 
-    GetInteralKeyLifetime(cur_op_trace_file, cur_compaction_trace_file )
-    os.chdir(cur_push_dir)
+
+# for i in np.arange(0.0, 1.2, 0.2):
+#     gc_threshold = round(i,2)
+#     cur_dir = op_trace_dir_prefix + str(gc_threshold)
+#     cur_op_trace_file = cur_dir + "/trace-human_readable_trace.txt"
+#     cur_compaction_trace_file = cur_dir + "/compaction_human_readable_trace.txt"
+#     cur_output_data_dir = './with_gc_1.0_' + str(gc_threshold) + '/'
+#     print('cur_op_trace_file: ', cur_op_trace_file)
+#     print('cur_compaction_trace_file: ', cur_compaction_trace_file)
+#     print('cur_output_data_dir: ', cur_output_data_dir)
+#     cur_push_dir = os.getcwd()
+#     os.mkdir(cur_output_data_dir ) 
+#     os.chdir(cur_output_data_dir)
+
+#     GetInternalKeyLifetime(cur_op_trace_file, cur_compaction_trace_file )
+#     os.chdir(cur_push_dir)
+
     # op_trace_files.append(op_trace_dir_prefix + str(gc_threshold) + "/trace-human_readable_trace.txt")
     # compaction_trace_files.append(compaction_trace_dir_prefix + str(gc_threshold) + "/compaction_human_readable_trace.txt")
 

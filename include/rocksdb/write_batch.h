@@ -220,6 +220,10 @@ class WriteBatch : public WriteBatchBase {
   class Handler {
    public:
     virtual ~Handler();
+    struct KeyFeatures {
+      uint64_t sequence;
+      uint64_t write_rate_mb_per_sec;
+    };
     // All handler functions in this class provide default implementations so
     // we won't break existing clients of Handler on a source code level when
     // adding a new member function.
@@ -227,6 +231,13 @@ class WriteBatch : public WriteBatchBase {
                          const Slice& value, uint64_t start_sequence) {
       return Status::InvalidArgument(
           "non-default column family and PutCFWithStartSequence not implemented");
+    }
+
+    virtual Status PutCFWithFeatures(uint32_t column_family_id, const Slice& key,
+                                     const Slice& value, const KeyFeatures& features) {
+
+      return Status::InvalidArgument(
+          "non-default column family and PutCFWithFeatures not implemented");
     }
 
 
@@ -455,8 +466,12 @@ class WriteBatch : public WriteBatchBase {
   explicit WriteBatch(const std::string& rep);
   explicit WriteBatch(std::string&& rep);
   explicit WriteBatch(std::string&& rep, uint64_t start_sequence);
+  explicit WriteBatch(std::string&& rep, uint64_t start_sequence,
+                      uint64_t write_rate_mb_per_sec);
 
   uint64_t GetStartSequence() const { return start_sequence_; }
+  uint64_t GetWriteRateMbPerSec() const { return write_rate_mb_per_sec_; }
+  uint64_t GetPeriodNumWrites() const { return period_num_writes_; }
 
   WriteBatch(const WriteBatch& src);
   WriteBatch(WriteBatch&& src) noexcept;
@@ -522,6 +537,8 @@ class WriteBatch : public WriteBatchBase {
  protected:
   std::string rep_;  // See comment in write_batch.cc for the format of rep_
   uint64_t start_sequence_=0;
+  uint64_t write_rate_mb_per_sec_=0;
+  uint64_t period_num_writes_ = 0;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

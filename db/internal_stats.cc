@@ -1546,6 +1546,9 @@ void InternalStats::DumpDBStats(std::string* value) {
   uint64_t interval_write_self = write_self - db_stats_snapshot_.write_self;
   uint64_t interval_num_keys_written =
       num_keys_written - db_stats_snapshot_.num_keys_written;
+  // auto write_rate =     double(user_bytes_written - db_stats_snapshot_.ingest_bytes) / kMB /
+          // std::max(interval_seconds_up, 0.001);
+  // fprintf(stderr, "write rate: %.2f MB/s\n", write_rate);
   snprintf(
       buf, sizeof(buf),
       "Interval writes: %s writes, %s keys, %s commit groups, "

@@ -138,12 +138,14 @@ Status TracerHelper::DecodeTraceRecord(Trace* trace, int trace_file_version,
     case kTraceWriteWithStartSequence: {
       PinnableSlice rep;
       uint64_t start_sequence = 0;
+      uint64_t write_rate_mb_per_sec = 0 ;
       if(trace_file_version < 2) {
         rep.PinSelf(trace->payload);
       } else {
         Slice buf(trace->payload);
         GetFixed64(&buf, &trace->payload_map);
         GetFixed64(&buf, &start_sequence);
+        GetFixed64(&buf, &write_rate_mb_per_sec);
         int64_t payload_map = static_cast<int64_t>(trace->payload_map);
         Slice write_batch_data;
         while(payload_map) {
@@ -163,7 +165,7 @@ Status TracerHelper::DecodeTraceRecord(Trace* trace, int trace_file_version,
 
       }
       if (record != nullptr) {
-        record->reset(new WriteQueryTraceRecord(std::move(rep), trace->ts, start_sequence) );
+        record->reset(new WriteQueryTraceRecord(std::move(rep), trace->ts, start_sequence, write_rate_mb_per_sec) );
       }
       return Status::OK();
 
@@ -388,7 +390,7 @@ Tracer::Tracer(SystemClock* clock, const TraceOptions& trace_options,
 
 Tracer::~Tracer() { trace_writer_.reset(); }
 
-Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq, uint64_t write_rate=1) {
+Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq, uint64_t write_rate) {
   TraceType trace_type = kTraceWriteWithStartSequence;
   if (ShouldSkipTrace(trace_type)) {
     return Status::OK();
@@ -401,6 +403,7 @@ Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_se
   PutFixed64(&trace.payload, trace.payload_map);
   PutFixed64(&trace.payload, start_seq);
   PutFixed64(&trace.payload, write_rate);
+  // fprintf(stdout, "write rate is %lu\n", write_rate);
   PutLengthPrefixedSlice(&trace.payload, Slice(write_batch->Data()));
 
   return WriteTrace(trace);

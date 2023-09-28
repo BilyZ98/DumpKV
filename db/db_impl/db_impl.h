@@ -2617,6 +2617,10 @@ class DBImpl : public DB {
   // Scheduler to run DumpStats(), PersistStats(), and FlushInfoLog().
   // Currently, internally it has a global timer instance for running the tasks.
   PeriodicTaskScheduler periodic_task_scheduler_;
+  uint64_t write_rate_mb_per_sec_  = 0 ;
+  float float_write_rate_mb_per_sec_  = 0.0 ;
+
+  uint64_t stats_period_num_writes_ = 0;
 
   // It contains the implementations for each periodic task.
   std::map<PeriodicTaskType, const PeriodicTaskFunc> periodic_task_functions_;

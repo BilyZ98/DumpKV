@@ -227,7 +227,7 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
       // TODO: maybe handle the tracing status?
       // tracer_->Write(my_batch).PermitUncheckedError();
 
-      tracer_->WriteWithStartSequence(my_batch, pre_last_sequence + 1)
+      tracer_->WriteWithStartSequence(my_batch, pre_last_sequence + 1, stats_period_num_writes_)
           .PermitUncheckedError();
     }
   }
@@ -705,7 +705,8 @@ Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
           for (auto* writer : wal_write_group) {
             // TODO: maybe handle the tracing status?
             // tracer_->Write(writer->batch).PermitUncheckedError();
-            tracer_->WriteWithStartSequence(writer->batch, current_sequence).PermitUncheckedError();
+            // fprintf(stdout, "stats_period_num_writes_ is %ld\n", stats_period_num_writes_);
+            tracer_->WriteWithStartSequence(writer->batch, current_sequence, stats_period_num_writes_).PermitUncheckedError();
           }
         }
       }

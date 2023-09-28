@@ -104,7 +104,7 @@ class WriteQueryTraceRecord : public QueryTraceRecord {
  public:
   WriteQueryTraceRecord(PinnableSlice&& write_batch_rep, uint64_t timestamp);
 
-  WriteQueryTraceRecord(PinnableSlice&& write_batch_rep, uint64_t timestamp, uint64_t start_sequence);
+  WriteQueryTraceRecord(PinnableSlice&& write_batch_rep, uint64_t timestamp, uint64_t start_sequence, uint64_t write_mb_per_sec);
 
   WriteQueryTraceRecord(const std::string& write_batch_rep, uint64_t timestamp);
 
@@ -112,6 +112,7 @@ class WriteQueryTraceRecord : public QueryTraceRecord {
 
   TraceType GetTraceType() const override { return kTraceWrite; }
   uint64_t GetStartSequence() const { return start_sequence_; }
+  uint64_t GetWriteRateMBPerSec() const { return write_rate_mb_per_sec_; }
 
   // rep string for the WriteBatch.
   virtual Slice GetWriteBatchRep() const;
@@ -122,6 +123,7 @@ class WriteQueryTraceRecord : public QueryTraceRecord {
  private:
   PinnableSlice rep_;
   uint64_t start_sequence_;
+  uint64_t write_rate_mb_per_sec_;
 };
 
 // Trace record for DB::Get() operation

@@ -192,6 +192,16 @@ WriteBatch::WriteBatch(std::string&& rep, uint64_t start_sequence)
       start_sequence_(start_sequence)
       {}
 
+WriteBatch::WriteBatch(std::string&& rep, uint64_t start_sequence,
+                       uint64_t write_rate_mb_per_sec)
+                       : content_flags_(ContentFlags::DEFERRED),
+                         max_bytes_(0),
+                         rep_(std::move(rep)),
+                         start_sequence_(start_sequence),
+                         write_rate_mb_per_sec_(write_rate_mb_per_sec),
+                          period_num_writes_(write_rate_mb_per_sec)
+                         {}
+
 WriteBatch::WriteBatch(std::string&& rep)
     : content_flags_(ContentFlags::DEFERRED),
       max_bytes_(0),
@@ -491,6 +501,7 @@ Status WriteBatch::Iterate(Handler* handler) const {
   return WriteBatchInternal::Iterate(this, handler, WriteBatchInternal::kHeader,
                                      rep_.size());
 }
+
 Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
                                    WriteBatch::Handler* handler, size_t begin,
                                    size_t end) {
@@ -553,7 +564,11 @@ Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
                (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
 
         // s = handler->PutCFWithStartSequence(column_family, key, value, wb->GetStartSequence());
-        s = handler->PutCFWithStartSequence(column_family, key, value, cur_sequence);
+        // s = handler->PutCFWithStartSequence(column_family, key, value, cur_sequence);
+        WriteBatch::Handler::KeyFeatures  kf;
+        kf.sequence = cur_sequence;
+        kf.write_rate_mb_per_sec = wb->GetPeriodNumWrites(); 
+        s = handler->PutCFWithFeatures(column_family, key, value, kf);
         if (LIKELY(s.ok())) {
           empty_batch = false;
           found++;

@@ -385,7 +385,8 @@ fi
 params_w="$l0_config \
           --max_background_jobs=$max_background_jobs \
           --max_write_buffer_number=8 \
-          $const_params"
+          --value_theta=10000.0
+          $const_params "
 
 params_bulkload="--max_background_jobs=$max_background_jobs \
                  --max_write_buffer_number=8 \
@@ -458,20 +459,21 @@ function month_to_num() {
 
 function monitor_kv_storage {
   output=$1
-  pspid=$!
   while :; do
     file_size=$( du -sh $output | awk '{print $1}' )
     ts=$( date +%H%M%S )
     echo -e "${file_size}\t${ts}"
     sleep 10
   done >& $output.storage &
-  szpid=$!
+
+  monitor_pspid=$!
+  # szpid=$!
 }
 function stop_monitor {
   output=$1
-  kill $pspid
-  kill $szpid
-  killall du
+  kill $monitor_pspid
+  # kill $szpid
+  # killall du
   sleep 1
   # gzip $output.storage
 }
@@ -1034,7 +1036,7 @@ function run_change_with_trace_monitor {
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
 # gdb --args
-  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd    ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \

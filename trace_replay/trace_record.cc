@@ -37,10 +37,12 @@ WriteQueryTraceRecord::WriteQueryTraceRecord(PinnableSlice&& write_batch_rep,
 
 WriteQueryTraceRecord::WriteQueryTraceRecord(PinnableSlice&& write_batch_rep,
                                              uint64_t timestamp,
-                                             uint64_t start_sequence) 
+                                             uint64_t start_sequence,
+                                             uint64_t write_rate_mb_per_sec) 
     : QueryTraceRecord(timestamp), 
       rep_(std::move(write_batch_rep)), 
-      start_sequence_(start_sequence) {}
+      start_sequence_(start_sequence),
+      write_rate_mb_per_sec_(write_rate_mb_per_sec) {}
 WriteQueryTraceRecord::WriteQueryTraceRecord(const std::string& write_batch_rep,
                                              uint64_t timestamp)
     : QueryTraceRecord(timestamp) {

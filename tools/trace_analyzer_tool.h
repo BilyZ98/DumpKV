@@ -208,6 +208,11 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status PutCFWithStartSequence(uint32_t column_family_id,
                                 const Slice& key, const Slice& value, uint64_t seq) override;
 
+  using WriteBatch::Handler::KeyFeatures;
+  using WriteBatch::Handler::PutCFWithFeatures;
+  Status PutCFWithFeatures(uint32_t column_family_id, const Slice& key,
+                              const Slice& value, const KeyFeatures& key_features) override;
+
   using WriteBatch::Handler::PutEntityCF;
   Status PutEntityCF(uint32_t column_family_id, const Slice& key,
                      const Slice& value) override;
@@ -273,10 +278,21 @@ class TraceAnalyzer : private TraceRecord::Handler,
                               std::vector<Slice> keys,
                               std::vector<size_t> value_sizes,
                               std::vector<uint64_t> sequence_numbers);
+  Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
+                              std::vector<uint32_t> cf_ids,
+                              std::vector<Slice> keys,
+                              std::vector<size_t> value_sizes,
+                              std::vector<KeyFeatures> features);
+
 
 
 
     // for write op specifically
+  Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
+                            uint32_t cf_id, const Slice& key,
+                            size_t value_size,
+                            const KeyFeatures& key_features);
+
   Status OutputAnalysisResult(TraceOperationType op_type, uint64_t timestamp,
                               uint32_t cf_id, const Slice& key,
                               size_t value_size,
@@ -324,6 +340,11 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status KeyStatsInsertion(const uint32_t& type, const uint32_t& cf_id,
                            const std::string& key, const size_t value_size,
                            const uint64_t ts,
+                           const KeyFeatures& features);
+
+  Status KeyStatsInsertion(const uint32_t& type, const uint32_t& cf_id,
+                           const std::string& key, const size_t value_size,
+                           const uint64_t ts,
                            const uint64_t sequence_number = 0);
   Status StatsUnitCorrelationUpdate(StatsUnit& unit, const uint32_t& type,
                                     const uint64_t& ts, const std::string& key);
@@ -343,6 +364,10 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
                             const Slice& key, const size_t value_size,
                             const uint64_t ts, const uint64_t seq);
+  Status WriteTraceSequence(const uint32_t& type, const uint32_t& cf_id,
+                            const Slice& key, const size_t value_size,
+                            const uint64_t ts, const KeyFeatures& features);
+
 
   Status MakeStatisticKeyStatsOrPrefix(TraceStats& stats);
 

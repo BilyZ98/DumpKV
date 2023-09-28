@@ -1075,6 +1075,25 @@ void DBImpl::DumpStats() {
     assert(!property_info->need_out_of_mutex);
     default_cf_internal_stats_->GetStringProperty(*property_info, *property,
                                                   &stats);
+    std::string interval_write_str = "Interval writes:";
+    size_t found  = stats.find(interval_write_str);
+    assert(found != std::string::npos);
+    std::string sub_str= stats.substr(found);
+    std::istringstream iss( sub_str );
+    std::string word;
+    size_t traget_index= 2;
+    while(std::getline(iss, word, ' ')){
+      if(traget_index == 0){
+        break;
+      }
+      traget_index--;
+    }
+    // float float_write_rate = std::stof(word);
+    uint64_t num_writes = std::stoull(word);
+    // fprintf(stdout, "float write rate: %f\n", float_write_rate);
+    // float_write_rate_mb_per_sec_ = float_write_rate;
+    // write_rate_mb_per_sec_ = static_cast<uint64_t>(float_write_rate);
+  stats_period_num_writes_ = num_writes;
 
     property = &InternalStats::kPeriodicCFStats;
     property_info = GetPropertyInfo(*property);
