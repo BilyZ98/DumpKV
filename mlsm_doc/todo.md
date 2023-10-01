@@ -986,3 +986,255 @@ if we want to geta sense of broad view in this area.
 Finally get the periodic num writes to the trace file. 
 So now let's run python model training to do some validataion. 
 
+
+Features
+Used
+1. key id ( trasform  from string to int, so basically useless right now.)
+2. interval writes
+
+To be used
+3. adjacent keys or precusor keys write rate .(but how to get this one?)
+4. 
+
+
+
+Load model in c api in lightgbm
+```
+To load a LightGBM model in the C API, you can use the function `LGBM_BoosterCreateFromModelfile`. Here is an example of how to use it:
+
+```c
+#include <LightGBM/c_api.h>
+
+int num_iterations;
+BoosterHandle booster;
+LGBM_BoosterCreateFromModelfile("model.txt", &num_iterations, &booster);
+
+
+```
+In this code, `"model.txt"` is the filename of your model. The function will load the model from this file into the `booster` variable. The `num_iterations` variable will hold the number of iterations that were used to train the model¹.
+
+Please replace `"model.txt"` with the path to your actual model file. After calling this function, you can use the `booster` handle to make predictions¹. Remember to check the return value of `LGBM_BoosterCreateFromModelfile` to ensure that the model was loaded successfully¹.
+
+Source: Conversation with Bing, 9/28/2023
+(1) C API — LightGBM 4.1.0.99 documentation - Read the Docs. https://lightgbm.readthedocs.io/en/latest/C-API.html.
+(2) lgbmclassifier save and load model · Issue #1217 · microsoft/LightGBM. https://github.com/microsoft/LightGBM/issues/1217.
+(3) Load LightGBM model from string or buffer - Stack Overflow. https://stackoverflow.com/questions/55641285/load-lightgbm-model-from-string-or-buffer.
+(4) Loading a model from Python into C++ just for predictions. #2397 - GitHub. https://github.com/microsoft/LightGBM/issues/2397.
+(5) undefined. https://github.com/dmlc/treelite.
+(6) undefined. https://lightgbm.readthedocs.io/en/latest/Parameters.html.
+
+
+Make predictions in lightgbm with c api
+```
+To perform prediction with the LightGBM C API, you can use the `LGBM_BoosterPredictForMat` function¹. Here is an example of how to use it:
+
+```c
+#include <LightGBM/c_api.h>
+
+BoosterHandle booster;
+// Load model
+LGBM_BoosterCreateFromModelfile("model.txt", &num_iterations, &booster);
+
+// Assume float_data contains your data and num_row and num_col are the number of rows and columns
+float *float_data = ...;
+int64_t num_row = ...;
+int32_t num_col = ...;
+
+double *out_result = (double*)malloc(sizeof(double) * num_row);
+int64_t out_len = 0;
+
+// Perform prediction
+LGBM_BoosterPredictForMat(booster, float_data, C_API_DTYPE_FLOAT32, num_row, num_col,
+                          C_API_PREDICT_NORMAL, 0, -1, "", &out_len, out_result);
+
+```
+In this code, `float_data` is a pointer to your data stored in row-major order¹. `num_row` and `num_col` are the number of rows and columns in your data¹. `out_result` is a pointer to a buffer where the predictions will be stored¹. After calling `LGBM_BoosterPredictForMat`, `out_result` will contain the predicted values¹.
+
+Please replace `"model.txt"` with the path to your actual model file and ensure that `float_data` points to your actual data¹.
+
+Remember to check the return value of `LGBM_BoosterPredictForMat` to ensure that the prediction was successful¹. Also, don't forget to free the memory allocated for `out_result` when you're done with it¹.
+
+Source: Conversation with Bing, 9/28/2023
+(1) C API — LightGBM 4.1.0.99 documentation - Read the Docs. https://lightgbm.readthedocs.io/en/latest/C-API.html.
+(2) How to use C_API(with category feature) to predict the data from stdin .... https://github.com/microsoft/LightGBM/issues/3334.
+(3) LGBM inference using C++ API (Python/C++ Interface) - GitHub. https://github.com/PathofData/LGBM_C_inference.
+(4) [C_API] LGBM model returns different predictions on Python and C++. https://github.com/microsoft/LightGBM/issues/5822.
+
+
+
+Experiments log: with period_num_writes , features [key_id, insert_timestamp, period_num_writes]
+```
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
+std_dev:  49876961.48668319
+Starting training...
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.019648 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 743
+[LightGBM] [Info] Number of data points in the train set: 348330, number of used features: 3
+[LightGBM] [Info] Start training from score 62074424.213011
+Starting predicting...
+The rmse of prediction is: 46839367.17308591
+
+```
+Experiments log: without extra features, features[key_id, insert_timestamp]
+```
+/home/zt/rocksdb_kv_sep/mlsm_model/lightgbm_lifetime_prediction.py:21: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  features['key'] = pd.to_numeric(features['key'])
+/home/zt/rocksdb_kv_sep/mlsm_model/lightgbm_lifetime_prediction.py:22: SettingWithCopyWarning:
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  features['insert_time'] = pd.to_numeric(features['insert_time'])
+std_dev:  49876961.48668319
+Starting training...
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.082093 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 510
+[LightGBM] [Info] Number of data points in the train set: 348330, number of used features: 2
+[LightGBM] [Info] Start training from score 62074424.213011
+Starting predicting...
+The rmse of prediction is: 46848442.41926392
+>>> exit()
+
+```
+
+
+Let's turn this job into classification task.
+First let's inspect the valid duration and see what classifications we should give 
+to this particular dataset.
+
+I believe there is research paper about how to give automatic classifications 
+for different workload.
+I can try the simple binary classification task and integrate this model into rocksdb
+
+Lightgbm classification usage example and evaluation of classification accuracy and recall. 
+I forget the definition of recall rate and accuracy rate.
+https://www.kaggle.com/code/prashant111/lightgbm-classifier-in-python#Classification-Metrices
+
+
+
+There is too many parameters to tune.
+
+Experiments with task changed to classification
+age_cutoff: 1.0
+gc_threshold: 0.8
+long lifetime threashold: 0.5 * 1e8
+Features:
+[key_id, insert_time, period_write_rates]
+Lightgbm params:
+```
+params = {
+    'boosting_type': 'gbdt',
+    'objective': 'binary',
+    'metric': {'auc', 'binary_logloss'},
+    # 'num_leaves': 31,
+    'learning_rate': 0.05,
+    'feature_fraction': 0.9
+}
+
+# Train the model
+print('Starting training...')
+gbm = lgb.train(params,
+                lgb_train,
+                num_boost_round=100,
+                valid_sets=lgb_eval,
+                )
+
+
+```
+Classification results:
+```
+std_dev:  0.49999998955478836
+Starting training...
+[LightGBM] [Info] Number of positive: 174252, number of negative: 174078
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.083323 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 743
+[LightGBM] [Info] Number of data points in the train set: 348330, number of used features: 3
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.500250 -> initscore=0.000999
+[LightGBM] [Info] Start training from score 0.000999
+Starting predicting...
+              precision    recall  f1-score   support
+
+           0       0.65      0.48      0.56     43584
+           1       0.59      0.74      0.66     43499
+
+    accuracy                           0.61     87083
+   macro avg       0.62      0.61      0.61     87083
+weighted avg       0.62      0.61      0.61     87083
+```
+
+
+Let's try auto tune framework to get the best paratmeter to train the model
+And then I will integrate this model into rocksdb 
+
+
+Removing period_write_rates features
+```
+std_dev:  0.49999998955478836
+Starting training...
+[LightGBM] [Info] Number of positive: 174252, number of negative: 174078
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.084810 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 510
+[LightGBM] [Info] Number of data points in the train set: 348330, number of used features: 2
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.500250 -> initscore=0.000999
+[LightGBM] [Info] Start training from score 0.000999
+Starting predicting...
+              precision    recall  f1-score   support
+
+           0       0.65      0.48      0.56     43584
+           1       0.59      0.74      0.66     43499
+
+    accuracy                           0.61     87083
+   macro avg       0.62      0.61      0.61     87083
+weighted avg       0.62      0.61      0.61     87083
+```
+Looks like adding period_num_writes features does not help at all
+
+
+FEatures: [key_id, period_num_writes]
+removing timestamp gives worse results
+```
+std_dev:  0.49999998955478836
+Starting training...
+[LightGBM] [Info] Number of positive: 174252, number of negative: 174078
+[LightGBM] [Warning] Auto-choosing col-wise multi-threading, the overhead of testing was 0.083045 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 488
+[LightGBM] [Info] Number of data points in the train set: 348330, number of used features: 2
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.500250 -> initscore=0.000999
+[LightGBM] [Info] Start training from score 0.000999
+Starting predicting...
+              precision    recall  f1-score   support
+
+           0       0.60      0.56      0.58     43584
+           1       0.59      0.63      0.61     43499
+
+    accuracy                           0.60     87083
+   macro avg       0.60      0.60      0.60     87083
+weighted avg       0.60      0.60      0.60     87083
+```
+
+Possible new features: 
+1. num of compaction going on
+2. read rates
+3. precursor write rates
+4. num of flushes recently
+5.  turn string key into key ranges ( need to show that keys falling in same range have similar lifetime, 
+is this assumption  true?) Anyway, it's worth trying
+
+If we can get more application level information, then it would be better
+
+
+Let's turn key into key ranges now
+
+
+

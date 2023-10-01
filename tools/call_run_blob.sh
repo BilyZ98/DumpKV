@@ -67,7 +67,9 @@ for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
   compaction_human_trace="${with_gc_dir}/compaction_human_readable_trace.txt" 
 
   # lifetime calculation
-  python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir
+  cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
+  echo " internal key lifetime python command: $cmd"
+  eval $cmd
 
   # calculate space amplification
   space_amp_ouput_path="${with_gc_dir}/space_amp.txt"
