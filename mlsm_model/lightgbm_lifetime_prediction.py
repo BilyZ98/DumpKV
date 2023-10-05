@@ -18,10 +18,11 @@ data = pd.read_csv(data_file_path, sep=' ', header=0)
 # X_train, X_test, y_train, y_test = train_test_split(housing.data, housing.target, test_size=0.2, random_state=0)
 
 
-features = data.iloc[:, [0,7]]
+features = data.iloc[:, [0,2,7,9]]
 features['key'] = pd.to_numeric(features['key']) 
-# features['insert_time'] = pd.to_numeric(features['insert_time'])
+features['insert_time'] = pd.to_numeric(features['insert_time'])
 features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
+features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
 # features['key'] = features['key'].apply(lambda x: int(x,16))
 # astype('category')
 labels = data.iloc[:, 8]
@@ -57,3 +58,5 @@ print('Starting predicting...')
 y_pred = gbm.predict(x_test, num_iteration=gbm.best_iteration)
 print(classification_report(y_test, y_pred.round() ))
 # print('The rmse of prediction is:', mean_squared_error(y_test, y_pred) ** 0.5)
+
+gbm.save_model("lightgbm_classification_key_range_model.txt")

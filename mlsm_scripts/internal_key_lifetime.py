@@ -1,4 +1,5 @@
 import numpy as np
+import bisect
 import os
 import bisect
 import sys
@@ -9,8 +10,8 @@ compaction_trace_file = "/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.2/compaction_
 op_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_"
 compaction_trace_dir_prefix= op_trace_dir_prefix
 
-
-
+key_ranges = []
+num_key_ranges = 100
 
 def callGetInternalKeyLifetime(op_trace_file, compaction_trace_file, output_dir):
 
@@ -42,7 +43,8 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
             compaction_keys_access_info[internal_key] = {'compaction_time': int(compaction_time), 'insert_time': None, 
                                                          'invalid_time': None, 'valid_duration': None, 
                                                          'actual_lifetime': None , 'uniq_key_id': None,
-                                                         'period_num_writes': None}
+                                                         'period_num_writes': None,
+                                                         'key_range_idx': None}
 
 
         print("The number of keys in compaction trace: ", len(compaction_keys_access_info))
@@ -72,6 +74,10 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 # if key_with_seq not in op_keys_with_sequence_info:
                 #     op_keys_with_sequence_info[key_with_seq] = {'insert_time': int(access_time), 'compaction_time': None, }
                 #     keys_access_info[key_with_seq] = {'insert_time': int(access_time), 'compaction_time': None, }
+        sorted_user_keys = sorted(list(op_keys_access_info.keys()))
+        for i in range(num_key_ranges):
+            next_key_idx = int(float(i/num_key_ranges) * len(sorted_user_keys))
+            key_ranges.append( sorted_user_keys[next_key_idx] )
 
         for key, _ in compaction_keys_access_info.items():
             if key not in op_keys_with_sequence_set:
@@ -93,6 +99,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 internal_key = key + "_" + str(access_infos[i][0])
                 valid_duration = access_infos[i + 1][1] - access_infos[i][1]
                 invalid_time = access_infos[i + 1][1]
+                key_range_idx = bisect.bisect_left(key_ranges, key)
                 if internal_key in compaction_keys_access_info:
                     assert(compaction_keys_access_info[internal_key]['insert_time'] == access_infos[i][1])
                     assert(compaction_keys_access_info[internal_key]['invalid_time'] == None)
@@ -102,6 +109,8 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                     compaction_keys_access_info[internal_key]['actual_lifetime'] = actual_lifetime
                     assert(uniq_key_map.get(key) != None)
                     compaction_keys_access_info[internal_key]['uniq_key_id'] = uniq_key_map[key]
+                    compaction_keys_access_info[internal_key]['key_range_idx'] = key_range_idx
+
                 # else:
                     # print("something wrong!")
                     # assert(False)
@@ -115,7 +124,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
     output_file_name = "internal_key_lifetime.txt"
     with open(output_file_name, 'w') as f:
         long_lifetime_border = 0.5 * 1e8
-        f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime period_num_writes is_long_live\n')
+        f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime period_num_writes is_long_live key_range_idx\n')
         for key, infos in compaction_keys_access_info.items():
 
             if infos['uniq_key_id'] != None:
@@ -123,7 +132,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 if infos['valid_duration'] != None and infos['valid_duration'] > long_lifetime_border:
                     is_long_live = 1
                 
-                f.write('{} {} {} {} {} {} {} {} {}\n'.format(infos['uniq_key_id'], key.split('_')[1], infos['insert_time'], infos['compaction_time'], infos['invalid_time'], infos['valid_duration'], infos['actual_lifetime'], infos['period_num_writes'], is_long_live))
+                f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(infos['uniq_key_id'], key.split('_')[1], infos['insert_time'], infos['compaction_time'], infos['invalid_time'], infos['valid_duration'], infos['actual_lifetime'], infos['period_num_writes'], is_long_live, infos['key_range_idx']))
             else:
                 print('key: ', key)
                 assert(False)

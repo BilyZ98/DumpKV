@@ -460,11 +460,12 @@ function month_to_num() {
 function monitor_kv_storage {
   output=$1
   while :; do
-    file_size=$( du -sh $output | awk '{print $1}' )
-    ts=$( date +%H%M%S )
+    file_size=$( du --exclude=*trace.txt -s --block-size=${M} $DB_DIR | awk '{print $1}' )
+    # ts=$( date +%H%M%S )
+    ts=$( date +%s )
     echo -e "${file_size}\t${ts}"
     sleep 10
-  done >& $output.storage &
+  done >& $output &
 
   monitor_pspid=$!
   # szpid=$!
@@ -1056,9 +1057,10 @@ function run_change_with_trace_monitor {
     echo $cmd | tee $log_file_name
   fi
   start_stats $log_file_name.stats
-  monitor_kv_storage $output_dir
+  space_monitor_file_name="$output_dir/dir_size.log"
+  monitor_kv_storage $space_monitor_file_name 
   eval $cmd
-  stop_monitor $output_dir
+  stop_monitor $space_monitor_file_name
   stop_stats $log_file_name.stats
   summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
 }
