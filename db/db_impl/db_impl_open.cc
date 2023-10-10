@@ -2082,6 +2082,17 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   if (s.ok()) {
     s = impl->RegisterRecordSeqnoTimeWorker();
   }
+
+  if(s.ok()) {
+    std::string model_path = "/home/zt/rocksdb_kv_sep/mlsm_model/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";  
+    s = impl->LoadModel(model_path);
+  }
+  if(s.ok()) {
+    printf("load model successfully\n");
+  } else {
+    printf("failed to load model\n");
+
+  }
   if (!s.ok()) {
     for (auto* h : *handles) {
       delete h;

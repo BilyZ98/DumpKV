@@ -65,6 +65,7 @@
 #include "util/repeatable_thread.h"
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
+#include "LightGBM/c_api.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -1278,7 +1279,11 @@ class DBImpl : public DB {
 
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
-
+  BoosterHandle lightgbm_handle_;
+  // Need to allocate memory for keys 
+  // Call AllocateKey?
+  std::vector<Slice> key_ranges_;
+  int lightgbm_num_iterations_;
   // State below is protected by mutex_
   // With two_write_queues enabled, some of the variables that accessed during
   // WriteToWAL need different synchronization: log_empty_, alive_log_files_,
@@ -1448,6 +1453,19 @@ class DBImpl : public DB {
                                 uint64_t log_ref, SequenceNumber seq,
                                 const size_t sub_batch_cnt);
 
+  // LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForMatSingleRowFast(FastConfigHandle fastConfig_handle,
+  //                                                              const void* data,
+  //                                                              int64_t* out_len,
+  //                                                              double* out_result);
+
+  struct KeyInsertContext {
+    uint64_t num_period_writes = 0;
+    uint64_t key_range_id;
+    uint64_t timestamp;
+
+  };
+  Status PredictLifetimeLabel(const Slice& key, const KeyInsertContext &kcontext , uint64_t* lifeteim_label);
+  Status LoadModel(std::string file_path) ;
   // Whether the batch requires to be assigned with an order
   enum AssignOrder : bool { kDontAssignOrder, kDoAssignOrder };
   // Whether it requires publishing last sequence or not

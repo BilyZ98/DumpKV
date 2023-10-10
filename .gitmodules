@@ -1,3 +1,6 @@
 [submodule "third-party/googletest"]
 	path = third-party/googletest
 	url = https://github.com/google/googletest.git
+[submodule "third-party/lightgbm"]
+	path = third-party/lightgbm
+	url = https://github.com/microsoft/LightGBM.git

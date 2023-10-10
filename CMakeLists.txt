@@ -108,6 +108,32 @@ else()
     endif()
   endif()
 
+# option(WITH_LIGHTGBM_LIB "build with lightgbm" ON)
+
+# if(WITH_LIGHTGBM_LIB) 
+#   include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/lightgbm/include)
+#   # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third-party/lightgbm/include)
+# endif()
+
+
+  option(WITH_LIGHTGBM "build with lightgbm" ON)
+  if(WITH_LIGHTGBM) 
+    message(STATUS "path of cmake module ${CMAKE_MODULE_PATH}")
+    find_package(lightgbm REQUIRED)
+    if(lightgbm_FOUND)
+      message("lightgbm found")
+      # set(LIGHTGBM_LIB ${})
+    else()
+      message("lightgbm not found")
+    endif()
+
+
+    # include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/lightgbm/include)
+    set(LIGHTGBM_LIB lightgbm::lightgbm)
+    list(APPEND THIRDPARTY_LIBS ${LIGHTGBM_LIB})
+    include_directories(${LIGHTGBM_INCLUDE_DIR})
+  endif()
+
   if(MINGW)
     option(WITH_GFLAGS "build with GFlags" OFF)
   else()
@@ -1135,9 +1161,13 @@ string(REGEX REPLACE "[^0-9: /-]+" "" GIT_DATE "${GIT_DATE}")
 set(BUILD_VERSION_CC ${CMAKE_BINARY_DIR}/build_version.cc)
 configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 
+# add_library()
+# add_subdirectory()
+
+# add_subdirectory(third-party/lightgbm/)
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} )
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})

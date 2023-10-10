@@ -10,6 +10,13 @@ if(@WITH_JEMALLOC@)
   find_dependency(JeMalloc)
 endif()
 
+if(@WITH_LIGHTGBM@)
+  find_dependency(lightgbm CONFIG)
+  if(NOT lightgbm_FOUND)
+    find_dependency(LightGBM)
+  endif()
+endif()
+
 if(@WITH_GFLAGS@)
   find_dependency(gflags CONFIG)
   if(NOT gflags_FOUND)

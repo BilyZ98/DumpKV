@@ -2047,9 +2047,10 @@ Status TraceAnalyzer::WriteTraceSequence(const uint32_t& type,
   if (ret < 0) {
     return Status::IOError("failed to format the output");
   }
+  std::string key_string(key.data(), key.size());
   std::string printout(buffer_);
   if (!FLAGS_no_key) {
-    printout = hex_key + " " + printout;
+    printout = hex_key + " " + printout ;
   }
   return trace_sequence_f_->Append(printout);
 }

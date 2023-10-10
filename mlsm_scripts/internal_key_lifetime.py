@@ -10,8 +10,15 @@ compaction_trace_file = "/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.2/compaction_
 op_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_"
 compaction_trace_dir_prefix= op_trace_dir_prefix
 
+
+op_valid_duration_file = "op_valid_duration.txt"
+
 key_ranges = []
 num_key_ranges = 100
+# [0-1) , [1-2) , [2-4), ... [1024, inf)
+# lifetime_labels = { 1: 1, 2: 2, 4:3, 8:4, 16:5, 32:6, 64:7, 128:8, 256:9, 512:10, 1024:11 }
+# lifetime_limits = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+lifetime_limits = [1, 10, 100, 1000]
 
 def callGetInternalKeyLifetime(op_trace_file, compaction_trace_file, output_dir):
 
@@ -69,7 +76,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                     op_keys_access_info[key] = []
                     int_key_id += 1
                     uniq_key_map[key] = int_key_id
-                op_keys_access_info[key].append([int_seq_num, int(access_time)])
+                op_keys_access_info[key].append([int_seq_num, int(access_time), int(period_num_writes)])
                 op_keys_with_sequence_set.add(key_with_seq)
                 # if key_with_seq not in op_keys_with_sequence_info:
                 #     op_keys_with_sequence_info[key_with_seq] = {'insert_time': int(access_time), 'compaction_time': None, }
@@ -98,6 +105,9 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
             for i in range(len(access_infos) - 1):
                 internal_key = key + "_" + str(access_infos[i][0])
                 valid_duration = access_infos[i + 1][1] - access_infos[i][1]
+                seq_i = access_infos[i][0]
+                seq_i_1 = access_infos[i + 1][0]
+                assert(valid_duration > 0 and seq_i < seq_i_1)
                 invalid_time = access_infos[i + 1][1]
                 key_range_idx = bisect.bisect_left(key_ranges, key)
                 if internal_key in compaction_keys_access_info:
@@ -115,16 +125,36 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                     # print("something wrong!")
                     # assert(False)
                 
+    with open(op_valid_duration_file, 'w') as f:
+        f.write('key key_id sequence_number insert_time invalid_time valid_duration period_num_writes is_long_live key_range_idx lifetime_exp_increase_label\n')
+        for key, infos in op_keys_access_info.items():
+            for i in range(len(infos) - 1):
+                seq_i = infos[i][0]
+                seq_i_1 = infos[i + 1][0]
+                assert(seq_i < seq_i_1)
+                internal_key = key + "_" + str(seq_i)
+                invalid_time = infos[i + 1][1]
+                key_range_idx = bisect.bisect_left(key_ranges, key)
+                is_long_live = 0
+                insert_time = infos[i][1]
+                valid_duration = invalid_time - insert_time
+                cur_key_period_num_writes = infos[i][2]
+                key_id = uniq_key_map[key]
+                lifetime_label_idx = bisect.bisect_left(lifetime_limits, valid_duration/1e6)
+                if valid_duration > 0.5 * 1e8:
+                    is_long_live = 1
+                f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(key, key_id, seq_i, insert_time, invalid_time, valid_duration, cur_key_period_num_writes, is_long_live, key_range_idx, lifetime_label_idx))
 
     valid_durations = []
     actual_lifetimes = []
     lifetime_gap = []
     lifetime_ratios = []
 
+
     output_file_name = "internal_key_lifetime.txt"
     with open(output_file_name, 'w') as f:
         long_lifetime_border = 0.5 * 1e8
-        f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime period_num_writes is_long_live key_range_idx\n')
+        f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime period_num_writes is_long_live key_range_idx lifetime_exp_increase_label\n')
         for key, infos in compaction_keys_access_info.items():
 
             if infos['uniq_key_id'] != None:
@@ -132,7 +162,18 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 if infos['valid_duration'] != None and infos['valid_duration'] > long_lifetime_border:
                     is_long_live = 1
                 
-                f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(infos['uniq_key_id'], key.split('_')[1], infos['insert_time'], infos['compaction_time'], infos['invalid_time'], infos['valid_duration'], infos['actual_lifetime'], infos['period_num_writes'], is_long_live, infos['key_range_idx']))
+
+                lifetime_label_idx = bisect.bisect_left(lifetime_limits, infos['valid_duration']/1e6)
+                # lifetime_label_idx = 0
+                # if lifetime_label_idx == len(lifetime_limits):
+                #     dataset_label = 12
+                # else:
+                # cur_lifetime_upper_bound = lifetime_limits[lifetime_label_idx]
+                # dataset_label = lifetime_labels[cur_lifetime_upper_bound]
+                dataset_label = lifetime_label_idx
+
+
+                f.write('{} {} {} {} {} {} {} {} {} {} {}\n'.format(infos['uniq_key_id'], key.split('_')[1], infos['insert_time'], infos['compaction_time'], infos['invalid_time'], infos['valid_duration'], infos['actual_lifetime'], infos['period_num_writes'], is_long_live, infos['key_range_idx'], dataset_label))
             else:
                 print('key: ', key)
                 assert(False)

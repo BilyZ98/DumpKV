@@ -1288,3 +1288,219 @@ I could try to plot the lifetime distribution as well.
 
 
 In the meantime I need to integarte the model into rocksdb as well.
+
+Lightgbm c API  import. -> Need to modify CMakelists.txt to import library as thir-party dependency
+
+
+There is a test failed in lightgbm cpp unit tests. I can fix this if I have some time
+
+difference between include_directories and add_subdirectory in cmake 
+In CMake, `include_directories` and `add_subdirectory` serve different purposes¹:
+
+- `include_directories(dir)`: This command is used to add the given directories to those the compiler uses to search for include files. These directories are added to the directory property `INCLUDE_DIRECTORIES` for the current CMakeLists file¹. It's used for adding headers search paths (`-I flag`)¹.
+
+- `add_subdirectory(source_dir)`: This command is used to add a subdirectory to the build. There is also a CMakeLists.txt file in the source_dir. This CMakeLists.txt file in the specified source directory will be processed immediately by CMake before processing in the current input file continues beyond this command¹. It's used when you want to include another directory that contains a CMakeLists.txt file³⁴.
+
+In summary, `include_directories` is used to specify directories where the compiler can find additional header files, while `add_subdirectory` is used to add a subdirectory that contains a CMakeLists.txt file to the build¹.
+
+Source: Conversation with Bing, 10/6/2023
+(1) CMake Difference between include_directories and add_subdirectory?. https://stackoverflow.com/questions/12761748/cmake-difference-between-include-directories-and-add-subdirectory.
+(2) [CMake] Difference between ADD_SUBDIRECTORY and INCLUDE. https://cmake.org/pipermail/cmake/2007-November/017896.html.
+(3) [CMake] Difference between ADD_SUBDIRECTORY and INCLUDE - narkive. https://cmake.cmake.narkive.com/afXctZak/difference-between-add-subdirectory-and-include.
+(4) cmake: add_subdirectory() vs include() - Stack Overflow. https://stackoverflow.com/questions/48509911/cmake-add-subdirectory-vs-include.
+
+
+Change classification labels into 4 with the exponential increasing duration
+[1, 10, 100, 100]
+Here's the results
+
+Most of the lifetime of keys GCed in compaction falls in the range 10-100s
+Maybe we need to get fine grained labels in this interval. But how ? 
+
+Starting predicting...
+              precision    recall  f1-score   support
+
+           0       0.50      0.00      0.00      1165
+           1       0.68      0.17      0.27     10007
+           2       0.69      0.94      0.79     57050
+           3       0.49      0.16      0.24     18678
+
+    accuracy                           0.67     86900
+   macro avg       0.59      0.32      0.33     86900
+weighted avg       0.64      0.67      0.60     86900
+
+precision score: 0.5873981957463573
+The model is bad at predicting lifetime labels for short and long lifetime keys.
+How can we improve this ? 
+The only way I can come up right now is to use more features and useful features.
+
+Tried more classification labels but get really bad prediction results
+[1,2,4,8,16,32,64,128,256,512,1024]
+              precision    recall  f1-score   support
+
+           1       0.00      0.00      0.00      1165
+           2       0.24      0.01      0.02      1222
+           3       0.32      0.00      0.01      2286
+           4       0.17      0.01      0.01      4420
+           5       0.16      0.02      0.03      8037
+           6       0.11      0.02      0.03     13631
+           7       0.14      0.03      0.06     21215
+           8       0.14      0.10      0.12     24569
+           9       0.12      0.54      0.20     10355
+          10       0.00      0.00      0.00         0
+
+    accuracy                           0.11     86900
+   macro avg       0.14      0.07      0.05     86900
+weighted avg       0.14      0.11      0.08     86900
+
+
+
+Need to do classification for all keys in the trace data instead of compaction trace 
+data.
+
+Number of compaction trace records: 434500
+Number of write op trace records: 2500000
+
+
+At the time of the end of db_bench running  
+21% of 3 lifetime keys are GCed
+67% of 2 lifetime keys are GCed
+Nearly 100% of 1 and 0 lifetime keys are GCed
+```
+
+➜  with_gc_1.0_0.8 cut -d ' ' -f 9,9 ./op_valid_duration.txt | sort | uniq -c
+   6209 0
+  54652 1
+ 422608 2
+ 435988 3
+      1 lifetime_exp_increase_label
+➜  with_gc_1.0_0.8 cut -d ' ' -f 11,11 ./internal_key_lifetime.txt | sort | uniq -c
+   6022 0
+  50418 1
+ 284356 2
+  93703 3
+      1 lifetime_exp_increase_label
+
+```
+How can we get the level distribution for these keys? Because those
+keys in compaction trace are discarded.
+
+
+exponential increasing lifetime classificaiton task on op_keys  
+The overall results are worse than that in the compaction trace data
+```
+              precision    recall  f1-score   support
+
+           0       0.38      0.00      0.00      1315
+           1       0.60      0.04      0.07     10937
+           2       0.65      0.46      0.54     84094
+           3       0.59      0.84      0.69     87546
+
+    accuracy                           0.61    183892
+   macro avg       0.55      0.33      0.32    183892
+weighted avg       0.62      0.61      0.58    183892
+
+0.5532965833971224
+```
+
+Binary classification task results on same op_keys data
+The recall rate is low . So this means that many short lifetime keys 
+are predicted to be long.
+The cause might be sample imbalance because there are too many long lifetime
+samples.
+Regarding the  number of samples, let's check the figure plotted 
+```
+              precision    recall  f1-score   support
+
+           0       0.74      0.22      0.34     54656
+           1       0.75      0.97      0.84    129236
+
+    accuracy                           0.75    183892
+   macro avg       0.74      0.59      0.59    183892
+weighted avg       0.74      0.75      0.69    183892
+```
+
+cpp example of how to use lightgbm to do model loading and prediction
+https://github.com/PathofData/LGBM_C_inference/tree/master
+
+Can not build lightgbm lib via Cmake file in rocksdb . So I compile lightgbm 
+manually and install it in the system path.
+include path: /usr/local/include/LightGBM
+bin path: /usr/local/bin/lightgbm
+lib path: /usr/local/lib/lib_lightgbm.a
+
+I added Findlightgbm.cmake file so that header files and lib files of lightgbm
+can be found when building rocksdb with CMakeLists.txt
+But I still failed to build the executables and the errors are like this
+```
+
+```
+It turns out that I build the lightgbm static lib with openmp lib function
+but there is no openmp lib installed in the system. 
+So I will rebuild the lightgbm lib and without using openmp functions .
+
+Great, I build the db_bench successfully after I rebuild lightgbm excluding 
+dependecy on openmp.
+
+So now what I need to do is to add new datastructures in version? to store 
+value blob with different lifetime labels
+
+I think the best time to do predictions for keys is during the flush operation.
+Or we could do predictions in a new thread so as not to degrade the flush performance
+or qps or write rate.
+Let's just go with first design now.
+I am excited about the results. Hope we can get a positive results.
+
+Then it comes to the garbage collection process
+It could happen that a lot of SST files are included in the GC for 
+one blob files if we take lifetime as the key factor to store values.
+
+Let's try it now.
+We can come up with solution later to solve this problem
+
+I put the PredictLifetime function in DBImpl. I don't know if Flush function can 
+call function of DBImpl or Flush function is part of the DBImpl class.
+
+[Important] Another feature I can use is the key size and value_size . I didn't put key size as a feature before.
+But some workloads have same key size.
+I guess we might need to make assumptions. The key of the paper for now is to prove our idea can work. 
+Features engineering is important
+
+How can I get the key_range_id ?
+Leaper get key range offline. So I guess we could use the same method.
+We can come up with other methods to get key ranges later. Maybe use sampling.
+
+Another prolem is that the key in op trace file is in hex format, maybe I need to
+conversion so that hex format keys are turn back into string.
+
+Or maybe I need to change trace analyzer code to write down string.
+
+Was working on writing string of trace keys into trace file but now I realize
+that I don't need to do that.  The reason I want to do this is because I want 
+to get key range id for each key. Keys generated offline is in hex format.
+But now I can load keys in key range list from file and then do conversion using 
+HexToString in rocksdb.
+
+Flush callstack:
+
+[Idea] Use LLM to decide adjacent keys group.
+[Idea] Update model for each compaction ? This idea does not necessaryily is meant 
+to use for GC but can be use to schedule compaction.
+
+immutable memtable is in ColumnFamilyData*cfd
+FlushMemTable()
+    MaybeScheduleFlushOrCompaction()
+        BGWorkFlush()
+            BackgroundCallFlush()
+                DBImpl::BackgroundFlush()
+                    DBImpl::FlushMemTablesToOutputFiles()
+                        DBImpl::FlushMemTableToOutputFile()
+                            FlushJob::Run()
+                                FlushJob::WriteLevel0Table() at flush_job.cc
+
+
+blob file SST file info is stored in VersionStorageInfo
+
+I can add a setBoosterHandle in FlushJob to pass the reference to model to it .
+
+How are current value blob files stored? This affects  the way I change current code

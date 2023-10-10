@@ -663,6 +663,27 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
   return status;
 }
 
+// Status DBImpl::PredictLifetimeLabel(Slice key, uint64_t timestamp, uint64_t* lifeteim_label);
+
+Status DBImpl::PredictLifetimeLabel(const Slice& key, const KeyInsertContext &kcontext , uint64_t* lifeteim_label) {
+
+
+
+  return Status::OK();
+}
+Status DBImpl::LoadModel(std::string file_path) {
+    // LGBM_BoosterCreateFromModelfile
+
+  int load_res = LGBM_BoosterCreateFromModelfile(file_path.c_str(), &lightgbm_num_iterations_, &lightgbm_handle_);
+    if(load_res !=0) {
+      return Status::IOError("Failed to load model from file");
+    }
+    return Status::OK();
+
+
+  }
+
+
 Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
                                   WriteBatch* my_batch, WriteCallback* callback,
                                   uint64_t* log_used, uint64_t log_ref,

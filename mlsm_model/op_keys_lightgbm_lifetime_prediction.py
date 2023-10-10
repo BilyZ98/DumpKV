@@ -11,7 +11,7 @@ import pandas as pd
 # Load data
 # boston = load_boston()
 # data_file_path = "../mlsm_scripts/internal_key_lifetime.txt"
-data_file_path = "/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.8/internal_key_lifetime.txt"
+data_file_path = "/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_0.8/op_valid_duration.txt"
 data = pd.read_csv(data_file_path, sep=' ', header=0)
 
 
@@ -19,15 +19,15 @@ data = pd.read_csv(data_file_path, sep=' ', header=0)
 # X_train, X_test, y_train, y_test = train_test_split(housing.data, housing.target, test_size=0.2, random_state=0)
 
 
-features = data.iloc[:, [0,2,7,9]]
-features['key'] = pd.to_numeric(features['key']) 
+features = data.iloc[:, [1,3,6,8]]
+features['key_id'] = pd.to_numeric(features['key_id']) 
 features['insert_time'] = pd.to_numeric(features['insert_time'])
 features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
 features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
 # features['key'] = features['key'].apply(lambda x: int(x,16))
 # astype('category')
 # labels = data.iloc[:, 8]
-labels = data.iloc[:, 10]
+labels = data.iloc[:, 7]
 std_dev = np.std(labels)
 print('std_dev: ', std_dev)
 labels = pd.to_numeric(labels)
@@ -38,19 +38,30 @@ lgb_train = lgb.Dataset(x_train, y_train)
 lgb_eval = lgb.Dataset(x_test, y_test, reference=lgb_train)
 
 # Specify your configurations as a dict
+# params = {
+#     'boosting_type': 'gbdt',
+#     'objective': 'multiclass',
+#     # 'metric': {'auc', },
+#     'metric': {'multi_logloss'},
+#     'num_leaves': 31,
+#     'learning_rate': 0.05,
+#     'num_class': 4,
+#     'feature_fraction': 0.9,
+#     'verbose': 10
+
+# }
 params = {
     'boosting_type': 'gbdt',
-    'objective': 'multiclass',
-    # 'metric': {'auc', },
-    'metric': {'multi_logloss'},
+    'objective': 'binary',
+    'metric': {'auc' },
+    # 'metric': {'multi_logloss'},
     'num_leaves': 31,
     'learning_rate': 0.05,
-    'num_class': 4,
+    # 'num_class': 4,
     'feature_fraction': 0.9,
     'verbose': 10
 
 }
-
 # Train the model
 print('Starting training...')
 gbm = lgb.train(params,
@@ -62,11 +73,11 @@ gbm = lgb.train(params,
 # Predict and evaluate
 print('Starting predicting...')
 y_pred = gbm.predict(x_test, num_iteration=gbm.best_iteration)
-# print(classification_report(y_test, y_pred.round() ))
-y_pred = np.argmax(y_pred, axis=1)  
-print(classification_report(y_test, y_pred))
+print(classification_report(y_test, y_pred.round() ))
+# y_pred = np.argmax(y_pred, axis=1)  
+# print(classification_report(y_test, y_pred))
 print(precision_score(y_test, y_pred, average='macro'))
 
 # print('The rmse of prediction is:', mean_squared_error(y_test, y_pred) ** 0.5)
 
-gbm.save_model("lightgbm_classification_key_range_model.txt")
+gbm.save_model("op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt")
