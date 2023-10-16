@@ -2084,15 +2084,26 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   }
 
   if(s.ok()) {
-    std::string model_path = "/home/zt/rocksdb_kv_sep/mlsm_model/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";  
+    std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";
     s = impl->LoadModel(model_path);
   }
   if(s.ok()) {
     printf("load model successfully\n");
   } else {
-    printf("failed to load model\n");
+    printf("failed to load model, msg: %s\n", s.ToString().c_str());
 
   }
+  if(s.ok()) {
+    std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt"  ;
+    s = impl->LoadKeyRangeFromFile(key_range_path);
+    // s = impl->LoadKeyRange(key_range_path);
+  }
+  if(s.ok()) {
+    printf("load key range successfully\n");
+  } else {
+    printf("failed to load key range, msg: %s\n", s.ToString().c_str());
+  }
+
   if (!s.ok()) {
     for (auto* h : *handles) {
       delete h;

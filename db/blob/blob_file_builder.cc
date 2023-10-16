@@ -41,13 +41,15 @@ BlobFileBuilder::BlobFileBuilder(
     BlobFileCompletionCallback* blob_callback,
     BlobFileCreationReason creation_reason,
     std::vector<std::string>* blob_file_paths,
-    std::vector<BlobFileAddition>* blob_file_additions)
+    std::vector<BlobFileAddition>* blob_file_additions,
+    uint64_t lifetime_label)
     : BlobFileBuilder([versions]() { return versions->NewFileNumber(); }, fs,
                       immutable_options, mutable_cf_options, file_options,
                       db_id, db_session_id, job_id, column_family_id,
                       column_family_name, io_priority, write_hint, io_tracer,
                       blob_callback, creation_reason, blob_file_paths,
-                      blob_file_additions) {}
+                      blob_file_additions,
+                      lifetime_label) {}
 
 BlobFileBuilder::BlobFileBuilder(
     std::function<uint64_t()> file_number_generator, FileSystem* fs,
@@ -60,7 +62,8 @@ BlobFileBuilder::BlobFileBuilder(
     BlobFileCompletionCallback* blob_callback,
     BlobFileCreationReason creation_reason,
     std::vector<std::string>* blob_file_paths,
-    std::vector<BlobFileAddition>* blob_file_additions)
+    std::vector<BlobFileAddition>* blob_file_additions,
+    uint64_t lifetime_label )
     : file_number_generator_(std::move(file_number_generator)),
       fs_(fs),
       immutable_options_(immutable_options),
@@ -82,7 +85,9 @@ BlobFileBuilder::BlobFileBuilder(
       blob_file_paths_(blob_file_paths),
       blob_file_additions_(blob_file_additions),
       blob_count_(0),
-      blob_bytes_(0) {
+      blob_bytes_(0),
+      lifetime_label_(lifetime_label  ){
+  // assert(lifetime_label_ >= 0);
   assert(file_number_generator_);
   assert(fs_);
   assert(immutable_options_);
@@ -95,6 +100,67 @@ BlobFileBuilder::BlobFileBuilder(
 
 BlobFileBuilder::~BlobFileBuilder() = default;
 
+
+Status BlobFileBuilder::Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket) {
+  assert(blob_index);
+  assert(blob_index->empty());
+
+
+  if (value.size() < min_blob_size_) {
+    return Status::OK();
+  }
+
+  {
+    const Status s = OpenBlobFileIfNeeded();
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  Slice blob = value;
+  std::string compressed_blob;
+
+  {
+    const Status s = CompressBlobIfNeeded(&blob, &compressed_blob);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  uint64_t blob_file_number = 0;
+  uint64_t blob_offset = 0;
+
+  {
+    const Status s =
+        WriteBlobToFile(key, blob, &blob_file_number, &blob_offset);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  {
+    const Status s = CloseBlobFileIfNeeded();
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  {
+    const Status s =
+        PutBlobIntoCacheIfNeeded(value, blob_file_number, blob_offset);
+    if (!s.ok()) {
+      ROCKS_LOG_WARN(immutable_options_->info_log,
+                     "Failed to pre-populate the blob into blob cache: %s",
+                     s.ToString().c_str());
+    }
+  }
+
+  BlobIndex::EncodeBlob(blob_index, blob_file_number, blob_offset, blob.size(),
+                        blob_compression_type_);
+
+  return Status::OK();
+
+}
 Status BlobFileBuilder::Add(const Slice& key, const Slice& value,
                             std::string* blob_index) {
   assert(blob_index);
@@ -340,7 +406,8 @@ Status BlobFileBuilder::CloseBlobFile() {
   assert(blob_file_additions_);
   blob_file_additions_->emplace_back(blob_file_number, blob_count_, blob_bytes_,
                                      std::move(checksum_method),
-                                     std::move(checksum_value));
+                                     std::move(checksum_value),
+                                     lifetime_label_);
 
   assert(immutable_options_);
   ROCKS_LOG_INFO(immutable_options_->logger,

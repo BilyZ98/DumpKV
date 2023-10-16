@@ -33,6 +33,19 @@ class BlobFileAddition {
         checksum_value_(std::move(checksum_value)) {
     assert(checksum_method_.empty() == checksum_value_.empty());
   }
+  BlobFileAddition(uint64_t blob_file_number, uint64_t total_blob_count,
+                   uint64_t total_blob_bytes, std::string checksum_method,
+                   std::string checksum_value, uint64_t lifetime_label)
+                   : BlobFileAddition(blob_file_number, total_blob_count,
+                                      total_blob_bytes, checksum_method,
+                                      checksum_value) {
+    lifetime_label_ = lifetime_label;
+  }
+
+
+  void SetLifetime(int label, uint64_t timestamp) ;  
+
+  uint64_t GetLifetimeLabel() const { return lifetime_label_; }
 
   uint64_t GetBlobFileNumber() const { return blob_file_number_; }
   uint64_t GetTotalBlobCount() const { return total_blob_count_; }
@@ -52,6 +65,9 @@ class BlobFileAddition {
   uint64_t blob_file_number_ = kInvalidBlobFileNumber;
   uint64_t total_blob_count_ = 0;
   uint64_t total_blob_bytes_ = 0;
+  int lifetime_label_ = -1;
+  uint64_t lifetime_duration_in_seconds_ = 0;
+  uint64_t build_timestamp_ = 0;
   std::string checksum_method_;
   std::string checksum_value_;
 };

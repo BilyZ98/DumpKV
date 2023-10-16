@@ -206,7 +206,13 @@ void FlushJob::PickMemTable() {
   base_ = cfd_->current();
   base_->Ref();  // it is likely that we do not need this reference
 }
-
+void FlushJob::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
+  compaction_tracer_ = tracer;
+}
+void FlushJob::SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle){
+  booster_handle_ = handle;
+  fast_config_handle_ = fast_config_handle;
+}
 Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
                      bool* switched_to_mempurge) {
   TEST_SYNC_POINT("FlushJob::Start");
@@ -480,6 +486,8 @@ Status FlushJob::MemPurge() {
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, ioptions->info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(compaction_tracer_);
+    // c_iter.SetModel(booster_handle_);
+    c_iter.SetModelAndConfig(booster_handle_, fast_config_handle_);
 
     // Set earliest sequence number in the new memtable
     // to be equal to the earliest sequence number of the
@@ -936,6 +944,9 @@ Status FlushJob::WriteLevel0Table() {
       const SequenceNumber job_snapshot_seq =
           job_context_->GetJobSnapshotSequence();
       tboptions.compaction_tracer = compaction_tracer_;
+      tboptions.booster_handle = booster_handle_;
+      tboptions.lifetime_bucket_num = 4;
+      tboptions.booster_fast_config_handle = fast_config_handle_;
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,
@@ -946,7 +957,7 @@ Status FlushJob::WriteLevel0Table() {
           BlobFileCreationReason::kFlush, seqno_to_time_mapping_, event_logger_,
           job_context_->job_id, io_priority, &table_properties_, write_hint,
           full_history_ts_low, blob_callback_, base_, &num_input_entries,
-          &memtable_payload_bytes, &memtable_garbage_bytes);
+          &memtable_payload_bytes, &memtable_garbage_bytes, &mems_);
       // TODO: Cleanup io_status in BuildTable and table builders
       assert(!s.ok() || io_s.ok());
       io_s.PermitUncheckedError();

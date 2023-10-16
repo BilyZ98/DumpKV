@@ -73,12 +73,17 @@ Status BuildTable(
     const std::string* full_history_ts_low,
     BlobFileCompletionCallback* blob_callback, Version* version,
     uint64_t* num_input_entries, uint64_t* memtable_payload_bytes,
-    uint64_t* memtable_garbage_bytes) {
+    uint64_t* memtable_garbage_bytes,
+    const autovector<MemTable*>* imm_memtables) {
   assert((tboptions.column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          tboptions.column_family_name.empty());
   if(tboptions.compaction_tracer.get() == nullptr) {
     fprintf(stderr, "compaction_tracer is null in table builder\n");
+    assert(false);
+  }
+  if(tboptions.booster_handle == nullptr || tboptions.booster_fast_config_handle == nullptr){
+    fprintf(stderr, "booster_handle is null in table builder\n");
     assert(false);
   }
   auto& mutable_cf_options = tboptions.moptions;
@@ -184,18 +189,37 @@ Status BuildTable(
         ioptions.logger, true /* internal key corruption is not ok */,
         snapshots.empty() ? 0 : snapshots.back(), snapshot_checker);
 
-    std::unique_ptr<BlobFileBuilder> blob_file_builder(
-        (mutable_cf_options.enable_blob_files &&
+    std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(tboptions.lifetime_bucket_num );
+    std::vector<BlobFileBuilder*> blob_file_builders_raw( tboptions.lifetime_bucket_num, nullptr);
+    bool enable_blob_file_builder = mutable_cf_options.enable_blob_files &&
          tboptions.level_at_creation >=
-             mutable_cf_options.blob_file_starting_level &&
-         blob_file_additions)
-            ? new BlobFileBuilder(
-                  versions, fs, &ioptions, &mutable_cf_options, &file_options,
-                  tboptions.db_id, tboptions.db_session_id, job_id,
-                  tboptions.column_family_id, tboptions.column_family_name,
-                  io_priority, write_hint, io_tracer, blob_callback,
-                  blob_creation_reason, &blob_file_paths, blob_file_additions)
-            : nullptr);
+             mutable_cf_options.blob_file_starting_level && blob_file_additions;
+
+    if(enable_blob_file_builder ) {
+      for(size_t i =0; i < blob_file_builders.size(); i++){
+        blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
+            new BlobFileBuilder(
+                versions, fs, &ioptions, &mutable_cf_options, &file_options,
+                tboptions.db_id, tboptions.db_session_id, job_id,
+                tboptions.column_family_id, tboptions.column_family_name,
+                io_priority, write_hint, io_tracer, blob_callback,
+                blob_creation_reason, &blob_file_paths, blob_file_additions,
+               i));
+          blob_file_builders_raw[i] = blob_file_builders[i].get();
+      }
+    }
+    // std::unique_ptr<BlobFileBuilder> blob_file_builder(
+    //     (mutable_cf_options.enable_blob_files &&
+    //      tboptions.level_at_creation >=
+    //          mutable_cf_options.blob_file_starting_level &&
+    //      blob_file_additions)
+    //         ? new BlobFileBuilder(
+    //               versions, fs, &ioptions, &mutable_cf_options, &file_options,
+    //               tboptions.db_id, tboptions.db_session_id, job_id,
+    //               tboptions.column_family_id, tboptions.column_family_name,
+    //               io_priority, write_hint, io_tracer, blob_callback,
+    //               blob_creation_reason, &blob_file_paths, blob_file_additions)
+    //         : nullptr);
 
     const std::atomic<bool> kManualCompactionCanceledFalse{false};
     CompactionIterator c_iter(
@@ -203,12 +227,15 @@ Status BuildTable(
         earliest_write_conflict_snapshot, job_snapshot, snapshot_checker, env,
         ShouldReportDetailedTime(env, ioptions.stats),
         true /* internal key corruption is not ok */, range_del_agg.get(),
-        blob_file_builder.get(), ioptions.allow_data_in_errors,
+        blob_file_builders_raw, ioptions.allow_data_in_errors,
         ioptions.enforce_single_del_contracts,
         /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
+    // c_iter.SetModel(tboptions.booster_handle);
+    c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
+    c_iter.SetMemTables(imm_memtables);
 
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {
@@ -227,6 +254,8 @@ Status BuildTable(
       if (!s.ok()) {
         break;
       }
+      // uint64_t lifetime_label_predict = model.Predict()
+      //
       builder->Add(key, value);
 
       s = meta->UpdateBoundaries(key, value, ikey.sequence, ikey.type);
@@ -361,14 +390,25 @@ Status BuildTable(
       s = *io_status;
     }
 
-    if (blob_file_builder) {
-      if (s.ok()) {
-        s = blob_file_builder->Finish();
-      } else {
-        blob_file_builder->Abandon(s);
+    for(size_t i=0; i < blob_file_builders.size(); i++) {
+      if (blob_file_builders[i]) {
+        if (s.ok()) {
+          s = blob_file_builders[i]->Finish();
+        } else {
+          blob_file_builders[i]->Abandon(s);
+        }
+        blob_file_builders[i].reset();
       }
-      blob_file_builder.reset();
+
     }
+    // if (blob_file_builder) {
+    //   if (s.ok()) {
+    //     s = blob_file_builder->Finish();
+    //   } else {
+    //     blob_file_builder->Abandon(s);
+    //   }
+    //   blob_file_builder.reset();
+    // }
 
     // TODO Also check the IO status when create the Iterator.
 

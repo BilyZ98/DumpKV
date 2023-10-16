@@ -266,6 +266,8 @@ Status DBImpl::FlushMemTableToOutputFile(
   // is unlocked by the current thread.
   if (s.ok()) {
     flush_job.SetCompactionTracer(compaction_tracer_);
+    // flush_job.SetBoosterHandle(this->lightgbm_handle_);
+    flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
     need_cancel = false;
@@ -532,6 +534,8 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     for (int i = 1; i != num_cfs; ++i) {
 
       jobs[i]->SetCompactionTracer(compaction_tracer_);
+      // jobs[i]->SetBoosterHandle(lightgbm_handle_);
+      jobs[i]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
       exec_status[i].second =
           jobs[i]->Run(&logs_with_prep_tracker_, &file_meta[i],
                        &(switched_to_mempurge.at(i)));
@@ -546,6 +550,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     assert(exec_status.size() > 0);
     assert(!file_meta.empty());
     jobs[0]->SetCompactionTracer(compaction_tracer_);
+    jobs[0]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     exec_status[0].second = jobs[0]->Run(
         &logs_with_prep_tracker_, file_meta.data() /* &file_meta[0] */,
         switched_to_mempurge.empty() ? nullptr : &(switched_to_mempurge.at(0)));

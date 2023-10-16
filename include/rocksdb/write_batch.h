@@ -41,6 +41,19 @@ class Slice;
 class ColumnFamilyHandle;
 struct SavePoints;
 struct SliceParts;
+struct KeyFeatures {
+  uint64_t sequence;
+  uint64_t key_range_id;
+  // Need to change time stamp format
+  uint64_t time_stamp;
+  // uint64_t write_rate;
+  uint64_t write_rate_mb_per_sec;
+  uint64_t adjaccent_key_range_write_rate;
+};
+// struct KeyFeatures {
+//   uint64_t sequence;
+//   uint64_t write_rate_mb_per_sec;
+// };
 
 struct SavePoint {
   size_t size;  // size of rep_
@@ -220,10 +233,6 @@ class WriteBatch : public WriteBatchBase {
   class Handler {
    public:
     virtual ~Handler();
-    struct KeyFeatures {
-      uint64_t sequence;
-      uint64_t write_rate_mb_per_sec;
-    };
     // All handler functions in this class provide default implementations so
     // we won't break existing clients of Handler on a source code level when
     // adding a new member function.

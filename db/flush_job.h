@@ -43,6 +43,7 @@
 #include "util/autovector.h"
 #include "util/stop_watch.h"
 #include "util/thread_local.h"
+#include "LightGBM/c_api.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -80,9 +81,8 @@ class FlushJob {
 
   ~FlushJob();
 
-  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
-    compaction_tracer_ = tracer;
-  }
+  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
+  void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle);
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
@@ -131,6 +131,9 @@ class FlushJob {
   std::unique_ptr<FlushJobInfo> GetFlushJobInfo() const;
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+  BoosterHandle booster_handle_;
+  FastConfigHandle fast_config_handle_;
+
   const std::string& dbname_;
   const std::string db_id_;
   const std::string db_session_id_;

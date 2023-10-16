@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 
+#include "db/db_impl/db_impl.h"
 #include "db/dbformat.h"
 #include "db/kv_checksum.h"
 #include "db/merge_context.h"
@@ -708,6 +709,191 @@ void MemTable::UpdateEntryChecksum(const ProtectionInfoKVOS64* kv_prot_info,
   }
 }
 
+
+bool MemTable::GetKeyFeatures(SequenceNumber seq, KeyFeatures** key_feat  ) {
+  if(key_features_.find(seq) != key_features_.end()) {
+    *key_feat = key_features_[seq];
+    return true;
+  }
+  return false;
+}
+Status MemTable::AddWithFeatures(SequenceNumber s, ValueType type, const Slice& key,
+             const Slice& value, const ProtectionInfoKVOS64* kv_prot_info,
+                                 DBImpl* db, bool allow_concurrent ,
+             MemTablePostProcessInfo* post_process_info ,
+             void** hint ){
+  // Format of an entry is concatenation of:
+  //  key_size     : varint32 of internal_key.size()
+  //  key bytes    : char[internal_key.size()]
+  //  value_size   : varint32 of value.size()
+  //  value bytes  : char[value.size()]
+  //  checksum     : char[moptions_.protection_bytes_per_key]
+  uint32_t key_size = static_cast<uint32_t>(key.size());
+  uint32_t val_size = static_cast<uint32_t>(value.size());
+  uint32_t internal_key_size = key_size + 8;
+  const uint32_t encoded_len = VarintLength(internal_key_size) +
+                               internal_key_size + VarintLength(val_size) +
+                               val_size + moptions_.protection_bytes_per_key;
+
+  KeyFeatures* key_features = reinterpret_cast<KeyFeatures*>(arena_.Allocate(sizeof(KeyFeatures)));
+  // key_features->sequence =  s;
+  // key_features->time_stamp = db->GetEnv()->NowMicros();
+  db->GetKeyFeatures(key, key_features);
+  key_features_[s] = key_features;
+  //
+  // key_features->write_rate_mb_per_sec = db->
+  // key_features->time_stamp = db_->
+  // key_features->time_stamp
+  char* buf = nullptr;
+  // key_features_[s] = key_features;
+  std::unique_ptr<MemTableRep>& table =
+      type == kTypeRangeDeletion ? range_del_table_ : table_;
+  KeyHandle handle = table->Allocate(encoded_len, &buf);
+
+  char* p = EncodeVarint32(buf, internal_key_size);
+  memcpy(p, key.data(), key_size);
+  Slice key_slice(p, key_size);
+  p += key_size;
+  uint64_t packed = PackSequenceAndType(s, type);
+  EncodeFixed64(p, packed);
+  p += 8;
+  p = EncodeVarint32(p, val_size);
+  memcpy(p, value.data(), val_size);
+  assert((unsigned)(p + val_size - buf + moptions_.protection_bytes_per_key) ==
+         (unsigned)encoded_len);
+
+  UpdateEntryChecksum(kv_prot_info, key, value, type, s,
+                      buf + encoded_len - moptions_.protection_bytes_per_key);
+  Slice encoded(buf, encoded_len - moptions_.protection_bytes_per_key);
+  if (kv_prot_info != nullptr) {
+    TEST_SYNC_POINT_CALLBACK("MemTable::Add:Encoded", &encoded);
+    Status status = VerifyEncodedEntry(encoded, *kv_prot_info);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  size_t ts_sz = GetInternalKeyComparator().user_comparator()->timestamp_size();
+  Slice key_without_ts = StripTimestampFromUserKey(key, ts_sz);
+
+  if (!allow_concurrent) {
+    // Extract prefix for insert with hint.
+    if (insert_with_hint_prefix_extractor_ != nullptr &&
+        insert_with_hint_prefix_extractor_->InDomain(key_slice)) {
+      Slice prefix = insert_with_hint_prefix_extractor_->Transform(key_slice);
+      bool res = table->InsertKeyWithHint(handle, &insert_hints_[prefix]);
+      if (UNLIKELY(!res)) {
+        return Status::TryAgain("key+seq exists");
+      }
+    } else {
+      bool res = table->InsertKey(handle);
+      if (UNLIKELY(!res)) {
+        return Status::TryAgain("key+seq exists");
+      }
+    }
+
+    // this is a bit ugly, but is the way to avoid locked instructions
+    // when incrementing an atomic
+    num_entries_.store(num_entries_.load(std::memory_order_relaxed) + 1,
+                       std::memory_order_relaxed);
+    data_size_.store(data_size_.load(std::memory_order_relaxed) + encoded_len,
+                     std::memory_order_relaxed);
+    if (type == kTypeDeletion || type == kTypeSingleDeletion ||
+        type == kTypeDeletionWithTimestamp) {
+      num_deletes_.store(num_deletes_.load(std::memory_order_relaxed) + 1,
+                         std::memory_order_relaxed);
+    }
+
+    if (bloom_filter_ && prefix_extractor_ &&
+        prefix_extractor_->InDomain(key_without_ts)) {
+      bloom_filter_->Add(prefix_extractor_->Transform(key_without_ts));
+    }
+    if (bloom_filter_ && moptions_.memtable_whole_key_filtering) {
+      bloom_filter_->Add(key_without_ts);
+    }
+
+    // The first sequence number inserted into the memtable
+    assert(first_seqno_ == 0 || s >= first_seqno_);
+    if (first_seqno_ == 0) {
+      first_seqno_.store(s, std::memory_order_relaxed);
+
+      if (earliest_seqno_ == kMaxSequenceNumber) {
+        earliest_seqno_.store(GetFirstSequenceNumber(),
+                              std::memory_order_relaxed);
+      }
+      assert(first_seqno_.load() >= earliest_seqno_.load());
+    }
+    assert(post_process_info == nullptr);
+    UpdateFlushState();
+  } else {
+    bool res = (hint == nullptr)
+                   ? table->InsertKeyConcurrently(handle)
+                   : table->InsertKeyWithHintConcurrently(handle, hint);
+    if (UNLIKELY(!res)) {
+      return Status::TryAgain("key+seq exists");
+    }
+
+    assert(post_process_info != nullptr);
+    post_process_info->num_entries++;
+    post_process_info->data_size += encoded_len;
+    if (type == kTypeDeletion) {
+      post_process_info->num_deletes++;
+    }
+
+    if (bloom_filter_ && prefix_extractor_ &&
+        prefix_extractor_->InDomain(key_without_ts)) {
+      bloom_filter_->AddConcurrently(
+          prefix_extractor_->Transform(key_without_ts));
+    }
+    if (bloom_filter_ && moptions_.memtable_whole_key_filtering) {
+      bloom_filter_->AddConcurrently(key_without_ts);
+    }
+
+    // atomically update first_seqno_ and earliest_seqno_.
+    uint64_t cur_seq_num = first_seqno_.load(std::memory_order_relaxed);
+    while ((cur_seq_num == 0 || s < cur_seq_num) &&
+           !first_seqno_.compare_exchange_weak(cur_seq_num, s)) {
+    }
+    uint64_t cur_earliest_seqno =
+        earliest_seqno_.load(std::memory_order_relaxed);
+    while (
+        (cur_earliest_seqno == kMaxSequenceNumber || s < cur_earliest_seqno) &&
+        !first_seqno_.compare_exchange_weak(cur_earliest_seqno, s)) {
+    }
+  }
+  if (type == kTypeRangeDeletion) {
+    auto new_cache = std::make_shared<FragmentedRangeTombstoneListCache>();
+    size_t size = cached_range_tombstone_.Size();
+    if (allow_concurrent) {
+      range_del_mutex_.lock();
+    }
+    for (size_t i = 0; i < size; ++i) {
+      std::shared_ptr<FragmentedRangeTombstoneListCache>* local_cache_ref_ptr =
+          cached_range_tombstone_.AccessAtCore(i);
+      auto new_local_cache_ref = std::make_shared<
+          const std::shared_ptr<FragmentedRangeTombstoneListCache>>(new_cache);
+      // It is okay for some reader to load old cache during invalidation as
+      // the new sequence number is not published yet.
+      // Each core will have a shared_ptr to a shared_ptr to the cached
+      // fragmented range tombstones, so that ref count is maintianed locally
+      // per-core using the per-core shared_ptr.
+      std::atomic_store_explicit(
+          local_cache_ref_ptr,
+          std::shared_ptr<FragmentedRangeTombstoneListCache>(
+              new_local_cache_ref, new_cache.get()),
+          std::memory_order_relaxed);
+    }
+    if (allow_concurrent) {
+      range_del_mutex_.unlock();
+    }
+    is_range_del_table_empty_.store(false, std::memory_order_relaxed);
+  }
+  UpdateOldestKeyTime();
+
+  TEST_SYNC_POINT_CALLBACK("MemTable::Add:BeforeReturn:Encoded", &encoded);
+  return Status::OK();
+
+}
 Status MemTable::Add(SequenceNumber s, ValueType type,
                      const Slice& key, /* user key */
                      const Slice& value,

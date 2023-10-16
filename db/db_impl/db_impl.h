@@ -194,6 +194,11 @@ class DBImpl : public DB {
   Status Put(const WriteOptions& options, ColumnFamilyHandle* column_family,
              const Slice& key, const Slice& ts, const Slice& value) override;
 
+
+  Status PredictLifetimeLabel(const Slice& key, const KeyFeatures &kcontext , uint64_t* lifeteim_label) ;
+  Status LoadKeyRangeFromFile(const std::string &file) ; 
+  int GetKeyRangeId(const Slice& key) const;
+  void GetKeyFeatures(const Slice& key, KeyFeatures* key_feat) const ;
   using DB::PutEntity;
   Status PutEntity(const WriteOptions& options,
                    ColumnFamilyHandle* column_family, const Slice& key,
@@ -1280,9 +1285,11 @@ class DBImpl : public DB {
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
   BoosterHandle lightgbm_handle_;
+  FastConfigHandle lightgbm_fastConfig_ ;
   // Need to allocate memory for keys 
   // Call AllocateKey?
   std::vector<Slice> key_ranges_;
+  std::vector<std::string> key_ranges_str_;
   int lightgbm_num_iterations_;
   // State below is protected by mutex_
   // With two_write_queues enabled, some of the variables that accessed during
@@ -1458,13 +1465,12 @@ class DBImpl : public DB {
   //                                                              int64_t* out_len,
   //                                                              double* out_result);
 
-  struct KeyInsertContext {
-    uint64_t num_period_writes = 0;
-    uint64_t key_range_id;
-    uint64_t timestamp;
+  // struct KeyInsertContext {
+  //   uint64_t num_period_writes = 0;
+  //   uint64_t key_range_id;
+  //   uint64_t timestamp;
 
-  };
-  Status PredictLifetimeLabel(const Slice& key, const KeyInsertContext &kcontext , uint64_t* lifeteim_label);
+  // };
   Status LoadModel(std::string file_path) ;
   // Whether the batch requires to be assigned with an order
   enum AssignOrder : bool { kDontAssignOrder, kDoAssignOrder };

@@ -208,7 +208,7 @@ class TraceAnalyzer : private TraceRecord::Handler,
   Status PutCFWithStartSequence(uint32_t column_family_id,
                                 const Slice& key, const Slice& value, uint64_t seq) override;
 
-  using WriteBatch::Handler::KeyFeatures;
+  // using WriteBatch::Handler::KeyFeatures;
   using WriteBatch::Handler::PutCFWithFeatures;
   Status PutCFWithFeatures(uint32_t column_family_id, const Slice& key,
                               const Slice& value, const KeyFeatures& key_features) override;

@@ -30,6 +30,12 @@ enum BlobFileAddition::CustomFieldTags : uint32_t {
   // Add forward incompatible fields here
 };
 
+
+void BlobFileAddition::SetLifetime(int label, uint64_t timestamp) {
+  assert(label >= 0);
+  lifetime_label_ = label;
+  build_timestamp_ = timestamp;
+}
 void BlobFileAddition::EncodeTo(std::string* output) const {
   PutVarint64(output, blob_file_number_);
   PutVarint64(output, total_blob_count_);

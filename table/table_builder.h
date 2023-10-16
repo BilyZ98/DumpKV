@@ -27,6 +27,7 @@
 #include "trace_replay/block_cache_tracer.h"
 
 #include "trace_replay/compaction_tracer.h"
+#include "LightGBM/c_api.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -148,6 +149,10 @@ struct TableBuilderOptions {
   bool skip_filters = false;
   const uint64_t cur_file_num;
   std::shared_ptr<CompactionTracer> compaction_tracer = nullptr;
+  BoosterHandle booster_handle = nullptr;
+  FastConfigHandle booster_fast_config_handle = nullptr;
+  uint64_t lifetime_bucket_num = 1; 
+
 };
 
 // TableBuilder provides the interface used to build a Table

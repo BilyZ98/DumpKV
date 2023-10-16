@@ -1667,3 +1667,7 @@ option(WITH_BENCHMARK "build benchmark tests" OFF)
 if(WITH_BENCHMARK)
   add_subdirectory(${PROJECT_SOURCE_DIR}/microbench/)
 endif()
+
+# file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/input.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/input.txt)
+file( COPY   ${CMAKE_BINARY_DIR}/compile_commands.json 
+  DESTINATION ${PROJECT_SOURCE_DIR}/)

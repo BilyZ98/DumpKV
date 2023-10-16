@@ -7,6 +7,7 @@
 
 #include <iterator>
 #include <limits>
+#include <algorithm>
 
 #include "db/blob/blob_fetcher.h"
 #include "db/blob/blob_file_builder.h"
@@ -21,6 +22,35 @@
 #include "test_util/sync_point.h"
 
 namespace ROCKSDB_NAMESPACE {
+CompactionIterator::CompactionIterator(
+    InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
+    SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+    SequenceNumber earliest_write_conflict_snapshot,
+    SequenceNumber job_snapshot, const SnapshotChecker* snapshot_checker,
+    Env* env, bool report_detailed_time, bool expect_valid_internal_key,
+    CompactionRangeDelAggregator* range_del_agg,
+    std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
+    bool enforce_single_del_contracts,
+    const std::atomic<bool>& manual_compaction_canceled,
+    const Compaction* compaction, const CompactionFilter* compaction_filter,
+    const std::atomic<bool>* shutting_down,
+    const std::shared_ptr<Logger> info_log,
+    const std::string* full_history_ts_low,
+    const SequenceNumber preserve_time_min_seqno,
+    const SequenceNumber preclude_last_level_min_seqno)
+     :CompactionIterator(
+          input, cmp, merge_helper, last_sequence, snapshots,
+          earliest_write_conflict_snapshot, job_snapshot, snapshot_checker, env,
+          report_detailed_time, expect_valid_internal_key, range_del_agg,
+          nullptr, allow_data_in_errors, enforce_single_del_contracts,
+          manual_compaction_canceled,
+          std::unique_ptr<CompactionProxy>(
+              compaction ? new RealCompaction(compaction) : nullptr),
+          compaction_filter, shutting_down, info_log, full_history_ts_low,
+          preserve_time_min_seqno, preclude_last_level_min_seqno){
+
+  lifetime_blob_file_builders_ = std::move(blob_file_builders);
+}
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
     SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
@@ -150,6 +180,33 @@ void CompactionIterator::ResetRecordCounts() {
 void CompactionIterator::SeekToFirst() {
   NextFromInput();
   PrepareOutput();
+}
+
+void CompactionIterator::SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle) {
+  booster_handle_ = booster_handle;
+  fast_config_handle_ = fast_config_handle;
+}
+
+
+void CompactionIterator::SetMemTables(const autovector<MemTable*>* mems) {
+
+  mems_ = mems;
+}
+void CompactionIterator::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
+  compaction_tracer_ = tracer;
+}
+
+
+Status CompactionIterator::PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label)  {
+  // int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(FastConfigHandle fastConfig_handle,
+  //                                                              const void* data,
+  //                                                              int64_t* out_len,
+  //                                                              double* out_result);
+
+  return Status::OK();
+
+
+
 }
 
 void CompactionIterator::Next() {
@@ -1030,13 +1087,24 @@ void CompactionIterator::NextFromInput() {
   }
 }
 
+// Todo: Do prediction here  add value to the lifetime label blob file
 bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   if (!blob_file_builder_) {
     return false;
   }
 
   blob_index_.clear();
-  const Status s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
+  // uint64_t bucket_id = booster_handle_->
+  std::vector<float> feature_vec;
+  int64_t out_len = 0;
+  std::vector<double> out_result(4,0);
+  int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
+      fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
+
+  int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+
+  // const Status s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
+  const Status s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
 
   if (!s.ok()) {
     status_ = s;

@@ -8,6 +8,7 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include <cinttypes>
 
+#include "rocksdb/utilities/ldb_cmd.h"
 #include "db/db_impl/db_impl.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
@@ -665,11 +666,55 @@ Status DBImpl::WriteImpl(const WriteOptions& write_options,
 
 // Status DBImpl::PredictLifetimeLabel(Slice key, uint64_t timestamp, uint64_t* lifeteim_label);
 
-Status DBImpl::PredictLifetimeLabel(const Slice& key, const KeyInsertContext &kcontext , uint64_t* lifeteim_label) {
+Status DBImpl::PredictLifetimeLabel(const Slice& key, const KeyFeatures &kcontext , uint64_t* lifeteim_label) {
 
 
 
   return Status::OK();
+}
+Status DBImpl::LoadKeyRangeFromFile(const std::string &file)  {
+  std::ifstream ifs(file);
+  if (!ifs.is_open()) {
+    return Status::IOError("Failed to open file: " + file);
+  }
+  std::string key;
+  //
+  while (std::getline(ifs, key)) {
+    // Slice key_slice(key);
+    // key_ranges_.push_back(key);
+    key_ranges_str_.emplace_back((ROCKSDB_NAMESPACE::LDBCommand::HexToString(std::move(key))));
+
+    key_ranges_.emplace_back(key_ranges_str_.back());
+    if(key_ranges_.size() > 1) {
+      assert(key_ranges_.back().compare( key_ranges_[key_ranges_.size() - 2]) >=  0);
+    }
+  }
+  return Status::OK();
+}
+void DBImpl::GetKeyFeatures(const Slice& key, KeyFeatures *key_feat) const  {
+  assert(key_feat);
+  key_feat->time_stamp = env_->NowMicros();
+  key_feat->write_rate_mb_per_sec = stats_period_num_writes_;
+  // key_feat->key_range_id 
+  int dist = GetKeyRangeId(key);
+  assert(dist >=0 );
+  key_feat->key_range_id = dist;
+  assert(key_feat->key_range_id <= key_ranges_.size());
+  key_feat->adjaccent_key_range_write_rate = 0;
+
+
+}
+int DBImpl::GetKeyRangeId(const Slice& key) const {
+  ColumnFamilyHandle *column_family =  DefaultColumnFamily();
+  assert(column_family);
+  const Comparator* const ucmp = column_family->GetComparator();
+  // const Comparator* const default_cf_ucmp = default_cf->GetComparator();
+  int dist = std::distance( key_ranges_.begin(), std::lower_bound(key_ranges_.begin(), key_ranges_.end(), key, [ucmp](const Slice & first, const Slice & second){
+                                                            return ucmp->Compare(first,second) < 0;
+                                                          }) );
+
+  return dist;
+
 }
 Status DBImpl::LoadModel(std::string file_path) {
     // LGBM_BoosterCreateFromModelfile
@@ -678,6 +723,15 @@ Status DBImpl::LoadModel(std::string file_path) {
     if(load_res !=0) {
       return Status::IOError("Failed to load model from file");
     }
+  // lightgbm_fastConfig_ = new FastConfigHandle();
+  std::string params = "num_threads=1";
+  int fast_single_row =  LGBM_BoosterPredictForMatSingleRowFastInit(
+      lightgbm_handle_, C_API_PREDICT_NORMAL, 0, 0,
+      C_API_DTYPE_FLOAT64, 4, params.c_str(), &lightgbm_fastConfig_
+    );
+  if(fast_single_row != 0 ) {
+    return Status::IOError("Failed to init fast single row");
+  }
     return Status::OK();
 
 
@@ -2315,6 +2369,7 @@ size_t DBImpl::GetWalPreallocateBlockSize(uint64_t write_buffer_size) const {
 
   return bsize;
 }
+
 
 // Default implementations of convenience methods that subclasses of DB
 // can call if they wish

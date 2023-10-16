@@ -236,6 +236,14 @@ class MemTable {
              MemTablePostProcessInfo* post_process_info = nullptr,
              void** hint = nullptr);
 
+  // void SetDB(DBImpl* db);
+  Status AddWithFeatures(SequenceNumber seq, ValueType type, const Slice& key,
+             const Slice& value, const ProtectionInfoKVOS64* kv_prot_info,
+                         DBImpl* db,
+              bool allow_concurrent = false, MemTablePostProcessInfo* post_process_info = nullptr,
+             void** hint = nullptr);
+
+  bool GetKeyFeatures(SequenceNumber seq, KeyFeatures** key_feat );
   // Used to Get value associated with key or Get Merge Operands associated
   // with key.
   // If do_merge = true the default behavior which is Get value for key is
@@ -589,6 +597,10 @@ class MemTable {
   std::unique_ptr<DynamicBloom> bloom_filter_;
 
   std::atomic<FlushStateEnum> flush_state_;
+
+  // we could use sequence number
+  // std::unordered_map<Slice, KeyFeatures> key_features_;
+  std::unordered_map<SequenceNumber, KeyFeatures*> key_features_;
 
   SystemClock* clock_;
 

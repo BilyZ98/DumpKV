@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rocksdb/options.h"
+#include "LightGBM/c_api.h"
 
 namespace ROCKSDB_NAMESPACE {
 class SystemClock;
@@ -104,6 +105,7 @@ struct ImmutableDBOptions {
   Logger* logger;
   std::shared_ptr<CompactionService> compaction_service;
   bool enforce_single_del_contracts;
+  BoosterHandle booster_handle;
 
   bool IsWalDirSameAsDBPath() const;
   bool IsWalDirSameAsDBPath(const std::string& path) const;

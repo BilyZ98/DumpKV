@@ -76,6 +76,14 @@ struct ColumnFamilyDescriptor {
       : name(_name), options(_options) {}
 };
 
+// struct KeyFeatures {
+//   uint64_t key_range_id;
+//   // Need to change time stamp format
+//   uint64_t time_stamp;
+//   uint64_t write_rate;
+//   uint64_t adjaccent_key_range_write_rate;
+// };
+
 class ColumnFamilyHandle {
  public:
   virtual ~ColumnFamilyHandle() {}

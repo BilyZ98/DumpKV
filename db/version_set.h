@@ -176,6 +176,8 @@ class VersionStorageInfo {
 
   void ReserveBlob(size_t size) { blob_files_.reserve(size); }
 
+  void AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta,
+                                     uint32_t bucket_id);
   void AddBlobFile(std::shared_ptr<BlobFileMetaData> blob_file_meta);
 
   void PrepareForVersionAppend(const ImmutableOptions& immutable_options,
@@ -391,6 +393,11 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   using BlobFiles = std::vector<std::shared_ptr<BlobFileMetaData>>;
   const BlobFiles& GetBlobFiles() const { return blob_files_; }
+
+  const std::vector<BlobFiles>& GetLifetimeBlobFiles() const { return lifetime_blob_files_; }
+  const BlobFiles& GetBlobFiles(uint64_t liftime_bucket) const {
+    return lifetime_blob_files_[liftime_bucket];
+  }
 
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   BlobFiles::const_iterator GetBlobFileMetaDataLB(
@@ -644,6 +651,8 @@ class VersionStorageInfo {
 
   // Vector of blob files in version sorted by blob file number.
   BlobFiles blob_files_;
+
+  std::vector<BlobFiles> lifetime_blob_files_;
 
   // Level that L0 data should be compacted to. All levels < base_level_ should
   // be empty. -1 if it is not level-compaction so it's not applicable.

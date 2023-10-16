@@ -19,6 +19,7 @@
 #include "db/snapshot_checker.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_filter.h"
+#include "LightGBM/c_api.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -203,6 +204,24 @@ class CompactionIterator {
       const SequenceNumber preserve_time_min_seqno = kMaxSequenceNumber,
       const SequenceNumber preclude_last_level_min_seqno = kMaxSequenceNumber);
 
+  CompactionIterator(
+      InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      SequenceNumber job_snapshot, const SnapshotChecker* snapshot_checker,
+      Env* env, bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
+      bool enforce_single_del_contracts,
+      const std::atomic<bool>& manual_compaction_canceled,
+      const Compaction* compaction = nullptr,
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const std::shared_ptr<Logger> info_log = nullptr,
+      const std::string* full_history_ts_low = nullptr,
+      const SequenceNumber preserve_time_min_seqno = kMaxSequenceNumber,
+      const SequenceNumber preclude_last_level_min_seqno = kMaxSequenceNumber);
+
   // Constructor with custom CompactionProxy, used for tests.
   CompactionIterator(
       InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
@@ -236,9 +255,11 @@ class CompactionIterator {
   // REQUIRED: SeekToFirst() has been called.
   void Next();
 
-  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
-    compaction_tracer_ = tracer;
-  }
+  void SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle);
+
+  void SetMemTables(const autovector<MemTable*>* mems);
+
+  void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
 
   // Getters
   const Slice& key() const { return key_; }
@@ -266,6 +287,9 @@ class CompactionIterator {
   // Decide the current key should be output to the last level or penultimate
   // level, only call for compaction supports per key placement
   void DecideOutputLevel();
+
+  // return lifetime bucket 
+  Status PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label) ;
 
   // Passes the output value to the blob file builder (if any), and replaces it
   // with the corresponding blob reference if it has been actually written to a
@@ -333,6 +357,9 @@ class CompactionIterator {
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+  BoosterHandle booster_handle_;
+  FastConfigHandle fast_config_handle_;
+  const autovector<MemTable*>* mems_;
   SequenceIterWrapper input_;
   const Comparator* cmp_;
   MergeHelper* merge_helper_;
@@ -352,6 +379,7 @@ class CompactionIterator {
   const bool expect_valid_internal_key_;
   CompactionRangeDelAggregator* range_del_agg_;
   BlobFileBuilder* blob_file_builder_;
+  std::vector<BlobFileBuilder*> lifetime_blob_file_builders_;
   std::unique_ptr<CompactionProxy> compaction_;
   const CompactionFilter* compaction_filter_;
   const std::atomic<bool>* shutting_down_;

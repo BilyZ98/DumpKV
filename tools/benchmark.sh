@@ -1037,7 +1037,7 @@ function run_change_with_trace_monitor {
   log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
   time_cmd=$( get_cmd $log_file_name.time )
 # gdb --args
-  cmd="$time_cmd    ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd    gdb --args  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \

@@ -687,6 +687,10 @@ Status DBImpl::CloseHelper() {
     delete txn_entry.second;
   }
 
+  LGBM_BoosterFree(lightgbm_handle_);
+  LGBM_FastConfigFree(lightgbm_fastConfig_);
+
+
   // versions need to be destroyed before table_cache since it can hold
   // references to table_cache.
   versions_.reset();

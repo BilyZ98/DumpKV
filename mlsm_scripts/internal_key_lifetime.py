@@ -11,6 +11,7 @@ op_trace_dir_prefix="/mnt/nvme0n1/mlsm/test_blob/with_gc_1.0_"
 compaction_trace_dir_prefix= op_trace_dir_prefix
 
 
+key_range_file = "/tmp/mlsm/key_range.txt"
 op_valid_duration_file = "op_valid_duration.txt"
 
 key_ranges = []
@@ -85,6 +86,11 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
         for i in range(num_key_ranges):
             next_key_idx = int(float(i/num_key_ranges) * len(sorted_user_keys))
             key_ranges.append( sorted_user_keys[next_key_idx] )
+
+        with open(key_range_file, 'w') as f:
+            for key in key_ranges:
+                f.write(key + "\n")
+        # exit(0)
 
         for key, _ in compaction_keys_access_info.items():
             if key not in op_keys_with_sequence_set:

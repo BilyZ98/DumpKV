@@ -46,7 +46,8 @@ class BlobFileBuilder {
                   BlobFileCompletionCallback* blob_callback,
                   BlobFileCreationReason creation_reason,
                   std::vector<std::string>* blob_file_paths,
-                  std::vector<BlobFileAddition>* blob_file_additions);
+                  std::vector<BlobFileAddition>* blob_file_additions,
+                  uint64_t lifetime_label=0);
 
   BlobFileBuilder(std::function<uint64_t()> file_number_generator,
                   FileSystem* fs, const ImmutableOptions* immutable_options,
@@ -61,7 +62,8 @@ class BlobFileBuilder {
                   BlobFileCompletionCallback* blob_callback,
                   BlobFileCreationReason creation_reason,
                   std::vector<std::string>* blob_file_paths,
-                  std::vector<BlobFileAddition>* blob_file_additions);
+                  std::vector<BlobFileAddition>* blob_file_additions,
+                  uint64_t lifetime_label=0);
 
   BlobFileBuilder(const BlobFileBuilder&) = delete;
   BlobFileBuilder& operator=(const BlobFileBuilder&) = delete;
@@ -69,7 +71,9 @@ class BlobFileBuilder {
   ~BlobFileBuilder();
 
   Status Add(const Slice& key, const Slice& value, std::string* blob_index);
+  Status Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket);
   Status Finish();
+  uint64_t GetLifetimeLabel() const { return lifetime_label_; }
   void Abandon(const Status& s);
 
  private:
@@ -105,8 +109,11 @@ class BlobFileBuilder {
   std::vector<std::string>* blob_file_paths_;
   std::vector<BlobFileAddition>* blob_file_additions_;
   std::unique_ptr<BlobLogWriter> writer_;
+  std::vector<std::unique_ptr<BlobLogWriter>> lifetime_writers_;
   uint64_t blob_count_;
   uint64_t blob_bytes_;
+  uint64_t lifetime_label_;  
+  uint64_t lifetime_bucket_num_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE
