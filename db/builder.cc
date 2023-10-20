@@ -230,12 +230,15 @@ Status BuildTable(
         blob_file_builders_raw, ioptions.allow_data_in_errors,
         ioptions.enforce_single_del_contracts,
         /*manual_compaction_canceled=*/kManualCompactionCanceledFalse,
+        tboptions.booster_handle,
+        tboptions.booster_fast_config_handle,
+        imm_memtables,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
     // c_iter.SetModel(tboptions.booster_handle);
-    c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
-    c_iter.SetMemTables(imm_memtables);
+    // c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
+    // c_iter.SetMemTables(imm_memtables);
 
     c_iter.SeekToFirst();
     for (; c_iter.Valid(); c_iter.Next()) {

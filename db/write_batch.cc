@@ -2332,6 +2332,7 @@ class MemTableInserter : public WriteBatch::Handler {
     } else {
       assert(!concurrent_memtable_writes_);
       assert(value_type == kTypeValue);
+      assert(false);
       ret_status = mem->UpdateCallback(sequence_, key, value, kv_prot_info);
       if (ret_status.IsNotFound()) {
         // key not found in memtable. Do sst get, update, add
@@ -2617,6 +2618,7 @@ class MemTableInserter : public WriteBatch::Handler {
     const auto* kv_prot_info = NextProtectionInfo();
     Status ret_status;
     if (kv_prot_info != nullptr) {
+      assert(false);
       // Memtable needs seqno, doesn't need CF ID
       auto mem_kv_prot_info =
           kv_prot_info->StripC(column_family_id).ProtectS(sequence_);
@@ -2625,8 +2627,8 @@ class MemTableInserter : public WriteBatch::Handler {
     } else {
       ret_status = PutCFImplWithFeatures(column_family_id, key, value, kTypeValue,
                                          nullptr);
-      ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
-                             nullptr /* kv_prot_info */);
+      // ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
+      //                        nullptr /* kv_prot_info */);
     }
     // TODO: this assumes that if TryAgain status is returned to the caller,
     // the operation is actually tried again. The proper way to do this is to

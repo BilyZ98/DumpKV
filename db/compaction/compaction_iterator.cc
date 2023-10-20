@@ -32,6 +32,9 @@ CompactionIterator::CompactionIterator(
     std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
     bool enforce_single_del_contracts,
     const std::atomic<bool>& manual_compaction_canceled,
+    BoosterHandle booster_handle,
+    FastConfigHandle fast_config_handle,
+    const autovector<MemTable*>* mems,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const std::shared_ptr<Logger> info_log,
@@ -1093,19 +1096,25 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     return false;
   }
 
+  Status s;
   blob_index_.clear();
   // uint64_t bucket_id = booster_handle_->
-  std::vector<float> feature_vec;
-  int64_t out_len = 0;
-  std::vector<double> out_result(4,0);
-  int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
-      fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
+  if (blob_file_builder_) {
+    s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
+  } else {
+    assert(lifetime_blob_file_builders_.size() > 0);
+    std::vector<float> feature_vec;
+    int64_t out_len = 0;
+    std::vector<double> out_result(4,0);
+    int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
+        fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
 
-  int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+    int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
 
-  // const Status s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
-  const Status s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
+    
+     s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
 
+  }
   if (!s.ok()) {
     status_ = s;
     validity_info_.Invalidate();

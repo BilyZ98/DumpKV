@@ -1508,6 +1508,14 @@ FlushMemTable()
                                                 CompactionIterator::ExtractLargeValueIfNeededImpl()
                                                     BlobFileBuilder::Add(key, value_, & blob_index_)
                                             GarbageCollectBlobIfNeeded();
+                                    edit_->SetBlobFileAdditions()
+                                cfd_->imm()->TryInstallMemtableFlushResults()
+                                    // each memtable has a associated VersionEdit
+                                    vset->LogAndApply(cfd, options, edit_list, mu, db_directory)
+                                    VersionSet::LogAndApply()
+                                        VersionSet::LogAndApply()  
+                                            VersionSet::ProcessManifestWrites()
+                            InstallSuperVersionAndScheduleWork()
 
 
 Version {
@@ -1682,3 +1690,110 @@ There's segmentation fault. So I think it's memory access issue.
 So the issue is compaction iterator is not set to have booster config 
 when compaction is started. Because I only set booster handle for compaction
 iterator in flush job.
+
+Another bug
+TryAgain status is returned by memtable add function
+The msg is "key+seq" exists
+Why does the skiplist return status not ok?
+Found the bug, it's because I don't comment the PUtCF() function
+after PutCFWithFeatures() so there's duplicate write 
+to the memtable.
+
+How do I deal with Delete ?
+Delete is not written to blob files
+Let the DeleteCFImpl call PutCFImpl. PutCFImpl puts delete to skiplist
+
+
+Try to get detail of how new version is installed and how new blob files
+are added to new version. 
+The code is too long. Need some doc help
+
+VersionSet::ProcessManifestWrites()
+    VersionSet::LogAndApplyHelper(cfd, VersionBuilder, VersionEdit)
+        VersionBuilder::Rep::Apply(VersionEdit*)
+            ApplyBlobFileAddition(BlobFileAddition) at version_set.cc
+                vs->AddObsolteBlobFile()
+            MergeBlobfileMetas()
+
+
+Is cfd in version or is cfd in versionset?
+So now I know how to apply versionedit and put blob files labeled with different
+lifetime into different bucket.
+
+
+These are the ideas that I get from watching machine learning 
+for cpp memory allocator talk from Martin Mass.
+https://www.youtube.com/watch?v=4_UdAR_5jqk
+[Idea] integrate model into system in a pluggable way.
+
+[Idea] Easy online and office line model integration.
+
+[Idea] Easy data collection and feature engineering. Can we use LLM for this?
+
+[Idea] Genralization of machine learning model to system 
+
+
+After fixing bugs of previous flush job code. Now I can start working 
+on doing GC on rocksdb with lifetime information.
+
+
+Get trace data from this link
+http://iotta.snia.org/traces
+This trace data site contains lots of data traces including 
+block i/o trace, hpc summaries, key-value traces.
+I knew this link from this paper: https://huaicheng.github.io/p/sosp21-ioda.pdf
+
+Block I/O trace data 
+http://iotta.snia.org/traces/block-io/388
+
+Installing new version code is at here: version_set.cc:5275
+
+version_set.cc:5010
+```
+    for (int i = 0; i < static_cast<int>(versions.size()); ++i) {
+      assert(!builder_guards.empty() &&
+             builder_guards.size() == versions.size());
+      auto* builder = builder_guards[i]->version_builder();
+      Status s = builder->SaveTo(versions[i]->storage_info());
+      if (!s.ok()) {
+        // free up the allocated memory
+```
+builder->SaveTo()
+    VersionBuilder::SaveBlobFilesTo(vstorage)
+        AddBlobFileIfNeeded()
+            vstorage->AddBlobFile()
+        MergeBlobfileMetas()
+
+
+So how should I chaneg current blob file storage structure?
+The goal is that values of keys that are invalidated at the same time 
+should be put together. ?
+But from what I see in the paper of learning memory allocation.
+
+[Idea]Will move blob to long lifetime if current garbage collection does not
+GC current value and key
+
+[Idea] Use multiple models for system task?
+
+[Idea] Embedding keys to get better adjacency.
+
+
+[Idea] Test storage performance when there is multiple vm using it.
+Can we get stable latency or schedule to get higher performance?
+Or how can we get same amount of I/O with cheaper price. 
+
+I can read papers from Socc to catch the latest progress in cloud 
+computing and storage
+
+
+[Idea] Disaggregated memory for machine learing
+
+[ Idea]  LSM-tree storage on disaggregated memory I don't think 
+this is worth researching though. Because memtable is small .
+What if we put nvm and connect them by rdma ??
+
+
+space amp is larger with gc
+
+
+[Idea] get garbage percentage for each blob file in regular interval

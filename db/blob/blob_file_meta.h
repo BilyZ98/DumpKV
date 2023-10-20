@@ -45,6 +45,20 @@ class SharedBlobFileMetaData {
         deleter);
   }
 
+  template <typename Deleter>
+  static std::shared_ptr<SharedBlobFileMetaData> Create(
+      uint64_t blob_file_number, uint64_t total_blob_count,
+      uint64_t total_blob_bytes, std::string checksum_method,
+      std::string checksum_value, Deleter deleter,
+      uint64_t lifetime_label) {
+    return std::shared_ptr<SharedBlobFileMetaData>(
+        new SharedBlobFileMetaData(blob_file_number, total_blob_count,
+                                   total_blob_bytes, std::move(checksum_method),
+                                   std::move(checksum_value), lifetime_label),
+        deleter);
+  }
+
+
   SharedBlobFileMetaData(const SharedBlobFileMetaData&) = delete;
   SharedBlobFileMetaData& operator=(const SharedBlobFileMetaData&) = delete;
 
@@ -57,6 +71,7 @@ class SharedBlobFileMetaData {
   uint64_t GetTotalBlobBytes() const { return total_blob_bytes_; }
   const std::string& GetChecksumMethod() const { return checksum_method_; }
   const std::string& GetChecksumValue() const { return checksum_value_; }
+  uint64_t GetLifetimeLabel() const { return lifetime_label_; }
 
   std::string DebugString() const;
 
@@ -72,11 +87,26 @@ class SharedBlobFileMetaData {
     assert(checksum_method_.empty() == checksum_value_.empty());
   }
 
+  SharedBlobFileMetaData(uint64_t blob_file_number, uint64_t total_blob_count,
+                         uint64_t total_blob_bytes, std::string checksum_method,
+                         std::string checksum_value,
+                         uint64_t lifetime_label)
+      : blob_file_number_(blob_file_number),
+        total_blob_count_(total_blob_count),
+        total_blob_bytes_(total_blob_bytes),
+        checksum_method_(std::move(checksum_method)),
+        checksum_value_(std::move(checksum_value)),
+  lifetime_label_(lifetime_label) {
+    assert(checksum_method_.empty() == checksum_value_.empty());
+  }
+
+
   uint64_t blob_file_number_;
   uint64_t total_blob_count_;
   uint64_t total_blob_bytes_;
   std::string checksum_method_;
   std::string checksum_value_;
+  uint64_t lifetime_label_ = 0;
 };
 
 std::ostream& operator<<(std::ostream& os,
@@ -93,6 +123,18 @@ std::ostream& operator<<(std::ostream& os,
 class BlobFileMetaData {
  public:
   using LinkedSsts = std::unordered_set<uint64_t>;
+
+  // static std::shared_ptr<BlobFileMetaData> Create(
+  //     std::shared_ptr<SharedBlobFileMetaData> shared_meta,
+  //     LinkedSsts linked_ssts, uint64_t garbage_blob_count,
+  //     uint64_t garbage_blob_bytes,
+  //     uint64_t create_timestamp,
+  //     uint64_t lifetime_label) {
+  //   return std::shared_ptr<BlobFileMetaData>(
+  //       new BlobFileMetaData(std::move(shared_meta), std::move(linked_ssts),
+  //                            garbage_blob_count, garbage_blob_bytes),
+  //                             create_timestamp, lifetime_label);
+  // }
 
   static std::shared_ptr<BlobFileMetaData> Create(
       std::shared_ptr<SharedBlobFileMetaData> shared_meta,
@@ -113,6 +155,10 @@ class BlobFileMetaData {
     return shared_meta_;
   }
 
+  uint64_t GetLifetimeLabel() const {
+    assert(shared_meta_);
+    return shared_meta_->GetLifetimeLabel();
+  }
   uint64_t GetBlobFileSize() const {
     assert(shared_meta_);
     return shared_meta_->GetBlobFileSize();
@@ -158,11 +204,27 @@ class BlobFileMetaData {
     assert(garbage_blob_count_ <= shared_meta_->GetTotalBlobCount());
     assert(garbage_blob_bytes_ <= shared_meta_->GetTotalBlobBytes());
   }
-
+  BlobFileMetaData(std::shared_ptr<SharedBlobFileMetaData> shared_meta,
+                   LinkedSsts linked_ssts, uint64_t garbage_blob_count,
+                   uint64_t garbage_blob_bytes,
+                   uint64_t create_timestamp,
+                   uint64_t lifetime_label )
+      : shared_meta_(std::move(shared_meta)),
+        linked_ssts_(std::move(linked_ssts)),
+        garbage_blob_count_(garbage_blob_count),
+        garbage_blob_bytes_(garbage_blob_bytes),
+        create_timestamp_(create_timestamp),
+        lifetime_label_(lifetime_label) {
+    assert(shared_meta_);
+    assert(garbage_blob_count_ <= shared_meta_->GetTotalBlobCount());
+    assert(garbage_blob_bytes_ <= shared_meta_->GetTotalBlobBytes());
+  }
   std::shared_ptr<SharedBlobFileMetaData> shared_meta_;
   LinkedSsts linked_ssts_;
   uint64_t garbage_blob_count_;
   uint64_t garbage_blob_bytes_;
+  uint64_t create_timestamp_;
+  uint64_t lifetime_label_;
 };
 
 std::ostream& operator<<(std::ostream& os, const BlobFileMetaData& meta);

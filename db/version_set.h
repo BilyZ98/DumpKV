@@ -176,8 +176,9 @@ class VersionStorageInfo {
 
   void ReserveBlob(size_t size) { blob_files_.reserve(size); }
 
-  void AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta,
-                                     uint32_t bucket_id);
+  void AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta);
+
+
   void AddBlobFile(std::shared_ptr<BlobFileMetaData> blob_file_meta);
 
   void PrepareForVersionAppend(const ImmutableOptions& immutable_options,
