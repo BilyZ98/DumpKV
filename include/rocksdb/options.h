@@ -183,6 +183,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   //
   // Dynamically changeable through SetOptions() API
   size_t write_buffer_size = 64 << 20;
+  // 8 << 20;
 
   // Compress blocks using the specified compression algorithm.
   //
@@ -284,6 +285,7 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   //
   // Dynamically changeable through SetOptions() API
   uint64_t max_bytes_for_level_base = 256 * 1048576;
+  // 2 * 1048576;
 
   // Deprecated.
   uint64_t snap_refresh_nanos = 0;

@@ -176,6 +176,12 @@ class VersionStorageInfo {
 
   void ReserveBlob(size_t size) { blob_files_.reserve(size); }
 
+  void ReserveBlobForLifetimeBuckets(size_t size) { 
+    for(size_t i=0; i < lifetime_blob_files_.size(); i++) {
+      lifetime_blob_files_[i].reserve(size);
+    }
+  }
+
   void AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta);
 
 
@@ -231,6 +237,9 @@ class VersionStorageInfo {
   // REQUIRES: DB mutex held
   void ComputeBottommostFilesMarkedForCompaction();
 
+  void ComputeFilesMarkedForForcedBlobGCWithLifetime(
+    double blob_garbage_collection_age_cutoff
+  );
   // This computes files_marked_for_forced_blob_gc_ and is called by
   // ComputeCompactionScore()
   //
@@ -396,6 +405,7 @@ class VersionStorageInfo {
   const BlobFiles& GetBlobFiles() const { return blob_files_; }
 
   const std::vector<BlobFiles>& GetLifetimeBlobFiles() const { return lifetime_blob_files_; }
+
   const BlobFiles& GetBlobFiles(uint64_t liftime_bucket) const {
     return lifetime_blob_files_[liftime_bucket];
   }
@@ -403,6 +413,26 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   BlobFiles::const_iterator GetBlobFileMetaDataLB(
       uint64_t blob_file_number) const;
+
+  BlobFiles::const_iterator GetBlobFileMetaDataLBWithLifetime(
+      uint64_t blob_file_number,
+      uint64_t lifetime ) const;
+
+  std::shared_ptr<BlobFileMetaData> GetBlobFileMetaDataWithLifetime(
+      uint64_t blob_file_number, uint64_t lifetime) const {
+    const auto it = GetBlobFileMetaDataLBWithLifetime(blob_file_number, lifetime);
+
+    assert(it == blob_files_.end() || *it);
+
+    if (it != blob_files_.end() &&
+        (*it)->GetBlobFileNumber() == blob_file_number) {
+      return *it;
+    }
+
+    return std::shared_ptr<BlobFileMetaData>();
+  }
+
+
 
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaData(
@@ -1436,6 +1466,16 @@ class VersionSet {
   // This function doesn't support leveldb SST filenames
   void GetLiveFilesMetaData(std::vector<LiveFileMetaData>* metadata);
 
+  void AddObsoleteBlobFileWithLifetime(uint64_t blob_file_number, std::string path,
+                                      uint64_t lifetime) {
+    assert(table_cache_);
+
+    table_cache_->Erase(GetSliceForKey(&blob_file_number));
+
+    obsolete_blob_files_.emplace_back(blob_file_number, std::move(path));
+  }
+
+
   void AddObsoleteBlobFile(uint64_t blob_file_number, std::string path) {
     assert(table_cache_);
 
@@ -1595,6 +1635,7 @@ class VersionSet {
 
   std::vector<ObsoleteFileInfo> obsolete_files_;
   std::vector<ObsoleteBlobFileInfo> obsolete_blob_files_;
+  std::vector<std::vector<ObsoleteBlobFileInfo>> lifetime_obsolete_blob_files_;
   std::vector<std::string> obsolete_manifests_;
 
   // env options for all reads and writes except compactions

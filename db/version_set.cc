@@ -3502,6 +3502,12 @@ void VersionStorageInfo::ComputeFilesMarkedForPeriodicCompaction(
   }
 }
 
+void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
+  double blob_garbage_collection_age_cutoff) {
+
+
+
+}
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC(
     double blob_garbage_collection_age_cutoff,
     double blob_garbage_collection_force_threshold) {
@@ -3655,7 +3661,19 @@ void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileM
 
 }
 
+VersionStorageInfo::BlobFiles::const_iterator
+VersionStorageInfo::GetBlobFileMetaDataLBWithLifetime(
+    uint64_t blob_file_number,
+    uint64_t lifetime ) const {
 
+  return std::lower_bound(
+      GetBlobFiles(lifetime).begin(), GetBlobFiles(lifetime).end(), blob_file_number,
+      [](const std::shared_ptr<BlobFileMetaData>& lhs, uint64_t rhs) {
+        assert(lhs);
+        return lhs->GetBlobFileNumber() < rhs;
+      });
+
+}
 
 VersionStorageInfo::BlobFiles::const_iterator
 VersionStorageInfo::GetBlobFileMetaDataLB(uint64_t blob_file_number) const {

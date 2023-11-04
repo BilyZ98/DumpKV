@@ -1797,3 +1797,35 @@ space amp is larger with gc
 
 
 [Idea] get garbage percentage for each blob file in regular interval
+
+UIUC AP points out that there is random access if 
+we have multiple lifetime categories. 
+
+What's difference between saveto() and apply()
+
+ApplyBlobFileAddition() goes before SaveTo()
+
+How can I get average garbage per blob ?  
+Snapshot?
+
+
+Update this  function to get correct behavior?
+Current implementation travese lifetime mutable file metas. 
+```
+
+  void MergeBlobFileMetasWithLifetime(uint64_t first_blob_file, ProcessBase process_base,
+                          ProcessMutable process_mutable,
+                          ProcessBoth process_both,
+                          uint64_t lifetime) const {
+
+```
+
+Make blob_files_ unused  and use lifetime_blob_files_ instead. 
+Don't know how this will affect garbage collectino process.
+
+So now our task it to update the garbage collection process
+ code and  test the write amplification first.
+
+
+Add alternaltive function for VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC()
+Current gc logic is that  

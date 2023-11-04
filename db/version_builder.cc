@@ -158,6 +158,7 @@ class VersionBuilder::Rep {
   // efficiently detect trivial moves.
   class MutableBlobFileMetaData {
    public:
+    explicit MutableBlobFileMetaData() { assert(false); }
     // To be used for brand new blob files
     explicit MutableBlobFileMetaData(
         std::shared_ptr<SharedBlobFileMetaData>&& shared_meta)
@@ -220,6 +221,10 @@ class VersionBuilder::Rep {
       linked_ssts_.erase(sst_file_number);
     }
 
+    uint64_t GetLifetimeLabel() const  {
+      return shared_meta_->GetLifetimeLabel();  
+    }
+
    private:
     std::shared_ptr<SharedBlobFileMetaData> shared_meta_;
     // Accumulated changes
@@ -256,6 +261,11 @@ class VersionBuilder::Rep {
   // Mutable metadata objects for all blob files affected by the series of
   // version edits.
   std::map<uint64_t, MutableBlobFileMetaData> mutable_blob_file_metas_;
+
+  typedef std::map<uint64_t, MutableBlobFileMetaData> BlobFileNumberToMetaMap;
+  // BlobFileNumberToMetaMap *lifetime_mutable_blob_file_metas_;
+  std::vector<BlobFileNumberToMetaMap> lifetime_mutable_blob_file_metas_;
+  // std::vector<uint64_t, std::map<uint64_t, MutableBlobFileMetaData>> lifetime_mutable_blob_file_metas_;
 
   std::shared_ptr<CacheReservationManager> file_metadata_cache_res_mgr_;
 
@@ -565,6 +575,20 @@ class VersionBuilder::Rep {
     return true;
   }
 
+  bool IsBlobFileInVersionWithLifetime(uint64_t blob_file_number, uint64_t lifetime) const {
+    auto mutable_it = mutable_blob_file_metas_.find(blob_file_number);
+    if (mutable_it != mutable_blob_file_metas_.end()) {
+      return true;
+    }
+
+    assert(base_vstorage_);
+    // const auto meta = base_vstorage_->GetBlobFileMetaData(blob_file_number);
+    const auto meta = base_vstorage_->GetBlobFileMetaDataWithLifetime(blob_file_number, lifetime);
+
+    return !!meta;
+  }
+
+
   bool IsBlobFileInVersion(uint64_t blob_file_number) const {
     auto mutable_it = mutable_blob_file_metas_.find(blob_file_number);
     if (mutable_it != mutable_blob_file_metas_.end()) {
@@ -599,8 +623,9 @@ class VersionBuilder::Rep {
 
   Status ApplyBlobFileAddition(const BlobFileAddition& blob_file_addition) {
     const uint64_t blob_file_number = blob_file_addition.GetBlobFileNumber();
+    const uint64_t lifetime_label = blob_file_addition.GetLifetimeLabel();
 
-    if (IsBlobFileInVersion(blob_file_number)) {
+    if (IsBlobFileInVersionWithLifetime(blob_file_number, lifetime_label)) {
       std::ostringstream oss;
       oss << "Blob file #" << blob_file_number << " already added";
 
@@ -618,8 +643,11 @@ class VersionBuilder::Rep {
         assert(!ioptions->cf_paths.empty());
         assert(shared_meta);
 
-        vs->AddObsoleteBlobFile(shared_meta->GetBlobFileNumber(),
-                                ioptions->cf_paths.front().path);
+        vs->AddObsoleteBlobFileWithLifetime(shared_meta->GetBlobFileNumber(),
+                                            ioptions->cf_paths.front().path,
+                                            shared_meta->GetLifetimeLabel());
+        // vs->AddObsoleteBlobFile(shared_meta->GetBlobFileNumber(),
+        //                         ioptions->cf_paths.front().path);
       }
 
       delete shared_meta;
@@ -633,6 +661,9 @@ class VersionBuilder::Rep {
         blob_file_addition.GetLifetimeLabel());
 
     mutable_blob_file_metas_.emplace(
+        blob_file_number, MutableBlobFileMetaData(std::move(shared_meta)));
+
+    lifetime_mutable_blob_file_metas_[lifetime_label].emplace(
         blob_file_number, MutableBlobFileMetaData(std::move(shared_meta)));
 
     return Status::OK();
@@ -908,6 +939,83 @@ class VersionBuilder::Rep {
     return Status::OK();
   }
 
+  template <typename ProcessBase, typename ProcessMutable, typename ProcessBoth>
+  void MergeBlobFileMetasWithLifetime(uint64_t first_blob_file, ProcessBase process_base,
+                          ProcessMutable process_mutable,
+                          ProcessBoth process_both,
+                          uint64_t lifetime) const {
+    assert(base_vstorage_);
+
+    auto base_it = base_vstorage_->GetBlobFileMetaDataLBWithLifetime(first_blob_file, lifetime);
+    // auto base_it = base_vstorage_->GetBlobFileMetaDataLB(first_blob_file);
+    const auto base_it_end = base_vstorage_->GetBlobFiles(lifetime).end();
+
+
+    // auto mutable_it = mutable_blob_file_metas_.lower_bound(first_blob_file);
+    auto mutable_it = lifetime_mutable_blob_file_metas_[lifetime].lower_bound(first_blob_file);
+    const auto mutable_it_end = lifetime_mutable_blob_file_metas_[lifetime].end(); 
+    // const auto mutable_it_end = mutable_blob_file_metas_.end();
+
+    while (base_it != base_it_end && mutable_it != mutable_it_end) {
+      if(mutable_it->second.GetLifetimeLabel() != lifetime) {
+        continue;
+      }
+      const auto& base_meta = *base_it;
+      assert(base_meta);
+
+      const uint64_t base_blob_file_number = base_meta->GetBlobFileNumber();
+      const uint64_t mutable_blob_file_number = mutable_it->first;
+
+      if (base_blob_file_number < mutable_blob_file_number) {
+        if (!process_base(base_meta)) {
+          return;
+        }
+
+        ++base_it;
+      } else if (mutable_blob_file_number < base_blob_file_number) {
+        const auto& mutable_meta = mutable_it->second;
+
+        if (!process_mutable(mutable_meta)) {
+          return;
+        }
+
+        ++mutable_it;
+      } else {
+        assert(base_blob_file_number == mutable_blob_file_number);
+
+        const auto& mutable_meta = mutable_it->second;
+
+        if (!process_both(base_meta, mutable_meta)) {
+          return;
+        }
+
+        ++base_it;
+        ++mutable_it;
+      }
+    }
+
+    while (base_it != base_it_end) {
+      const auto& base_meta = *base_it;
+
+      if (!process_base(base_meta)) {
+        return;
+      }
+
+      ++base_it;
+    }
+
+    while (mutable_it != mutable_it_end || mutable_it->second.GetLifetimeLabel() != lifetime) {
+      const auto& mutable_meta = mutable_it->second;
+
+      if (!process_mutable(mutable_meta)) {
+        return;
+      }
+
+      ++mutable_it;
+    }
+  }
+
+
   // Helper function template for merging the blob file metadata from the base
   // version with the mutable metadata representing the state after applying the
   // edits. The function objects process_base and process_mutable are
@@ -1003,6 +1111,47 @@ class VersionBuilder::Rep {
     return true;
   }
 
+  uint64_t GetMinOldestBlobFileNumber(uint64_t lifetime) const {
+    uint64_t min_oldest_blob_file_num = kInvalidBlobFileNumber;
+
+    auto process_base =
+        [&min_oldest_blob_file_num](
+            const std::shared_ptr<BlobFileMetaData>& base_meta) {
+          assert(base_meta);
+
+          return CheckLinkedSsts(*base_meta, &min_oldest_blob_file_num);
+        };
+
+    auto process_mutable = [&min_oldest_blob_file_num](
+                               const MutableBlobFileMetaData& mutable_meta) {
+      return CheckLinkedSsts(mutable_meta, &min_oldest_blob_file_num);
+    };
+
+    auto process_both = [&min_oldest_blob_file_num](
+                            const std::shared_ptr<BlobFileMetaData>& base_meta,
+                            const MutableBlobFileMetaData& mutable_meta) {
+#ifndef NDEBUG
+      assert(base_meta);
+      assert(base_meta->GetSharedMeta() == mutable_meta.GetSharedMeta());
+#else
+      (void)base_meta;
+#endif
+
+      // Look at mutable_meta since it supersedes *base_meta
+      return CheckLinkedSsts(mutable_meta, &min_oldest_blob_file_num);
+    };
+
+
+
+    MergeBlobFileMetasWithLifetime(kInvalidBlobFileNumber, process_base, process_mutable,
+                                  process_both, lifetime);
+    // MergeBlobFileMetas(kInvalidBlobFileNumber, process_base, process_mutable,
+    //                    process_both);
+
+    return min_oldest_blob_file_num;
+  }
+
+
   // Find the oldest blob file that has linked SSTs.
   uint64_t GetMinOldestBlobFileNumber() const {
     uint64_t min_oldest_blob_file_num = kInvalidBlobFileNumber;
@@ -1034,6 +1183,13 @@ class VersionBuilder::Rep {
       return CheckLinkedSsts(mutable_meta, &min_oldest_blob_file_num);
     };
 
+    // size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
+  
+    // for(size_t i=0; i < lifetime_bucket_size; i++) {
+    //   MergeBlobFileMetasWithLifetime(oldest_blob_file_with_linked_ssts, process_base,
+    //                      process_mutable, process_both, i);
+    // }
+
     MergeBlobFileMetas(kInvalidBlobFileNumber, process_base, process_mutable,
                        process_both);
 
@@ -1059,7 +1215,8 @@ class VersionBuilder::Rep {
       return;
     }
 
-    vstorage->AddBlobFile(std::forward<Meta>(meta));
+    // vstorage->AddBlobFile(std::forward<Meta>(meta));
+    vstorage->AddBlobFileWithLifetimeBucket(std::forward<Meta>(meta));
   }
 
   // Merge the blob file metadata from the base version with the changes (edits)
@@ -1068,13 +1225,8 @@ class VersionBuilder::Rep {
     assert(vstorage);
 
     assert(base_vstorage_);
-    vstorage->ReserveBlob(base_vstorage_->GetBlobFiles().size() +
-                          mutable_blob_file_metas_.size());
-
-    const uint64_t oldest_blob_file_with_linked_ssts =
-        GetMinOldestBlobFileNumber();
-
-    auto process_base =
+    // vstorage->ReserveBlobForLifetimeBuckets()
+       auto process_base =
         [vstorage](const std::shared_ptr<BlobFileMetaData>& base_meta) {
           assert(base_meta);
 
@@ -1113,8 +1265,21 @@ class VersionBuilder::Rep {
       return true;
     };
 
-    MergeBlobFileMetas(oldest_blob_file_with_linked_ssts, process_base,
-                       process_mutable, process_both);
+   size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
+
+  
+    for(size_t i=0; i < lifetime_bucket_size; i++) {
+      vstorage->ReserveBlobForLifetimeBuckets(base_vstorage_->GetBlobFiles(i).size() + lifetime_mutable_blob_file_metas_[i].size()); 
+      const uint64_t oldest_blob_file_with_linked_ssts =
+            GetMinOldestBlobFileNumber(i);
+      //   GetMinOldestBlobFileNumber();
+
+
+      MergeBlobFileMetasWithLifetime(oldest_blob_file_with_linked_ssts, process_base,
+                         process_mutable, process_both, i);
+    }
+    // MergeBlobFileMetas(oldest_blob_file_with_linked_ssts, process_base,
+    //                    process_mutable, process_both);
   }
 
   void MaybeAddFile(VersionStorageInfo* vstorage, int level,
