@@ -22,6 +22,16 @@
 #include "test_util/sync_point.h"
 
 namespace ROCKSDB_NAMESPACE {
+const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
+  {0, 1},
+  {1, 10},
+  {2, 100},
+  {3, 1000}
+};
+
+const std::vector<uint64_t> LifetimeSecs = { 1, 10 , 100, 1000};
+
+
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
     SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
@@ -35,6 +45,7 @@ CompactionIterator::CompactionIterator(
     BoosterHandle booster_handle,
     FastConfigHandle fast_config_handle,
     const autovector<MemTable*>* mems,
+    ColumnFamilyData* cfd,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const std::shared_ptr<Logger> info_log,
@@ -51,7 +62,9 @@ CompactionIterator::CompactionIterator(
               compaction ? new RealCompaction(compaction) : nullptr),
           compaction_filter, shutting_down, info_log, full_history_ts_low,
           preserve_time_min_seqno, preclude_last_level_min_seqno){
+  cfd_ = cfd;
 
+  // is this ok?
   lifetime_blob_file_builders_ = std::move(blob_file_builders);
 }
 CompactionIterator::CompactionIterator(
@@ -148,6 +161,7 @@ CompactionIterator::CompactionIterator(
   assert(snapshots_ != nullptr);
   assert(preserve_time_min_seqno_ <= preclude_last_level_min_seqno_);
 
+  cfd_ = nullptr;
   if (compaction_ != nullptr) {
     level_ptrs_ = std::vector<size_t>(compaction_->number_levels(), 0);
   }
@@ -1090,6 +1104,34 @@ void CompactionIterator::NextFromInput() {
   }
 }
 
+bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label) {
+  if (!blob_file_builder_) {
+    return false;
+  }
+
+  Status s;
+  blob_index_.clear();
+  // uint64_t bucket_id = booster_handle_->
+   
+  s = lifetime_blob_file_builders_[lifetime_label]->Add(user_key(), value_, &blob_index_);
+
+  if (!s.ok()) {
+    status_ = s;
+    validity_info_.Invalidate();
+
+    return false;
+  }
+
+  if (blob_index_.empty()) {
+    return false;
+  }
+
+  value_ = blob_index_;
+
+  return true;
+}
+
+
 // Todo: Do prediction here  add value to the lifetime label blob file
 bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   if (!blob_file_builder_) {
@@ -1142,6 +1184,21 @@ void CompactionIterator::ExtractLargeValueIfNeeded() {
   current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
 }
 
+uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_label, uint64_t time_elapse_micros) {
+  uint64_t orig_time_sec = LifetimeLabelToSecMap.at(orig_lifetime_label);
+  assert(orig_time_sec >= time_elapse_micros / 1000000);
+  uint64_t remaining_time = orig_time_sec - time_elapse_micros / 1000000;
+  auto lower_boud_iter = std::lower_bound(LifetimeSecs.begin(), LifetimeSecs.end(), remaining_time);
+
+  if(lower_boud_iter == LifetimeSecs.end()) {
+    fprintf(stderr, "Error: cannot find the lifetime label for the remaining time %lu \n", remaining_time);
+    assert(false);
+  }
+  uint64_t new_lifetime_label = std::distance(LifetimeSecs.begin(), lower_boud_iter);
+
+  return new_lifetime_label; 
+}
+
 void CompactionIterator::GarbageCollectBlobIfNeeded() {
   assert(ikey_.type == kTypeBlobIndex);
 
@@ -1173,6 +1230,20 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
       return;
     }
 
+    // blob file creation timestamp
+    //
+    // blob file lifetime label
+    auto vstorage = cfd_->current()->storage_info();
+
+
+    auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
+    uint64_t lifetime_label = blob_file_meta->GetLifetimeLabel();
+    uint64_t creation_timestamp = blob_file_meta->GetCreationTimestamp();
+
+    uint64_t now_micros = env_->NowMicros();
+    uint64_t time_elapse = now_micros - creation_timestamp;
+    uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
+
     FilePrefetchBuffer* prefetch_buffer =
         prefetch_buffers_ ? prefetch_buffers_->GetOrCreatePrefetchBuffer(
                                 blob_index.file_number())
@@ -1202,7 +1273,7 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
 
     value_ = blob_value_;
 
-    if (ExtractLargeValueIfNeededImpl()) {
+    if (ExtractLargeValueIfNeededImplWithLifetimeLabel(new_lifetime_label)) {
       return;
     }
 

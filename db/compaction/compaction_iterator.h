@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "db/column_family.h"
 #include "db/compaction/compaction.h"
 #include "db/compaction/compaction_iteration_stats.h"
 #include "db/merge_helper.h"
@@ -71,6 +72,9 @@ class SequenceIterWrapper : public InternalIterator {
   uint64_t num_itered_ = 0;
   bool need_count_entries_;
 };
+extern const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap;
+extern const std::vector<uint64_t> LifetimeSecs; 
+
 
 class CompactionIterator {
  public:
@@ -217,6 +221,7 @@ class CompactionIterator {
       BoosterHandle booster_handle,
       FastConfigHandle fast_config_handle,
       const autovector<MemTable*>* mems,
+      ColumnFamilyData* cfd,
       const Compaction* compaction = nullptr,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
@@ -258,6 +263,8 @@ class CompactionIterator {
   // REQUIRED: SeekToFirst() has been called.
   void Next();
 
+  uint64_t GetLifetime();
+
   void SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle);
 
   void SetMemTables(const autovector<MemTable*>* mems);
@@ -293,6 +300,8 @@ class CompactionIterator {
 
   // return lifetime bucket 
   Status PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label) ;
+
+  bool ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label);
 
   // Passes the output value to the blob file builder (if any), and replaces it
   // with the corresponding blob reference if it has been actually written to a
@@ -335,6 +344,8 @@ class CompactionIterator {
   }
 
   bool DefinitelyInSnapshot(SequenceNumber seq, SequenceNumber snapshot);
+
+  uint64_t GetLifetimeLabelFromTTL(uint64_t orig_lifetime_label, uint64_t time_elapse_micros);
 
   bool DefinitelyNotInSnapshot(SequenceNumber seq, SequenceNumber snapshot);
 
@@ -463,6 +474,7 @@ class CompactionIterator {
   // True if the iterator has already returned a record for the current key.
   bool has_outputted_key_ = false;
 
+  ColumnFamilyData* cfd_;
   // truncated the value of the next key and output it without applying any
   // compaction rules.  This is used for outputting a put after a single delete.
   bool clear_and_output_next_key_ = false;
@@ -529,6 +541,8 @@ class CompactionIterator {
     // This is a best-effort facility, so memory_order_relaxed is sufficient.
     return manual_compaction_canceled_.load(std::memory_order_relaxed);
   }
+
+
 };
 
 inline bool CompactionIterator::DefinitelyInSnapshot(SequenceNumber seq,

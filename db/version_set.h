@@ -20,6 +20,7 @@
 
 #pragma once
 #include <atomic>
+#include <cstdint>
 #include <deque>
 #include <limits>
 #include <map>
@@ -131,6 +132,7 @@ class VersionStorageInfo {
                      CompactionStyle compaction_style,
                      VersionStorageInfo* src_vstorage,
                      bool _force_consistency_checks,
+                     Env* env,
                      EpochNumberRequirement epoch_number_requirement =
                          EpochNumberRequirement::kMustPresent);
   // No copying allowed
@@ -433,6 +435,19 @@ class VersionStorageInfo {
   }
 
 
+  std::shared_ptr<BlobFileMetaData> FastGetBlobFileMetaData(
+    uint64_t blob_file_number ) const  {
+    const auto iter = blob_file_numer_to_blob_meta_map_.find(blob_file_number);
+    if(iter  == blob_file_numer_to_blob_meta_map_.end()) {
+      assert(false);
+      return std::shared_ptr<BlobFileMetaData>();
+    }
+
+    return iter->second;
+    // return blob_file_numer_to_blob_meta_map_[blob_file_number];
+
+
+  }
 
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaData(
@@ -675,6 +690,8 @@ class VersionStorageInfo {
   // in increasing order of keys
   std::vector<FileMetaData*>* files_;
 
+  Env* env_;
+
   // Map of all table files in version. Maps file number to (level, position on
   // level).
   using FileLocations = UnorderedMap<uint64_t, FileLocation>;
@@ -684,6 +701,8 @@ class VersionStorageInfo {
   BlobFiles blob_files_;
 
   std::vector<BlobFiles> lifetime_blob_files_;
+
+  UnorderedMap<uint64_t, std::shared_ptr<BlobFileMetaData>> blob_file_numer_to_blob_meta_map_; 
 
   // Level that L0 data should be compacted to. All levels < base_level_ should
   // be empty. -1 if it is not level-compaction so it's not applicable.

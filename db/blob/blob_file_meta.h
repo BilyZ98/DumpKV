@@ -50,11 +50,12 @@ class SharedBlobFileMetaData {
       uint64_t blob_file_number, uint64_t total_blob_count,
       uint64_t total_blob_bytes, std::string checksum_method,
       std::string checksum_value, Deleter deleter,
-      uint64_t lifetime_label) {
+      uint64_t lifetime_label,
+      uint64_t creation_timestamp) {
     return std::shared_ptr<SharedBlobFileMetaData>(
         new SharedBlobFileMetaData(blob_file_number, total_blob_count,
                                    total_blob_bytes, std::move(checksum_method),
-                                   std::move(checksum_value), lifetime_label),
+                                   std::move(checksum_value), lifetime_label, creation_timestamp),
         deleter);
   }
 
@@ -72,6 +73,7 @@ class SharedBlobFileMetaData {
   const std::string& GetChecksumMethod() const { return checksum_method_; }
   const std::string& GetChecksumValue() const { return checksum_value_; }
   uint64_t GetLifetimeLabel() const { return lifetime_label_; }
+  uint64_t GetCreationTimestamp() const { return creation_timestamp_; }
 
   std::string DebugString() const;
 
@@ -90,13 +92,16 @@ class SharedBlobFileMetaData {
   SharedBlobFileMetaData(uint64_t blob_file_number, uint64_t total_blob_count,
                          uint64_t total_blob_bytes, std::string checksum_method,
                          std::string checksum_value,
-                         uint64_t lifetime_label)
+                         uint64_t lifetime_label,
+                         uint64_t creation_timestamp)
       : blob_file_number_(blob_file_number),
         total_blob_count_(total_blob_count),
         total_blob_bytes_(total_blob_bytes),
         checksum_method_(std::move(checksum_method)),
         checksum_value_(std::move(checksum_value)),
-  lifetime_label_(lifetime_label) {
+        lifetime_label_(lifetime_label),
+        creation_timestamp_(creation_timestamp)
+         {
     assert(checksum_method_.empty() == checksum_value_.empty());
   }
 
@@ -107,6 +112,8 @@ class SharedBlobFileMetaData {
   std::string checksum_method_;
   std::string checksum_value_;
   uint64_t lifetime_label_ = 0;
+  // micros?
+  uint64_t creation_timestamp_ = 0;
 };
 
 std::ostream& operator<<(std::ostream& os,
@@ -155,6 +162,11 @@ class BlobFileMetaData {
     return shared_meta_;
   }
 
+  uint64_t GetCreationTimestamp() const {
+    assert(shared_meta_);
+    return shared_meta_->GetCreationTimestamp();
+
+  }
   uint64_t GetLifetimeLabel() const {
     assert(shared_meta_);
     return shared_meta_->GetLifetimeLabel();

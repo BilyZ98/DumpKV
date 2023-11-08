@@ -947,6 +947,7 @@ Status FlushJob::WriteLevel0Table() {
       tboptions.booster_handle = booster_handle_;
       tboptions.lifetime_bucket_num = 4;
       tboptions.booster_fast_config_handle = fast_config_handle_;
+      tboptions.cfd = cfd_;
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,

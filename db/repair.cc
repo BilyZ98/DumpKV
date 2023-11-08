@@ -651,6 +651,7 @@ class Repairer {
           &cfd->internal_comparator(), cfd->user_comparator(),
           cfd->NumberLevels(), cfd->ioptions()->compaction_style,
           nullptr /* src_vstorage */, cfd->ioptions()->force_consistency_checks,
+          env_,
           EpochNumberRequirement::kMightMissing);
       Status s;
       VersionEdit dummy_edit;

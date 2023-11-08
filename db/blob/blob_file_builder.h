@@ -47,7 +47,8 @@ class BlobFileBuilder {
                   BlobFileCreationReason creation_reason,
                   std::vector<std::string>* blob_file_paths,
                   std::vector<BlobFileAddition>* blob_file_additions,
-                  uint64_t lifetime_label=0);
+                  uint64_t lifetime_label=0,
+                  uint64_t creation_timestamp=0);
 
   BlobFileBuilder(std::function<uint64_t()> file_number_generator,
                   FileSystem* fs, const ImmutableOptions* immutable_options,
@@ -74,6 +75,7 @@ class BlobFileBuilder {
   Status Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket);
   Status Finish();
   uint64_t GetLifetimeLabel() const { return lifetime_label_; }
+  uint64_t GetCreationTimestamp() const { return creation_timestamp_; }
   void Abandon(const Status& s);
 
  private:
@@ -113,6 +115,7 @@ class BlobFileBuilder {
   uint64_t blob_count_;
   uint64_t blob_bytes_;
   uint64_t lifetime_label_;  
+  uint64_t creation_timestamp_;
   uint64_t lifetime_bucket_num_;
 };
 

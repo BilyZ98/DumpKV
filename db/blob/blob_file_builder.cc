@@ -42,14 +42,18 @@ BlobFileBuilder::BlobFileBuilder(
     BlobFileCreationReason creation_reason,
     std::vector<std::string>* blob_file_paths,
     std::vector<BlobFileAddition>* blob_file_additions,
-    uint64_t lifetime_label)
+    uint64_t lifetime_label,
+    uint64_t creation_timestamp)
     : BlobFileBuilder([versions]() { return versions->NewFileNumber(); }, fs,
                       immutable_options, mutable_cf_options, file_options,
                       db_id, db_session_id, job_id, column_family_id,
                       column_family_name, io_priority, write_hint, io_tracer,
                       blob_callback, creation_reason, blob_file_paths,
                       blob_file_additions,
-                      lifetime_label) {}
+                      lifetime_label) {
+  creation_timestamp_ = creation_timestamp;
+
+}
 
 BlobFileBuilder::BlobFileBuilder(
     std::function<uint64_t()> file_number_generator, FileSystem* fs,
@@ -407,7 +411,8 @@ Status BlobFileBuilder::CloseBlobFile() {
   blob_file_additions_->emplace_back(blob_file_number, blob_count_, blob_bytes_,
                                      std::move(checksum_method),
                                      std::move(checksum_value),
-                                     lifetime_label_);
+                                     lifetime_label_,
+                                     creation_timestamp_);
 
   assert(immutable_options_);
   ROCKS_LOG_INFO(immutable_options_->logger,

@@ -1829,3 +1829,124 @@ So now our task it to update the garbage collection process
 
 Add alternaltive function for VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC()
 Current gc logic is that  
+
+
+Need to think about how to add timestamp to the blob file when creating 
+blob files duing comaction process that happens on higher levels other 
+than flush.
+
+
+I want to do a simple test now. So I will come up wih a simple 
+implementation that can help me to get results of idea asap.
+
+How about putting all the values back to the same lifetime bucket?
+This brings another problem which is that k/v pair in the orignial 
+blob files are not traversed sequentially during the compaction process.
+The essential piece is that k/v pairs stored in previous blob files
+consumes some of its lifetime when it's rewritten to new blob files.
+So the remaining lifetime of k/v pairs need to be reducted from the original
+estimated lifetime.
+
+I can add a method to the iterator to return estimated remaining lifetime 
+for each k/v. We assume that lifetime for each k/v pair in the blob file
+are same.
+
+
+Again, the problem is that compaction iterator traverse keys in the order 
+that is not the same as that in blob/value file.
+
+[Idea and implementation] I may need to add another implementation of 
+garbage collection which reads all of values and put them into LSM-tree
+again. If we use the original implentation of gc then we may read lots of 
+values other than the values in the original blob files .
+
+Have two implementation choices for gc.
+1. Add lifetime interface to iterator 
+2. Do put op to LSM-tree during gc process.
+
+
+I will go with the first one because I think it's more easier.
+Don't know what's the first version implementation of blobdb
+
+
+Where is internal iterator first initiated?
+
+compaction_job.cc
+get iterator from versions.
+It's much more work than I anticipate.
+```
+  // Although the v2 aggregator is what the level iterator(s) know about,
+  // the AddTombstones calls will be propagated down to the v1 aggregator.
+  std::unique_ptr<InternalIterator> raw_input(versions_->MakeInputIterator(
+      read_options, sub_compact->compaction, range_del_agg.get(),
+      file_options_for_read_, start, end));
+  InternalIterator* input = raw_input.get();
+
+
+```
+
+values are added to new blob file in prepareoutput() function.
+blob file number and pos index number are read in this function.
+so we can get the lifetime of blob file in this function.
+get the creation time of blob file in this function as well. 
+
+compaction iterator does not have version storage instance.
+Pass the version information to compaction iterator?
+
+
+flush_job.cc
+get vstorage from column family data
+```
+  auto vstorage = cfd_->current()->storage_info();
+  for (int level = 0; level < vstorage->num_levels(); ++level) {
+    stream << vstorage->NumLevelFiles(level);
+  }
+  stream.EndArray();
+
+
+
+```
+
+[Impl] Need to add a map to vstorage to map blob file number to its blobfilemetadata?
+
+
+[Impl notice] Need to set lifetime bucket number.
+
+
+[Todo] Need to consider the situation that memtable is not filled full 
+after long time. There is long time elapse between the key inserted and 
+the key flushed. May need to deduct this period of time on which keys spent
+on memtable.
+For, we simply assume that memtable will be filled full in very short time 
+compared to lifetime of keys. 
+
+[Todo] set creation timestamp when blobfilebuilder is initiated or pick the timestamp
+of key that is oldest among all keys?
+I will set timestamp of creation time of blobfilebuilder as creation timestamp
+for blob file for now. 
+
+
+I think I officially finish the first version of dumplsm implementation which is super exciting 
+and good.
+
+So now let's try to do test and test the performance
+
+
+[Todo] Need to record the trace data and then train the model and test the results.
+
+Test plan
+1. Try binary classification model
+2. Try multi classificaiton model
+Then change garbage collection logic so that only values in blob files that are
+garbage collected will be put rewritten back to LSM-tree instead of doing compaction.
+However, this approach has its own problem. keys associated with values might still be 
+in LSM-tree and we might need to do get to see if value is still valid?
+How does wisckey deal with this? Wisckey needs to do get to check the validity of 
+values in blob files as well.
+
+oh my god, we are not finished yet. Need to finish the computegarbagescore() to 
+pick the blob files to be gced.
+
+[Todo] log blob files and sst files for each garbage collection.
+May need to change gc implementation as well. Current gc implementation 
+is not good for our idea.

@@ -658,7 +658,8 @@ class VersionBuilder::Rep {
         blob_file_addition.GetTotalBlobBytes(),
         blob_file_addition.GetChecksumMethod(),
         blob_file_addition.GetChecksumValue(), deleter,
-        blob_file_addition.GetLifetimeLabel());
+        blob_file_addition.GetLifetimeLabel(),
+        blob_file_addition.GetCreationTimestamp());
 
     mutable_blob_file_metas_.emplace(
         blob_file_number, MutableBlobFileMetaData(std::move(shared_meta)));

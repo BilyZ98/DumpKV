@@ -2037,6 +2037,7 @@ VersionStorageInfo::VersionStorageInfo(
     const Comparator* user_comparator, int levels,
     CompactionStyle compaction_style, VersionStorageInfo* ref_vstorage,
     bool _force_consistency_checks,
+    Env* env,
     EpochNumberRequirement epoch_number_requirement)
     : internal_comparator_(internal_comparator),
       user_comparator_(user_comparator),
@@ -2046,6 +2047,7 @@ VersionStorageInfo::VersionStorageInfo(
       file_indexer_(user_comparator),
       compaction_style_(compaction_style),
       files_(new std::vector<FileMetaData*>[num_levels_]),
+      env_(env),
       base_level_(num_levels_ == 1 ? -1 : 1),
       level_multiplier_(0.0),
       files_by_compaction_pri_(num_levels_),
@@ -2108,6 +2110,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
               ? nullptr
               : cfd_->current()->storage_info(),
           cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks,
+          vset->env_,
           epoch_number_requirement),
       vset_(vset),
       next_(this),
@@ -3385,13 +3388,17 @@ void VersionStorageInfo::ComputeCompactionScore(
         immutable_options, mutable_cf_options.periodic_compaction_seconds);
   }
 
-  if (mutable_cf_options.enable_blob_garbage_collection &&
-      mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0 &&
-      mutable_cf_options.blob_garbage_collection_force_threshold < 1.0) {
-    ComputeFilesMarkedForForcedBlobGC(
-        mutable_cf_options.blob_garbage_collection_age_cutoff,
-        mutable_cf_options.blob_garbage_collection_force_threshold);
+  if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
+    ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
   }
+
+  // if (mutable_cf_options.enable_blob_garbage_collection &&
+  //     mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0 &&
+  //     mutable_cf_options.blob_garbage_collection_force_threshold < 1.0) {
+  //   ComputeFilesMarkedForForcedBlobGC(
+  //       mutable_cf_options.blob_garbage_collection_age_cutoff,
+  //       mutable_cf_options.blob_garbage_collection_force_threshold);
+  // }
 
   EstimateCompactionBytesNeeded(mutable_cf_options);
 }
@@ -3504,8 +3511,58 @@ void VersionStorageInfo::ComputeFilesMarkedForPeriodicCompaction(
 
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
   double blob_garbage_collection_age_cutoff) {
+    // traversed the oldest blob files for each 
+    // lifetime classification and pick the blob files
+    // that is supposed to outlive its lifetime
+    for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
+      if(lifetime_blob_files_[lifetime_idx].empty()) {
+        continue;
+      }
 
+      const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
+      // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
+      if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
+        fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
+        assert(false);
+      }
+      uint64_t lifetime_ttl = lifetime_label_iter->second;
+      size_t to_be_gced_idx = 0;
+      for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
+        uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / 1000000;
+        uint64_t now_sec = env_->NowMicros() / 1000000;
+        assert(now_sec >= blob_file_creation_time_sec);
 
+        uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
+        if(elapsed_sec >= lifetime_ttl) {
+          auto linked_ssts = iter->GetLinkedSsts();
+
+          for (uint64_t sst_file_number : linked_ssts) {
+            const FileLocation location = GetFileLocation(sst_file_number);
+            assert(location.IsValid());
+
+            const int level = location.GetLevel();
+            assert(level >= 0);
+
+            const size_t pos = location.GetPosition();
+
+            FileMetaData* const sst_meta = files_[level][pos];
+            assert(sst_meta);
+
+            if (sst_meta->being_compacted) {
+              continue;
+            }
+
+            files_marked_for_forced_blob_gc_.emplace_back(level, sst_meta);
+          }
+          // this blob file is supposed to be GCed
+          // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
+        } else {
+          // this blob file is not supposed to be GCed
+          break;
+        }
+
+      }
+    }
 
 }
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC(
@@ -3579,6 +3636,8 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC(
     sum_garbage_blob_bytes += meta->GetGarbageBlobBytes();
   }
 
+  // this doesnt' make sense. 
+  // this part will never be reached.
   if (count < blob_files_.size()) {
     const auto& meta = blob_files_[count];
     assert(meta);
@@ -3657,6 +3716,7 @@ void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileM
             lifetime_blob_files_[lifetime_bucket_idx].back()->GetBlobFileNumber() <
                 blob_file_meta->GetBlobFileNumber()));
 
+    blob_files_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta; 
     lifetime_blob_files_[lifetime_bucket_idx].emplace_back(std::move(blob_file_meta));
 
 }

@@ -129,6 +129,7 @@ Status ImportColumnFamilyJob::Run() {
       &cfd_->internal_comparator(), cfd_->user_comparator(),
       cfd_->NumberLevels(), cfd_->ioptions()->compaction_style,
       nullptr /* src_vstorage */, cfd_->ioptions()->force_consistency_checks,
+      db_options_.env,
       EpochNumberRequirement::kMightMissing);
   Status s;
   for (size_t i = 0; s.ok() && i < files_to_import_.size(); ++i) {

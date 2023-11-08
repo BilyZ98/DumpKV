@@ -197,6 +197,7 @@ Status BuildTable(
 
     if(enable_blob_file_builder ) {
       for(size_t i =0; i < blob_file_builders.size(); i++){
+        uint64_t timestamp = env->NowMicros();
         blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
             new BlobFileBuilder(
                 versions, fs, &ioptions, &mutable_cf_options, &file_options,
@@ -204,7 +205,7 @@ Status BuildTable(
                 tboptions.column_family_id, tboptions.column_family_name,
                 io_priority, write_hint, io_tracer, blob_callback,
                 blob_creation_reason, &blob_file_paths, blob_file_additions,
-               i));
+                i, timestamp));
           blob_file_builders_raw[i] = blob_file_builders[i].get();
       }
     }
@@ -233,6 +234,7 @@ Status BuildTable(
         tboptions.booster_handle,
         tboptions.booster_fast_config_handle,
         imm_memtables,
+        tboptions.cfd,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
