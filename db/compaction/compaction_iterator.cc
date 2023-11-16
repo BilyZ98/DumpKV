@@ -23,13 +23,18 @@
 
 namespace ROCKSDB_NAMESPACE {
 const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
-  {0, 1},
-  {1, 10},
-  {2, 100},
-  {3, 1000}
+  {0, 50},
+  {1, 100}
 };
+// const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
+//   {0, 1},
+//   {1, 10},
+//   {2, 100},
+//   {3, 1000}
+// };
 
-const std::vector<uint64_t> LifetimeSecs = { 1, 10 , 100, 1000};
+// const std::vector<uint64_t> LifetimeSecs = { 1, 10 , 100, 1000};
+const std::vector<uint64_t> LifetimeSecs = { 50, 100};
 
 
 CompactionIterator::CompactionIterator(
@@ -63,9 +68,13 @@ CompactionIterator::CompactionIterator(
           compaction_filter, shutting_down, info_log, full_history_ts_low,
           preserve_time_min_seqno, preclude_last_level_min_seqno){
   cfd_ = cfd;
+  mems_ = mems;
+  fast_config_handle_ = fast_config_handle;
+  booster_handle_ = booster_handle;
 
   // is this ok?
   lifetime_blob_file_builders_ = std::move(blob_file_builders);
+
 }
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
@@ -93,6 +102,43 @@ CompactionIterator::CompactionIterator(
               compaction ? new RealCompaction(compaction) : nullptr),
           compaction_filter, shutting_down, info_log, full_history_ts_low,
           preserve_time_min_seqno, preclude_last_level_min_seqno) {}
+
+CompactionIterator::CompactionIterator(
+    InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
+    SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+    SequenceNumber earliest_write_conflict_snapshot,
+    SequenceNumber job_snapshot, const SnapshotChecker* snapshot_checker,
+    Env* env, bool report_detailed_time, bool expect_valid_internal_key,
+    CompactionRangeDelAggregator* range_del_agg,
+    std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
+    bool enforce_single_del_contracts,
+    const std::atomic<bool>& manual_compaction_canceled,
+    BoosterHandle booster_handle,
+    FastConfigHandle fast_config_handle,
+    ColumnFamilyData* cfd,
+    const Compaction* compaction, const CompactionFilter* compaction_filter,
+    const std::atomic<bool>* shutting_down,
+    const std::shared_ptr<Logger> info_log,
+    const std::string* full_history_ts_low,
+    const SequenceNumber preserve_time_min_seqno,
+    const SequenceNumber preclude_last_level_min_seqno)
+    : CompactionIterator(
+          input, cmp, merge_helper, last_sequence, snapshots,
+          earliest_write_conflict_snapshot, job_snapshot, snapshot_checker, env,
+          report_detailed_time, expect_valid_internal_key, range_del_agg,
+          nullptr, allow_data_in_errors, enforce_single_del_contracts,
+          manual_compaction_canceled,
+          std::unique_ptr<CompactionProxy>(
+              compaction ? new RealCompaction(compaction) : nullptr),
+          compaction_filter, shutting_down, info_log, full_history_ts_low,
+          preserve_time_min_seqno, preclude_last_level_min_seqno) {
+    booster_handle_ = booster_handle;
+    fast_config_handle_ = fast_config_handle;
+    cfd_ = cfd;
+    lifetime_blob_file_builders_ = std::move(blob_file_builders);
+
+    }
+
 
 CompactionIterator::CompactionIterator(
     InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
@@ -1105,9 +1151,12 @@ void CompactionIterator::NextFromInput() {
 }
 
 bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label) {
-  if (!blob_file_builder_) {
+  if(!lifetime_blob_file_builders_[lifetime_label]) {
     return false;
   }
+  // if (!blob_file_builder_) {
+  //   return false;
+  // }
 
   Status s;
   blob_index_.clear();
@@ -1134,7 +1183,11 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
 
 // Todo: Do prediction here  add value to the lifetime label blob file
 bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
-  if (!blob_file_builder_) {
+  // if (!blob_file_builder_) {
+  //   return false;
+  // }
+  if(lifetime_blob_file_builders_.size() == 0) {
+    assert(false);
     return false;
   }
 
@@ -1142,14 +1195,58 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   blob_index_.clear();
   // uint64_t bucket_id = booster_handle_->
   if (blob_file_builder_) {
+    assert(false);
     s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
   } else {
+
     assert(lifetime_blob_file_builders_.size() > 0);
-    std::vector<float> feature_vec;
+    std::vector<double> feature_vec;
+    // Todo: get features from memtable
+
+    SequenceNumber seq =  ikey().sequence; 
+    bool get_feat = false;
+    KeyFeatures* key_feat = nullptr;
+    for(const auto &mem: *mems_) {
+
+      get_feat = mem->GetKeyFeatures(seq, &key_feat);
+      if(get_feat) {
+        break;
+      }
+      // feature_vec-
+    }
+    if(!get_feat) {
+      fprintf(stderr, " should get feat for seq %lu \n", seq);
+      // return false;
+      assert(false);
+    }
+    // features['insert_time'] = pd.to_numeric(features['insert_time'])
+    // features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
+    // features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
+
+    feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
+    feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
+    feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
+
+
+
     int64_t out_len = 0;
-    std::vector<double> out_result(4,0);
+    uint64_t classification_num = lifetime_blob_file_builders_.size();
+    assert(classification_num >= 1);
+    // if(compaction_) {
+
+    //   classification_num = compaction_->real_compaction()->immutable_options()->num_classification;
+    // } else {
+    //   assert(false);
+    // }
+
+    assert(fast_config_handle_);
+    std::vector<double> out_result(classification_num, 0.0);
     int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
         fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
+    if(predict_res != 0) {
+      fprintf(stderr, " predict error \n");
+      assert(false);
+    }
 
     int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
 
@@ -1186,15 +1283,24 @@ void CompactionIterator::ExtractLargeValueIfNeeded() {
 
 uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_label, uint64_t time_elapse_micros) {
   uint64_t orig_time_sec = LifetimeLabelToSecMap.at(orig_lifetime_label);
-  assert(orig_time_sec >= time_elapse_micros / 1000000);
-  uint64_t remaining_time = orig_time_sec - time_elapse_micros / 1000000;
+  // assert(orig_time_sec >= time_elapse_micros / 1000000);
+  uint64_t remaining_time = 0;
+  if(orig_time_sec < time_elapse_micros / 1000000) {
+    remaining_time = 0;
+  } else{
+    remaining_time = orig_time_sec - time_elapse_micros / 1000000;
+  }
   auto lower_boud_iter = std::lower_bound(LifetimeSecs.begin(), LifetimeSecs.end(), remaining_time);
 
+  uint64_t new_lifetime_label=0;
   if(lower_boud_iter == LifetimeSecs.end()) {
-    fprintf(stderr, "Error: cannot find the lifetime label for the remaining time %lu \n", remaining_time);
-    assert(false);
+
+    new_lifetime_label = LifetimeSecs.size() - 1;
+    // fprintf(stderr, "Error: cannot find the lifetime label for the remaining time %lu \n", remaining_time);
+    // assert(false);
+  } else {
+    new_lifetime_label = std::distance(LifetimeSecs.begin(), lower_boud_iter);
   }
-  uint64_t new_lifetime_label = std::distance(LifetimeSecs.begin(), lower_boud_iter);
 
   return new_lifetime_label; 
 }
@@ -1203,6 +1309,7 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
   assert(ikey_.type == kTypeBlobIndex);
 
   if (!compaction_) {
+    assert(false);
     return;
   }
 
@@ -1240,8 +1347,7 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     uint64_t lifetime_label = blob_file_meta->GetLifetimeLabel();
     uint64_t creation_timestamp = blob_file_meta->GetCreationTimestamp();
 
-    uint64_t now_micros = env_->NowMicros();
-    uint64_t time_elapse = now_micros - creation_timestamp;
+    uint64_t time_elapse =  env_->NowMicros()  - creation_timestamp;
     uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
 
     FilePrefetchBuffer* prefetch_buffer =

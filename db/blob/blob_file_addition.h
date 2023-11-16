@@ -23,17 +23,8 @@ class BlobFileAddition {
  public:
   BlobFileAddition() = default;
 
-  BlobFileAddition(uint64_t blob_file_number, uint64_t total_blob_count,
-                   uint64_t total_blob_bytes, std::string checksum_method,
-                   std::string checksum_value)
-      : blob_file_number_(blob_file_number),
-        total_blob_count_(total_blob_count),
-        total_blob_bytes_(total_blob_bytes),
-        checksum_method_(std::move(checksum_method)),
-        checksum_value_(std::move(checksum_value)) {
-    assert(checksum_method_.empty() == checksum_value_.empty());
-  }
-  BlobFileAddition(uint64_t blob_file_number, uint64_t total_blob_count,
+
+  explicit BlobFileAddition(uint64_t blob_file_number, uint64_t total_blob_count,
                    uint64_t total_blob_bytes, std::string checksum_method,
                    std::string checksum_value, uint64_t lifetime_label,
                    uint64_t build_timestamp)
@@ -63,6 +54,16 @@ class BlobFileAddition {
   std::string DebugJSON() const;
 
  private:
+  BlobFileAddition(uint64_t blob_file_number, uint64_t total_blob_count,
+                   uint64_t total_blob_bytes, std::string checksum_method,
+                   std::string checksum_value)
+      : blob_file_number_(blob_file_number),
+        total_blob_count_(total_blob_count),
+        total_blob_bytes_(total_blob_bytes),
+        checksum_method_(std::move(checksum_method)),
+        checksum_value_(std::move(checksum_value)) {
+    assert(checksum_method_.empty() == checksum_value_.empty());
+  }
   enum CustomFieldTags : uint32_t;
 
   uint64_t blob_file_number_ = kInvalidBlobFileNumber;

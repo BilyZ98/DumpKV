@@ -158,11 +158,23 @@ class VersionBuilder::Rep {
   // efficiently detect trivial moves.
   class MutableBlobFileMetaData {
    public:
+    // template <typename Deleter>
+    // static std::shared_ptr<MutableBlobFileMetaData> Create(
+    // const std::shared_ptr<SharedBlobFileMetaData>& shared_meta) {
+    //   return std::shared_ptr<MutableBlobFileMetaData>(shared_meta);
+    // }
+
+
     explicit MutableBlobFileMetaData() { assert(false); }
     // To be used for brand new blob files
+    // explicit MutableBlobFileMetaData(
+    //     std::shared_ptr<SharedBlobFileMetaData>&& shared_meta)
+    //     : shared_meta_(std::move(shared_meta)) {}
+
+
     explicit MutableBlobFileMetaData(
-        std::shared_ptr<SharedBlobFileMetaData>&& shared_meta)
-        : shared_meta_(std::move(shared_meta)) {}
+        const std::shared_ptr<SharedBlobFileMetaData>& shared_meta)
+        : shared_meta_(shared_meta) {}
 
     // To be used for pre-existing blob files
     explicit MutableBlobFileMetaData(
@@ -260,9 +272,9 @@ class VersionBuilder::Rep {
 
   // Mutable metadata objects for all blob files affected by the series of
   // version edits.
-  std::map<uint64_t, MutableBlobFileMetaData> mutable_blob_file_metas_;
+  std::map<uint64_t, std::shared_ptr<MutableBlobFileMetaData>> mutable_blob_file_metas_;
 
-  typedef std::map<uint64_t, MutableBlobFileMetaData> BlobFileNumberToMetaMap;
+  typedef std::map<uint64_t, std::shared_ptr<MutableBlobFileMetaData>> BlobFileNumberToMetaMap;
   // BlobFileNumberToMetaMap *lifetime_mutable_blob_file_metas_;
   std::vector<BlobFileNumberToMetaMap> lifetime_mutable_blob_file_metas_;
   // std::vector<uint64_t, std::map<uint64_t, MutableBlobFileMetaData>> lifetime_mutable_blob_file_metas_;
@@ -284,6 +296,7 @@ class VersionBuilder::Rep {
         level_nonzero_cmp_(base_vstorage_->InternalComparator()),
         file_metadata_cache_res_mgr_(file_metadata_cache_res_mgr) {
     assert(ioptions_);
+    lifetime_mutable_blob_file_metas_.resize(version_set_->db_options()->num_classification);
 
     levels_ = new LevelState[num_levels_];
   }
@@ -605,17 +618,23 @@ class VersionBuilder::Rep {
       uint64_t blob_file_number) {
     auto mutable_it = mutable_blob_file_metas_.find(blob_file_number);
     if (mutable_it != mutable_blob_file_metas_.end()) {
-      return &mutable_it->second;
+      return mutable_it->second.get();
     }
 
     assert(base_vstorage_);
     const auto meta = base_vstorage_->GetBlobFileMetaData(blob_file_number);
 
     if (meta) {
+
+      auto mutable_file_meta_data = std::shared_ptr<MutableBlobFileMetaData>(
+          new MutableBlobFileMetaData(meta));
       mutable_it = mutable_blob_file_metas_
-                       .emplace(blob_file_number, MutableBlobFileMetaData(meta))
+                       .emplace(blob_file_number, mutable_file_meta_data )
                        .first;
-      return &mutable_it->second;
+        uint64_t blob_lifetime_label = meta->GetLifetimeLabel();
+        lifetime_mutable_blob_file_metas_[blob_lifetime_label].emplace(
+            blob_file_number,  mutable_file_meta_data);
+      return mutable_it->second.get();
     }
 
     return nullptr;
@@ -661,11 +680,14 @@ class VersionBuilder::Rep {
         blob_file_addition.GetLifetimeLabel(),
         blob_file_addition.GetCreationTimestamp());
 
+    // auto shared_mutable_blob_file_metadata = 
+    // const auto shared_meta_const = shared_meta;
+    auto shared_mutable_blob_file_metadata = std::shared_ptr<MutableBlobFileMetaData>(new MutableBlobFileMetaData(shared_meta)); 
     mutable_blob_file_metas_.emplace(
-        blob_file_number, MutableBlobFileMetaData(std::move(shared_meta)));
+        blob_file_number, shared_mutable_blob_file_metadata);
 
     lifetime_mutable_blob_file_metas_[lifetime_label].emplace(
-        blob_file_number, MutableBlobFileMetaData(std::move(shared_meta)));
+        blob_file_number, shared_mutable_blob_file_metadata);
 
     return Status::OK();
   }
@@ -958,7 +980,7 @@ class VersionBuilder::Rep {
     // const auto mutable_it_end = mutable_blob_file_metas_.end();
 
     while (base_it != base_it_end && mutable_it != mutable_it_end) {
-      if(mutable_it->second.GetLifetimeLabel() != lifetime) {
+      if(mutable_it->second->GetLifetimeLabel() != lifetime) {
         continue;
       }
       const auto& base_meta = *base_it;
@@ -974,7 +996,7 @@ class VersionBuilder::Rep {
 
         ++base_it;
       } else if (mutable_blob_file_number < base_blob_file_number) {
-        const auto& mutable_meta = mutable_it->second;
+        const auto& mutable_meta = *(mutable_it->second);
 
         if (!process_mutable(mutable_meta)) {
           return;
@@ -984,7 +1006,7 @@ class VersionBuilder::Rep {
       } else {
         assert(base_blob_file_number == mutable_blob_file_number);
 
-        const auto& mutable_meta = mutable_it->second;
+        const auto& mutable_meta = *mutable_it->second;
 
         if (!process_both(base_meta, mutable_meta)) {
           return;
@@ -1005,8 +1027,11 @@ class VersionBuilder::Rep {
       ++base_it;
     }
 
-    while (mutable_it != mutable_it_end || mutable_it->second.GetLifetimeLabel() != lifetime) {
-      const auto& mutable_meta = mutable_it->second;
+    while (mutable_it != mutable_it_end ) {
+      if( mutable_it->second->GetLifetimeLabel() != lifetime) {
+        continue;
+      }
+      const auto& mutable_meta = *mutable_it->second;
 
       if (!process_mutable(mutable_meta)) {
         return;
@@ -1052,7 +1077,7 @@ class VersionBuilder::Rep {
 
         ++base_it;
       } else if (mutable_blob_file_number < base_blob_file_number) {
-        const auto& mutable_meta = mutable_it->second;
+        const auto& mutable_meta = *mutable_it->second;
 
         if (!process_mutable(mutable_meta)) {
           return;
@@ -1062,7 +1087,7 @@ class VersionBuilder::Rep {
       } else {
         assert(base_blob_file_number == mutable_blob_file_number);
 
-        const auto& mutable_meta = mutable_it->second;
+        const auto& mutable_meta = *mutable_it->second;
 
         if (!process_both(base_meta, mutable_meta)) {
           return;
@@ -1084,7 +1109,7 @@ class VersionBuilder::Rep {
     }
 
     while (mutable_it != mutable_it_end) {
-      const auto& mutable_meta = mutable_it->second;
+      const auto& mutable_meta = *mutable_it->second;
 
       if (!process_mutable(mutable_meta)) {
         return;

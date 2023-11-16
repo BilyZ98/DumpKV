@@ -1211,22 +1211,56 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   assert(mutable_cf_options);
 
   std::vector<std::string> blob_file_paths;
+  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(db_options_.num_classification  );
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( db_options_.num_classification, nullptr);
+  bool enable_blob_file_builder = mutable_cf_options->enable_blob_files &&
+       sub_compact->compaction->output_level() >=
+           mutable_cf_options->blob_file_starting_level;
+    // mutable_cf_options.enable_blob_files &&
+    //    tboptions.level_at_creation >=
+    //        mutable_cf_options.blob_file_starting_level && blob_file_additions;
+
+  if(enable_blob_file_builder ) {
+    for(size_t i =0; i < blob_file_builders.size(); i++){
+      uint64_t timestamp = env_->NowMicros();
+      blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
+      new BlobFileBuilder(
+        versions_, fs_.get(),
+        sub_compact->compaction->immutable_options(),
+        mutable_cf_options, &file_options_, db_id_, db_session_id_,
+        job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
+        write_hint_, io_tracer_, blob_callback_,
+        BlobFileCreationReason::kCompaction, &blob_file_paths,
+        sub_compact->Current().GetBlobFileAdditionsPtr()));
+
+        blob_file_builders_raw[i] = blob_file_builders[i].get();
+    }
+  }
+
+  // new BlobFileBuilder(
+  //     versions, fs, &ioptions, &mutable_cf_options, &file_options,
+  //     tboptions.db_id, tboptions.db_session_id, job_id,
+  //     tboptions.column_family_id, tboptions.column_family_name,
+  //     io_priority, write_hint, io_tracer, blob_callback,
+  //     blob_creation_reason, &blob_file_paths, blob_file_additions,
+  //     i, timestamp));
+
 
   // TODO: BlobDB to support output_to_penultimate_level compaction, which needs
   //  2 builders, so may need to move to `CompactionOutputs`
-  std::unique_ptr<BlobFileBuilder> blob_file_builder(
-      (mutable_cf_options->enable_blob_files &&
-       sub_compact->compaction->output_level() >=
-           mutable_cf_options->blob_file_starting_level)
-          ? new BlobFileBuilder(
-                versions_, fs_.get(),
-                sub_compact->compaction->immutable_options(),
-                mutable_cf_options, &file_options_, db_id_, db_session_id_,
-                job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
-                write_hint_, io_tracer_, blob_callback_,
-                BlobFileCreationReason::kCompaction, &blob_file_paths,
-                sub_compact->Current().GetBlobFileAdditionsPtr())
-          : nullptr);
+  // std::unique_ptr<BlobFileBuilder> blob_file_builder(
+  //     (mutable_cf_options->enable_blob_files &&
+  //      sub_compact->compaction->output_level() >=
+  //          mutable_cf_options->blob_file_starting_level)
+  //         ? new BlobFileBuilder(
+  //               versions_, fs_.get(),
+  //               sub_compact->compaction->immutable_options(),
+  //               mutable_cf_options, &file_options_, db_id_, db_session_id_,
+  //               job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
+  //               write_hint_, io_tracer_, blob_callback_,
+  //               BlobFileCreationReason::kCompaction, &blob_file_paths,
+  //               sub_compact->Current().GetBlobFileAdditionsPtr())
+  //         : nullptr);
 
   TEST_SYNC_POINT("CompactionJob::Run():Inprogress");
   TEST_SYNC_POINT_CALLBACK(
@@ -1239,17 +1273,30 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   const SequenceNumber job_snapshot_seq =
       job_context_ ? job_context_->GetJobSnapshotSequence()
                    : kMaxSequenceNumber;
-
-  auto c_iter = std::make_unique<CompactionIterator>(
+auto c_iter = std::make_unique<CompactionIterator>(
       input, cfd->user_comparator(), &merge, versions_->LastSequence(),
       &existing_snapshots_, earliest_write_conflict_snapshot_, job_snapshot_seq,
       snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_),
       /*expect_valid_internal_key=*/true, range_del_agg.get(),
-      blob_file_builder.get(), db_options_.allow_data_in_errors,
+      blob_file_builders_raw, db_options_.allow_data_in_errors,
       db_options_.enforce_single_del_contracts, manual_compaction_canceled_,
+      db_options_.booster_handle,
+      db_options_.booster_fast_config_handle,
+      cfd,
       sub_compact->compaction, compaction_filter, shutting_down_,
       db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
       preclude_last_level_min_seqno_);
+
+  // auto c_iter = std::make_unique<CompactionIterator>(
+  //     input, cfd->user_comparator(), &merge, versions_->LastSequence(),
+  //     &existing_snapshots_, earliest_write_conflict_snapshot_, job_snapshot_seq,
+  //     snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_),
+  //     /*expect_valid_internal_key=*/true, range_del_agg.get(),
+  //     blob_file_builder.get(), db_options_.allow_data_in_errors,
+  //     db_options_.enforce_single_del_contracts, manual_compaction_canceled_,
+  //     sub_compact->compaction, compaction_filter, shutting_down_,
+  //     db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
+  //     preclude_last_level_min_seqno_);
   c_iter->SetCompactionTracer(compaction_tracer_);
   c_iter->SeekToFirst();
 
@@ -1369,15 +1416,27 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   status = sub_compact->CloseCompactionFiles(status, open_file_func,
                                              close_file_func);
 
-  if (blob_file_builder) {
-    if (status.ok()) {
-      status = blob_file_builder->Finish();
-    } else {
-      blob_file_builder->Abandon(status);
+  for(size_t i=0; i < blob_file_builders.size(); i++) {
+    if (blob_file_builders[i]) {
+      if (status.ok()) {
+        status = blob_file_builders[i]->Finish();
+      } else {
+        blob_file_builders[i]->Abandon(status);
+      }
+      blob_file_builders[i].reset();
     }
-    blob_file_builder.reset();
-    sub_compact->Current().UpdateBlobStats();
+
   }
+
+  // if (blob_file_builder) {
+  //   if (status.ok()) {
+  //     status = blob_file_builder->Finish();
+  //   } else {
+  //     blob_file_builder->Abandon(status);
+  //   }
+  //   blob_file_builder.reset();
+  //   sub_compact->Current().UpdateBlobStats();
+  // }
 
   sub_compact->compaction_job_stats.cpu_micros =
       db_options_.clock->CPUMicros() - prev_cpu_micros;

@@ -652,6 +652,7 @@ class Repairer {
           cfd->NumberLevels(), cfd->ioptions()->compaction_style,
           nullptr /* src_vstorage */, cfd->ioptions()->force_consistency_checks,
           env_,
+          VersionStorageLifetimeInfo{db_options_.classification_num},
           EpochNumberRequirement::kMightMissing);
       Status s;
       VersionEdit dummy_edit;

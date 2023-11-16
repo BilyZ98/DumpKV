@@ -3822,6 +3822,7 @@ class Benchmark {
     }
 
     if (name != "replay" && FLAGS_trace_file != "") {
+      fprintf(stderr,"trace name : %s\n", name.c_str());
       Status s = db_.db->EndTrace();
       if (!s.ok()) {
         fprintf(stderr, "Encountered an error ending the trace, %s\n",
@@ -8440,6 +8441,10 @@ class Benchmark {
       exit(1);
     }
     std::unique_ptr<Replayer> replayer;
+    // db_with_cfh->cfh = db_with_cfh->db->DefaultColumnFamily();
+    if(db_with_cfh->cfh.size() == 0) {
+      db_with_cfh->cfh.push_back(db_with_cfh->db->DefaultColumnFamily());
+    }
     s = db_with_cfh->db->NewDefaultReplayer(db_with_cfh->cfh,
                                             std::move(trace_reader), &replayer);
     if (!s.ok()) {
@@ -8465,6 +8470,7 @@ class Benchmark {
     } else {
       fprintf(stderr, "Replay failed. Error: %s\n", s.ToString().c_str());
     }
+    db_with_cfh->cfh.pop_back();
   }
 
   void Backup(ThreadState* thread) {

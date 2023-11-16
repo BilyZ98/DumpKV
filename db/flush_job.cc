@@ -945,7 +945,7 @@ Status FlushJob::WriteLevel0Table() {
           job_context_->GetJobSnapshotSequence();
       tboptions.compaction_tracer = compaction_tracer_;
       tboptions.booster_handle = booster_handle_;
-      tboptions.lifetime_bucket_num = 4;
+      tboptions.lifetime_bucket_num = db_options_.num_classification;
       tboptions.booster_fast_config_handle = fast_config_handle_;
       tboptions.cfd = cfd_;
       s = BuildTable(
@@ -1048,6 +1048,11 @@ Status FlushJob::WriteLevel0Table() {
     stats.bytes_written_blob += blob.GetTotalBlobBytes();
   }
 
+  ROCKS_LOG_INFO(db_options_.info_log,
+                "[%s] [JOB %d] Flush generated %" PRIu64
+                 "blob files  ",
+                 cfd_->GetName().c_str(), job_context_->job_id,
+                 blobs.size());
   stats.num_output_files_blob = static_cast<int>(blobs.size());
 
   RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);

@@ -407,6 +407,7 @@ Status BlobFileBuilder::CloseBlobFile() {
         blob_count_, blob_bytes_);
   }
 
+
   assert(blob_file_additions_);
   blob_file_additions_->emplace_back(blob_file_number, blob_count_, blob_bytes_,
                                      std::move(checksum_method),
@@ -417,9 +418,9 @@ Status BlobFileBuilder::CloseBlobFile() {
   assert(immutable_options_);
   ROCKS_LOG_INFO(immutable_options_->logger,
                  "[%s] [JOB %d] Generated blob file #%" PRIu64 ": %" PRIu64
-                 " total blobs, %" PRIu64 " total bytes",
+                 " total blobs, %" PRIu64 " total bytes, lifetime label: %" PRIu64  ,
                  column_family_name_.c_str(), job_id_, blob_file_number,
-                 blob_count_, blob_bytes_);
+                 blob_count_, blob_bytes_, lifetime_label_);
 
   writer_.reset();
   blob_count_ = 0;

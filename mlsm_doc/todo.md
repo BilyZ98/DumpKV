@@ -1950,3 +1950,472 @@ pick the blob files to be gced.
 [Todo] log blob files and sst files for each garbage collection.
 May need to change gc implementation as well. Current gc implementation 
 is not good for our idea.
+
+Will call trace replay to replay the trace so that we don't need to implement
+the logics to read trace file and put keys back to db.
+
+Far more work than I anticipated need to be done to get the test results..
+
+each column family data has its own lsm-tree
+https://cf2.cloudferro.com:8080/swift/v1/AUTH_5e376cddf8a94f9294259b5f48d7b2cd/ceph/rocksdb_in_ceph.pdf
+
+
+[ Error to be solved] handle is nullptr when doing replay
+check Open(&open_options_)
+Looks like db_cfh is not initialized 
+solution, initialize cfh of db in Open() function
+[Solved]
+
+[Todo] submit pr to fix db_bench_tool when running with replay
+
+[Error to be solved] initialize lifetime_blob_files_ vector to have lifetime bucket num size
+[Fixed]
+
+[Bug] SharedMeta intialized to be nullptr and is referenced in mergemeta
+The problem is that shared_meta is moved to mutable_blob_file_metas vector
+so it is moved to lifetime_mutable_blob_file_metas after thato.
+So only nullptr is stored in lifetime_mutable_blob_file_metas.
+SharedBlobFileMetaData is created with deleter.
+So what about MutableBlobFileMetaData ?
+
+Looks like there is no destructor function in MutableBlobFileMetaData.
+reference count of shared_ptr in class will be automatically called
+when class is destructed.
+
+MutableBlobFileMetaData can only be created from pre-existing blob files
+or new blob files which are represented by different data structures. 
+Modify the constructor of MutableBlobFileMetaData so that it does not 
+do std::move(SharedBlobFileMetaData).
+So now SharedBlobFileMetaData is shared between mutable_blob_file_metas and 
+lifetime_mutable_blob_file_metas.
+[Fixed]
+
+[Todo] Need to add BlobFileMetaData to blob_files_ and lifetime_blob_files_ at the same
+time so that other functions can work as the same as before.
+[Done]
+
+
+[Bug] replyed failed. 
+CheckConsistency(VersionStorageInfo*)
+root cause: didn't add blobfilemetadata to unordered_map I added before.
+add blobfilemetadata to unordered_map, doesn't work
+Update AddBlobFileAddtion in VersionEdit to fix this ?
+What causes this problem?
+Maybe the reason is that I don't pass vector of 
+Still haven't fixed this bug
+
+LinkSst() is called in ApplyFileAddition()
+Need to check this function
+```
+  Status ApplyFileAddition(int level, const FileMetaData& meta) {
+```
+
+call stack
+```
+#0  rocksdb::VersionBuilder::Rep::CheckConsistencyDetails (this=0x1555500043c0,
+    vstorage=0x155550018680)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:529
+#1  0x0000555555899338 in rocksdb::VersionBuilder::Rep::CheckConsistency (
+    this=0x1555500043c0, vstorage=0x155550018680)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:551
+#2  0x000055555589ca8e in rocksdb::VersionBuilder::Rep::SaveTo (this=0x1555500043c0,
+    vstorage=0x155550018680)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:1432
+#3  0x0000555555894cff in rocksdb::VersionBuilder::SaveTo (this=0x155550004060,
+    vstorage=0x155550018680)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:1560
+#4  0x00005555558d0ad7 in rocksdb::VersionSet::ProcessManifestWrites (
+    this=0x5555568bb8b0, writers=std::deque with 1 element = {...}, mu=0x5555568bffc0,
+    dir_contains_current_file=0x5555568d7560, new_descriptor_log=false,
+    new_cf_options=0x0)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.cc:5114
+#5  0x00005555558d4515 in rocksdb::VersionSet::LogAndApply(rocksdb::autovector<rocksdb::ColumnFamilyData*, 8ul> const&, rocksdb::autovector<rocksdb::MutableCFOptions const*, 8ul> co
+nst&, rocksdb::autovector<rocksdb::autovector<rocksdb::VersionEdit*, 8ul>, 8ul> const&, rocksdb::InstrumentedMutex*, rocksdb::FSDirectory*, bool, rocksdb::ColumnFamilyOptions const*
+, std::vector<std::function<void (rocksdb::Status const&)>, std::allocator<std::function<void (rocksdb::Status const&)> > > const&) (this=0x5555568bb8b0,
+    column_family_datas=..., mutable_cf_options_list=..., edit_lists=...,
+    mu=0x5555568bffc0, dir_contains_current_file=0x5555568d7560,
+    new_descriptor_log=false, new_cf_options=0x0,
+    manifest_wcbs=std::vector of length 0, capacity 0)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.cc:5626
+#6  0x00005555556ca49b in rocksdb::VersionSet::LogAndApply (this=0x5555568bb8b0,
+    column_family_data=0x5555568e1a80, mutable_cf_options=..., edit=0x155550001d08,
+    mu=0x5555568bffc0, dir_contains_current_file=0x5555568d7560,
+    new_descriptor_log=false, column_family_options=0x0)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.h:1221
+#7  0x0000555555d2ed27 in rocksdb::CompactionJob::InstallCompactionResults (
+    this=0x155554f42710, mutable_cf_options=...)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/compaction/compaction_job.cc:1717
+#8  0x0000555555d29b9e in rocksdb::CompactionJob::Install (this=0x155554f42710,
+    mutable_cf_options=...)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/compaction/compaction_job.cc:829
+#9  0x000055555574bffd in rocksdb::DBImpl::BackgroundCompaction (this=0x5555568bf7c0,
+    made_progress=0x155554f42d3f, job_context=0x155554f42da0, log_buffer=0x155554f42fa0,
+    prepicked_compaction=0x0, thread_pri=rocksdb::Env::LOW)
+```
+When is oldest_blob_filenumber updated for each FileMetaData.
+Don't find out the root cause.
+The problem happens at compaction.
+Maybe the code I write to put blob file does't work.
+
+There is blob file meta in lifetime_blob_files but not in blob_files.
+There is blob file addition in version edit in flush job.
+there is SharedBlobFileMetaData in builder->rep_->mutable_blob_file_metas
+but not in lifetime_mutable_blob_file_metas
+gdb info
+```
+(gdb) p builder->rep_->mutable_blob_file_metas_
+$31 = std::map with 1 element = {[10] = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 3, weak count 0) = {
+      get() = 0x1555480024d0}, delta_ = {additional_garbage_count_ = 0,
+      additional_garbage_bytes_ = 0, newly_linked_ssts_ = std::unordered_set with 1 element = {                                                                                                           [0] = 9}, newly_unlinked_ssts_ = std::unordered_set with 0 elements},
+    linked_ssts_ = std::unordered_set with 1 element = {[0] = 9}, garbage_blob_count_ = 0,
+    garbage_blob_bytes_ = 0}}
+(gdb) p builder->rep_->lifetime_mutable_blob_file_metas_[0]
+$32 = std::map with 1 element = {[10] = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 3, weak count 0) = {
+      get() = 0x1555480024d0}, delta_ = {additional_garbage_count_ = 0,
+      additional_garbage_bytes_ = 0, newly_linked_ssts_ = std::unordered_set with 0 elements,
+      newly_unlinked_ssts_ = std::unordered_set with 0 elements},
+    linked_ssts_ = std::unordered_set with 0 elements, garbage_blob_count_ = 0,
+    garbage_blob_bytes_ = 0}}
+```
+
+
+make sure sharedblobfilemetadata is the same between blob_files_ and lifetime_blob_files_
+```
+(gdb) p *(versions[i]->storage_info()->lifetime_blob_files_[0][0])
+$48 = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 3, weak count 0) = {
+    get() = 0x1555480024d0}, linked_ssts_ = std::unordered_set with 0 elements,
+  garbage_blob_count_ = 0, garbage_blob_bytes_ = 0, create_timestamp_ = 17338454175503460425,
+  lifetime_label_ = 2211685959070656598}
+(gdb) p *(versions[i]->storage_info()->lifetime_blob_files_[0][0]).GetBlobFileNumber()
+Couldn't find method std::shared_ptr<rocksdb::BlobFileMetaData>::GetBlobFileNumber
+(gdb) p (versions[i]->storage_info()->lifetime_blob_files_[0][0]->GetBlobFileNumber())
+$49 = 10
+```
+
+```
+(gdb) p *versions[i]->storage_info()->blob_files_[0]
+$40 = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 3, weak count 0) = {
+get() = 0x1555480024d0}, linked_ssts_ = std::unordered_set with 0 elements,
+
+  garbage_blob_count_ = 0, garbage_blob_bytes_ = 0, create_timestamp_ = 17338454175503460425,
+  lifetime_label_ = 2211685959070656598}
+(gdb) p versions[i]->storage_info()->blob_files_[0]->GetBlobFileNumber()                                                                                                                          $41 = 10
+```
+blob file:10 is sotred in version storage before version builder calls SaveTo function.
+
+
+check consistency is called before SaveTo() so that it make sure that 
+version vefore SaveTo() is consistent
+
+However, blob file:10 also shows up in edit_list[0]->blob_file_additions_;
+which is supposed not to be here.
+
+so vstorage should not have blob file:10 ?
+
+
+
+```
+#1  0x0000555555885f66 in rocksdb::VersionBuilder::Rep::CheckConsistency (this=0x1555480294c0,                                                                                           [45/1456]    vstorage=0x15554801d180)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:551
+#2  0x00005555558896bc in rocksdb::VersionBuilder::Rep::SaveTo (this=0x1555480294c0,
+    vstorage=0x15554801d180)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:1432
+#3  0x000055555588192d in rocksdb::VersionBuilder::SaveTo (this=0x155548015980,
+    vstorage=0x15554801d180)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_builder.cc:1560
+#4  0x00005555558bd66f in rocksdb::VersionSet::ProcessManifestWrites (this=0x5555569f8950,
+    writers=std::deque with 1 element = {...}, mu=0x555556a00840,
+    dir_contains_current_file=0x555556a16670, new_descriptor_log=false, new_cf_options=0x0)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.cc:5116
+#5  0x00005555558c10ad in rocksdb::VersionSet::LogAndApply(rocksdb::autovector<rocksdb::ColumnFamilyData*, 8ul> const&, rocksdb::autovector<rocksdb::MutableCFOptions const*, 8ul> const&, rocksdb::autovector<rocksdb::autovector<rocksdb::VersionEdit*, 8ul>, 8ul> const&, rocksdb::InstrumentedMutex*, rocksdb::FSDirectory*, bool, rocksdb::ColumnFamilyOptions const*, std::vector<std::function<void (rocksdb::Status const&)>, std::allocator<std::function<void (rocksdb::Status const&)> > > const&) (this=0x5555569f8950, column_family_datas=..., mutable_cf_options_list=...,
+    edit_lists=..., mu=0x555556a00840, dir_contains_current_file=0x555556a16670,
+    new_descriptor_log=false, new_cf_options=0x0,
+    manifest_wcbs=std::vector of length 1, capacity 1 = {...})
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.cc:5628
+#6  0x0000555555839e03 in rocksdb::VersionSet::LogAndApply(rocksdb::ColumnFamilyData*, rocksdb::MutableCFOptions const&, rocksdb::autovector<rocksdb::VersionEdit*, 8ul> const&, rocksdb::InstrumentedMutex*, rocksdb::FSDirectory*, bool, rocksdb::ColumnFamilyOptions const*, std::function<void (rocksdb::Status const&)> const&) (this=0x5555569f8950, column_family_data=0x555556a18a10,
+    mutable_cf_options=..., edit_list=..., mu=0x555556a00840,
+    dir_contains_current_file=0x555556a16670, new_descriptor_log=false,
+    column_family_options=0x0, manifest_wcb=...)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/version_set.h:1240
+#7  0x00005555558365ef in rocksdb::MemTableList::TryInstallMemtableFlushResults (
+    this=0x555556a19318, cfd=0x555556a18a10, mutable_cf_options=..., mems=...,                                                                                                                        prep_tracker=0x555556a018b8, vset=0x5555569f8950, mu=0x555556a00840, file_number=9,
+    to_delete=0x155554d41e88, db_directory=0x555556a16670, log_buffer=0x155554d41fc0,                                                                                                                 committed_flush_jobs_info=0x155554d41260, write_edits=true)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/memtable_list.cc:581
+#8  0x00005555557db530 in rocksdb::FlushJob::Run (this=0x155554d40e10,
+    prep_tracker=0x555556a018b8, file_meta=0x155554d408f0, switched_to_mempurge=0x155554d4085d)                                                                                                       at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/flush_job.cc:305
+#9  0x0000555555724b91 in rocksdb::DBImpl::FlushMemTableToOutputFile (this=0x555556a00000,
+    cfd=0x555556a18a10, mutable_cf_options=..., made_progress=0x155554d41d63,
+    job_context=0x155554d41dc0, flush_reason=rocksdb::FlushReason::kWriteBufferFull,                                                                                                                  superversion_context=0x155548000ee0, snapshot_seqs=std::vector of length 0, capacity 0,
+    earliest_write_conflict_snapshot=72057594037927935, snapshot_checker=0x0,
+    log_buffer=0x155554d41fc0, thread_pri=rocksdb::Env::HIGH)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/db_impl/db_impl_compaction_flush.cc:271
+#10 0x0000555555725583 in rocksdb::DBImpl::FlushMemTablesToOutputFiles (this=0x555556a00000,
+    bg_flush_args=..., made_progress=0x155554d41d63, job_context=0x155554d41dc0,
+    log_buffer=0x155554d41fc0, thread_pri=rocksdb::Env::HIGH)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/db_impl/db_impl_compaction_flush.cc:392
+#11 0x0000555555734fa9 in rocksdb::DBImpl::BackgroundFlush (this=0x555556a00000,                                                                                                                      made_progress=0x155554d41d63, job_context=0x155554d41dc0, log_buffer=0x155554d41fc0,                                                                                                              reason=0x155554d41d64, thread_pri=rocksdb::Env::HIGH)                                                                                                                                             at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/db_impl/db_impl_compaction_flush.cc:2904                                                                                                  #12 0x000055555573563b in rocksdb::DBImpl::BackgroundCallFlush (this=0x555556a00000,                                                                                                                  thread_pri=rocksdb::Env::HIGH)
+    at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/db_impl/db_impl_compaction_flush.cc:2949                                                                                                  #13 0x000055555573451e in rocksdb::DBImpl::BGWorkFlush (arg=0x15550a90bea0)                                                                                                                           at /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/db_impl/db_impl_compaction_flush.cc:2758 
+```
+Will vstorage be updated when doing compaction ?
+
+breakpoint 1: version_builder.cc ApplyBlobFileAddition()
+breakpoint 2: version_builder.cc 
+
+Fisrst Apply(), then Saveto()
+
+Pay attention to 
+ApplyFileAddition(int level, FileMetaData& meta)
+which is called by Apply(VersionEdit* edit)
+```
+    const uint64_t blob_file_number = f->oldest_blob_file_number;
+
+    if (blob_file_number != kInvalidBlobFileNumber) {
+      MutableBlobFileMetaData* const mutable_meta =
+          GetOrCreateMutableBlobFileMetaData(blob_file_number);
+      if (mutable_meta) {
+        mutable_meta->LinkSst(file_number);
+      }
+    }
+
+
+```
+Pay attention to AddBlobFileWithLifetimeBucket() in VersionStorageInfo()
+Find out  that  mutable_blob_file_metas_ and lifetime_mutable_blob_file_metas_
+does not share memory space so that linked_ssts_ is not the same in these
+two struct in  VersionBuilder
+How to fix this problem ?
+1. make sure to call linksst() of both mutable_blob_file_metas_ and lifetime_mutable_blob_file_metas_
+2. make MutableBlobFileMetaData as shared_ptr.
+
+So now we pass the CheckConsistency()  function
+[Fixed?]
+
+
+[Todo] Put k/v to batch when doing gc that only gc values in the blob file 
+that is supposed to be dead .
+
+[Todo] Constructor of CompactionIterator()
+[Done]
+
+[Todo] Fast convert KeyFeatures to vector of double to do prediction
+Proposal: Maybe store features as vector in mem add function.
+So that we don't store struct .
+
+
+
+[Todo] Need to make sure order of features in vector of double align with 
+that when doing training.
+Feature order when doing training:
+[Done]
+
+
+Best practice to encode timestamp for training model
+```
+There are several best practices for encoding timestamp features for machine learning models:
+
+1. **Discrete Components**: Break down the timestamp into discrete components such as year, quarter, month, day, and hour¹. This approach allows the model to capture patterns that occur at regular intervals.
+
+2. **Time Elapsed Since an Event**: Another approach is to calculate the time elapsed since a particular event. This could be the Unix time (the number of seconds that have elapsed since the Unix epoch), or it could be a more domain-specific event¹.
+
+3. **Cyclical Encoding**: For cyclical features like hours in a day or days in a week, you can use sin and cos functions to preserve the cyclical nature¹. This helps the model understand that certain times are close to each other, even though their numerical values might be far apart (e.g., 23:59 is close to 00:01).
+
+4. **Neural Networks**: If your data has time-based cycles, you can pick a neural network that can capture those patterns. Long Short Term Memory (LSTM) is one of the most popular options¹.
+
+5. **UTC Time**: Convert timestamp to UTC-time and discretize its values by some threshold (seconds, minutes, etc.)⁴.
+
+Remember, the best approach depends on your specific use case and the nature of your data. It's often a good idea to experiment with different methods and see which one works best for your model.
+
+Source: Conversation with Bing, 11/12/2023
+(1) machine learning - Add timestamp as a feature to model - Data Science .... https://datascience.stackexchange.com/questions/107573/add-timestamp-as-a-feature-to-model.
+(2) machine learning - Training the classfication model with the timestamp .... https://stackoverflow.com/questions/62589383/training-the-classfication-model-with-the-timestamp.
+(3) Three Approaches to Encoding Time Information as Features for ML Models .... https://developer.nvidia.com/blog/three-approaches-to-encoding-time-information-as-features-for-ml-models/.
+(4) Best practice for encoding datetime in machine learning. https://stats.stackexchange.com/questions/311494/best-practice-for-encoding-datetime-in-machine-learning.
+```
+I can try UTC  first
+code example to convert timstamp to year/month/day/hour
+```
+import pandas as pd
+from datetime import datetime
+import pytz
+
+# Assume df is your DataFrame and 'timestamp' is your timestamp column
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+# Convert the timestamp to UTC
+df['timestamp'] = df['timestamp'].dt.tz_convert(pytz.UTC)
+
+df['year'] = df['timestamp'].dt.year
+# Extract features from the timestamp
+df['month'] = df['timestamp'].dt.month
+df['day'] = df['timestamp'].dt.day
+df['hour'] = df['timestamp'].dt.hour
+
+```
+
+
+Challenges 
+1. feature selection
+2. Model integration.
+3. Deal with misprediction
+4. [maybe] continuous model update ( This is a new problem)
+5. Define lifetime classification
+
+
+
+[Todo] Need to log classification of keys during flush job and compaction
+
+
+[Bug] no blob file is generated.
+There is no blob file addtion in VersionEdit
+Seems that I find the root cause .
+ExtractLargeValueIfNeededImpl() return directly becuase blob_file_builder_ is nullptr
+and no error is reported.
+[Seems fixed]
+
+
+[Todo] Get number of classification from lifetime_blob_builders. 
+[Done]
+
+[Bug] Segmentation fault calling LGBM_BoosterPredictForMatSingleRowFast()
+But I can not get which variable is nullptr.
+So now I will compile the lightgbm as debug mode adn try to debug again.
+Assign fast_config_handle to fast_config_handle_ in compaction iterator.
+[Fixed]
+
+cmake command to build lightgbm with debug and static lib
+```
+cmake -DUSE_DEBUG=ON -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON ..
+```
+
+
+[Todo]Need to update  lifetime label to sec map.
+[Fixed]
+
+
+[Bug] There is only one blob file generated in first flush job which is
+not what I expect. Let's fix the previous bug and keep watching.
+[Not a bug]
+
+
+Looks like oldest_blob_filenumber is set in sst filemeta in callbck function
+
+
+Figure out version edit, version storage , and their relationship with compaction/flush job?
+VersionEdit will be applied to VersionBuilder by calling ApplyBlobFileAddition()
+And then in SaveTo() function VersionStorageInfo will be updated by VersionBuilder
+
+[Bug] FastGetBlobFileMetaData() return not found for the blob file number.
+Seems that it's not a bug , blob file:14 is newly generated.
+[Not a bug]
+
+
+[Bug] blob file [25-38] exist in the db folders but not in blob_files_ in VersionStorage
+And db report that it can not find blob file 27 in blob_files_;
+
+```
+(gdb) p vstorage->blob_file_numer_to_blob_meta_map_
+$25 = std::unordered_map with 2 elements = {
+  [35] = std::shared_ptr<rocksdb::BlobFileMetaData> (use count 3, weak count 0) = {get() = 0x155548013d30},
+  [25] = std::shared_ptr<rocksdb::BlobFileMetaData> (use count 3, weak count 0) = {get() = 0x155550015e80}}
+```
+
+```
+(gdb) p *vstorage->blob_files_[0]
+$28 = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 1, weak count 0) = {get() = 0x15555001f1c0},
+  linked_ssts_ = std::unordered_set with 1 element = {
+    [0] = 26}, garbage_blob_count_ = 52156,
+  garbage_blob_bytes_ = 44296397, create_timestamp_ = 0,
+  lifetime_label_ = 0}
+(gdb) p *vstorage->blob_files_[1]
+$29 = {shared_meta_ = warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+warning: RTTI symbol not found for class 'std::_Sp_counted_deleter<rocksdb::SharedBlobFileMetaData*, rocksdb::VersionBuilder::Rep::ApplyBlobFileAddition(rocksdb::BlobFileAddition const&)::{lambda(rocksdb::SharedBlobFileMetaData*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2>'
+
+std::shared_ptr<rocksdb::SharedBlobFileMetaData> (use count 1, weak count 0) = {get() = 0x155548016100},
+  linked_ssts_ = std::unordered_set with 1 element = {
+    [0] = 34}, garbage_blob_count_ = 0,
+  garbage_blob_bytes_ = 0, create_timestamp_ = 0,
+  lifetime_label_ = 0}
+```
+we have 25 and 35 blob file 
+
+
+check consistency between blob_file_numer_to_blob_meta_map_ and blob_files_ and 
+lifetime_blob_files_
+They are consistent.
+
+Looks like blob_files_ is built in SaveBlobFilesTo() function in VersionBuilder()
+
+No blob file 27 generated log in LOG which is not right.
+Need to check how blob files are recorded in log and then we might find out the
+root cause and fix this.
+
+Seems that no blob file log shows up in compaction whose compaction reason is 
+"ForcedBlobGC"
+Need to make sure garbage count is updated and newly generated blob files ared 
+added to VersionStorage.
+
+31, 29, 27 blob file is missing from the LOG .
+Seems that I find the root cause of the bug. 
+I don't write code that closes the blob file builders in compaction_job.cc
+
+So now I have a clear idea of how VersionEdit, VersionBuilder, VersionStorageInfo work together.
+VersionBuilder::Apply(VersionEdit *edit) will first apply versionedit such as blob file addition and file addition
+to create mutable_blob_file_meta.
+And then VersionBuilder::SaveTo() will save blobfilemetadatas to VersionStorageInfo
+```
+  Status SaveTo(VersionStorageInfo* vstorage) const {
+```
+Why is this?
+I don't remember there is VersionBuilder in leveldb.
+
+Difference between blobdb and  old stackable blobdb
+```
+The main differences between the new integrated BlobDB and the old Stackable BlobDB in RocksDB are as follows:
+
+1. **API**: The old BlobDB had its own StackableDB-based interface (`rocksdb::blob_db::BlobDB`), while the new BlobDB can be used via the well-known `rocksdb::DB` API¹².
+
+2. **Consistency**: With the integrated BlobDB implementation, RocksDB’s consistency guarantees and various write options (like using the WAL or synchronous writes) now apply to blobs as well¹.
+
+3. **Write Performance**: The old BlobDB required synchronization and performed expensive operations like compression in the application thread. The new BlobDB offloads blob file building to RocksDB’s background jobs, i.e., flushes and compactions¹.
+
+4. **Read Performance**: The new BlobDB improves read performance by generalizing RocksDB’s Version concept to include the set of live blob files¹.
+
+5. **Compatibility**: The old BlobDB was incompatible with many widely used RocksDB features and was primarily geared towards FIFO/TTL use cases that can tolerate some data loss². The new BlobDB has feature parity with the core of RocksDB¹.
+
+6. **Configuration**: The new BlobDB can be configured on a per-column family basis using the configuration options `enable_blob_files`, `min_blob_size`, `blob_file_size`, `blob_compression_type`, `enable_blob_garbage_collection`, and `blob_garbage_collection_age_cutoff`³.
+
+In summary, the new integrated BlobDB is a significant improvement over the old Stackable BlobDB in terms of API, consistency, performance, compatibility, and configuration¹²³.
+
+Source: Conversation with Bing, 11/15/2023
+(1) Integrated BlobDB | RocksDB. https://rocksdb.org/blog/2021/05/26/integrated-blob-db.html.
+(2) BlobDB · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/BlobDB.
+(3) Does rocksdb have two blobdb interfaces? - Google Groups. https://groups.google.com/g/rocksdb/c/hrXOP4fCOCs.
+(4) BlobDB · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/BlobDB/f268c1ff9ac2bc0f6157dd897acd3a54390c5131.
+```
+
+
+
+
+[Todo] Get total file size from sstfilemanagerimpl instead of getting it from bash command.
+Call GetTotalSize()
+sst_file_manager is in immutable_db_options_;
+
+
+[Todo] Find out the root cause for the situation that only one label is generated for all keys.
+
+[Todo] Need to check key range id.

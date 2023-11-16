@@ -130,6 +130,7 @@ Status ImportColumnFamilyJob::Run() {
       cfd_->NumberLevels(), cfd_->ioptions()->compaction_style,
       nullptr /* src_vstorage */, cfd_->ioptions()->force_consistency_checks,
       db_options_.env,
+      VersionStorageLifetimeInfo{db_options_.num_classification},
       EpochNumberRequirement::kMightMissing);
   Status s;
   for (size_t i = 0; s.ok() && i < files_to_import_.size(); ++i) {

@@ -122,6 +122,9 @@ enum EpochNumberRequirement {
   kMustPresent,
 };
 
+struct VersionStorageLifetimeInfo {
+  uint64_t lifetime_bucket_num=1;
+};
 // Information of the storage associated with each Version, including number of
 // levels of LSM tree, files information at each level, files marked for
 // compaction, blob files, etc.
@@ -133,6 +136,7 @@ class VersionStorageInfo {
                      VersionStorageInfo* src_vstorage,
                      bool _force_consistency_checks,
                      Env* env,
+                     const VersionStorageLifetimeInfo& vs_lifetime_info,
                      EpochNumberRequirement epoch_number_requirement =
                          EpochNumberRequirement::kMustPresent);
   // No copying allowed
@@ -422,7 +426,8 @@ class VersionStorageInfo {
 
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaDataWithLifetime(
       uint64_t blob_file_number, uint64_t lifetime) const {
-    const auto it = GetBlobFileMetaDataLBWithLifetime(blob_file_number, lifetime);
+    // auto it = GetBlobFileMetaDataLBWithLifetime(blob_file_number, lifetime);
+    const auto it = GetBlobFileMetaDataLB(blob_file_number);
 
     assert(it == blob_files_.end() || *it);
 
@@ -439,7 +444,7 @@ class VersionStorageInfo {
     uint64_t blob_file_number ) const  {
     const auto iter = blob_file_numer_to_blob_meta_map_.find(blob_file_number);
     if(iter  == blob_file_numer_to_blob_meta_map_.end()) {
-      assert(false);
+      // assert(false);
       return std::shared_ptr<BlobFileMetaData>();
     }
 
@@ -452,6 +457,7 @@ class VersionStorageInfo {
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaData(
       uint64_t blob_file_number) const {
+    return FastGetBlobFileMetaData(blob_file_number);
     const auto it = GetBlobFileMetaDataLB(blob_file_number);
 
     assert(it == blob_files_.end() || *it);

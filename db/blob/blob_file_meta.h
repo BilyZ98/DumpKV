@@ -28,6 +28,7 @@ class SharedBlobFileMetaData {
       uint64_t blob_file_number, uint64_t total_blob_count,
       uint64_t total_blob_bytes, std::string checksum_method,
       std::string checksum_value) {
+    assert(false);
     return std::shared_ptr<SharedBlobFileMetaData>(new SharedBlobFileMetaData(
         blob_file_number, total_blob_count, total_blob_bytes,
         std::move(checksum_method), std::move(checksum_value)));

@@ -38,6 +38,7 @@ function display_usage() {
   echo -e "\trandomtransaction"
   echo -e "\tuniversal_compaction"
   echo -e "\tmixgraph"
+  echo -e "\treplay"
   echo -e "\tdebug"
   echo ""
   echo "Generic enviroment Variables:"
@@ -1065,6 +1066,46 @@ function run_change_with_trace_monitor {
   summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
 }
 
+
+
+function run_change_with_replay {
+  output_name=$1
+  grep_name=$2
+  benchmarks=$3
+  op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  if [ ! -z $op_trace_file ]; then
+    op_trace_file_name=$op_trace_file
+  fi
+  echo "Do $num_keys random $output_name"
+  log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
+  time_cmd=$( get_cmd $log_file_name.time )
+# gdb --args
+# --seed=$( date +%s ) \
+  cmd="$time_cmd    gdb --args  ./db_bench --benchmarks=$benchmarks,stats \
+       --use_existing_db=0 \
+       --sync=$syncval \
+       $params_w \
+       --threads=$num_threads \
+       --merge_operator=\"put\" \
+       --report_file=${log_file_name}.r.csv \
+       --trace_file=${op_trace_file_name} \
+       --compaction_trace_file=${compaction_trace_file} \
+       2>&1 | tee -a $log_file_name"
+  if [[ "$job_id" != "" ]]; then
+    echo "Job ID: ${job_id}" > $log_file_name
+    echo $cmd | tee -a $log_file_name
+  else
+    echo $cmd | tee $log_file_name
+  fi
+  start_stats $log_file_name.stats
+  space_monitor_file_name="$output_dir/dir_size.log"
+  monitor_kv_storage $space_monitor_file_name 
+  eval $cmd
+  stop_monitor $space_monitor_file_name
+  stop_stats $log_file_name.stats
+  summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
+}
+
 function run_filluniquerandom {
   echo "Loading $num_keys unique keys randomly"
   log_file_name=$output_dir/benchmark_filluniquerandom.log
@@ -1255,6 +1296,8 @@ for job in ${jobs[@]}; do
   start=$(now)
   if [ $job = bulkload ]; then
     run_bulkload
+  elif [ $job = replay ]; then
+    run_change_with_replay replay replay replay
   elif [ $job = mixgraph ]; then
     run_change_with_trace_monitor mixgraph mixgraph mixgraph
   elif [ $job = flush_mt_l0 ]; then

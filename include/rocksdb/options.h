@@ -1395,6 +1395,14 @@ struct DBOptions {
   // of the contract leads to undefined behaviors with high possibility of data
   // inconsistency, e.g. deleted old data become visible again, etc.
   bool enforce_single_del_contracts = true;
+
+
+  std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";  
+
+  std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt" ;
+
+  uint64_t classification_num = 2; 
+
 };
 
 // Options to control the behavior of a database (passed to DB::Open)

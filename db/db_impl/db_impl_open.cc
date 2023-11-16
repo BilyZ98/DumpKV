@@ -2083,9 +2083,11 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->RegisterRecordSeqnoTimeWorker();
   }
 
-  if(s.ok()) {
-    std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";
-    s = impl->LoadModel(model_path);
+  if(s.ok() && db_options.model_path != "") {
+    // std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";
+    s = impl->LoadModel(db_options.model_path);
+  } else {
+    assert(false);
   }
   if(s.ok()) {
     printf("load model successfully\n");
@@ -2093,10 +2095,12 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     printf("failed to load model, msg: %s\n", s.ToString().c_str());
 
   }
-  if(s.ok()) {
-    std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt"  ;
-    s = impl->LoadKeyRangeFromFile(key_range_path);
+  if(s.ok() && db_options.key_range_path != "") {
+    // std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt"  ;
+    s = impl->LoadKeyRangeFromFile(db_options.key_range_path);
     // s = impl->LoadKeyRange(key_range_path);
+  } else {
+    assert(false);
   }
   if(s.ok()) {
     printf("load key range successfully\n");

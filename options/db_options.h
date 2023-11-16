@@ -105,12 +105,15 @@ struct ImmutableDBOptions {
   Logger* logger;
   std::shared_ptr<CompactionService> compaction_service;
   bool enforce_single_del_contracts;
-  BoosterHandle booster_handle;
 
   bool IsWalDirSameAsDBPath() const;
   bool IsWalDirSameAsDBPath(const std::string& path) const;
   const std::string& GetWalDir() const;
   const std::string& GetWalDir(const std::string& path) const;
+  uint64_t num_classification = 1;
+  BoosterHandle booster_handle = nullptr;
+  FastConfigHandle booster_fast_config_handle = nullptr;
+
 };
 
 struct MutableDBOptions {

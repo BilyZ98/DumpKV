@@ -2038,6 +2038,7 @@ VersionStorageInfo::VersionStorageInfo(
     CompactionStyle compaction_style, VersionStorageInfo* ref_vstorage,
     bool _force_consistency_checks,
     Env* env,
+    const VersionStorageLifetimeInfo& version_storage_lifetime_info,
     EpochNumberRequirement epoch_number_requirement)
     : internal_comparator_(internal_comparator),
       user_comparator_(user_comparator),
@@ -2083,6 +2084,7 @@ VersionStorageInfo::VersionStorageInfo(
     compact_cursor_ = ref_vstorage->compact_cursor_;
     compact_cursor_.resize(num_levels_);
   }
+  lifetime_blob_files_.resize(version_storage_lifetime_info.lifetime_bucket_num);
 }
 
 Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
@@ -2111,6 +2113,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
               : cfd_->current()->storage_info(),
           cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks,
           vset->env_,
+          VersionStorageLifetimeInfo{ vset->db_options()->num_classification },
           epoch_number_requirement),
       vset_(vset),
       next_(this),
@@ -3554,6 +3557,7 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
 
             files_marked_for_forced_blob_gc_.emplace_back(level, sst_meta);
           }
+          break;
           // this blob file is supposed to be GCed
           // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
         } else {
@@ -3698,6 +3702,7 @@ void VersionStorageInfo::AddFile(int level, FileMetaData* f) {
 
 void VersionStorageInfo::AddBlobFile(
     std::shared_ptr<BlobFileMetaData> blob_file_meta) {
+    assert(false);
   assert(blob_file_meta);
 
   assert(blob_files_.empty() ||
@@ -3709,15 +3714,19 @@ void VersionStorageInfo::AddBlobFile(
 
 void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta) {
   assert(blob_file_meta);
-    uint64_t lifetime_bucket_idx = blob_file_meta->GetLifetimeLabel();
-    assert(lifetime_bucket_idx < lifetime_blob_files_.size());
-    assert(lifetime_blob_files_[lifetime_bucket_idx].empty() ||
-           (lifetime_blob_files_[lifetime_bucket_idx].back() &&
-            lifetime_blob_files_[lifetime_bucket_idx].back()->GetBlobFileNumber() <
-                blob_file_meta->GetBlobFileNumber()));
+  assert(blob_file_meta->GetBlobFileNumber() > 0);
+  uint64_t lifetime_bucket_idx = blob_file_meta->GetLifetimeLabel();
+  assert(lifetime_bucket_idx < lifetime_blob_files_.size());
+  assert(lifetime_blob_files_[lifetime_bucket_idx].empty() ||
+         (lifetime_blob_files_[lifetime_bucket_idx].back() &&
+          lifetime_blob_files_[lifetime_bucket_idx].back()->GetBlobFileNumber() <
+              blob_file_meta->GetBlobFileNumber()));
 
-    blob_files_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta; 
-    lifetime_blob_files_[lifetime_bucket_idx].emplace_back(std::move(blob_file_meta));
+    // blob_files_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta; 
+    blob_files_.emplace_back( blob_file_meta);
+    blob_file_numer_to_blob_meta_map_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta;
+
+    lifetime_blob_files_[lifetime_bucket_idx].emplace_back(blob_file_meta);
 
 }
 
@@ -3727,7 +3736,7 @@ VersionStorageInfo::GetBlobFileMetaDataLBWithLifetime(
     uint64_t lifetime ) const {
 
   return std::lower_bound(
-      GetBlobFiles(lifetime).begin(), GetBlobFiles(lifetime).end(), blob_file_number,
+      lifetime_blob_files_[lifetime].begin(), lifetime_blob_files_[lifetime].end(), blob_file_number,
       [](const std::shared_ptr<BlobFileMetaData>& lhs, uint64_t rhs) {
         assert(lhs);
         return lhs->GetBlobFileNumber() < rhs;

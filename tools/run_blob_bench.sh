@@ -107,6 +107,8 @@ output_dir=$OUTPUT_DIR
 compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
 op_trace_file=${OP_TRACE_FILE:-""}
 
+is_replay=${IS_REPLAY:false}
+
 num_threads=${NUM_THREADS:-16}
 
 compression_type=${COMPRESSION_TYPE:-lz4}
@@ -186,7 +188,8 @@ ENV_VARS="\
   VALUE_SIZE=$value_size \
   NUM_KEYS=$num_keys \
   COMPACTION_TRACE_FILE=$compaction_trace_file\
-  OP_TRACE_FILE=$op_trace_file "
+  OP_TRACE_FILE=$op_trace_file \
+  IS_REPLAY=$is_replay "
 
 ENV_VARS_D="$ENV_VARS DURATION=$duration"
 
@@ -216,6 +219,7 @@ PARAMS_GC="$PARAMS \
 # overwrite + waitforcompaction
 # env -u DURATION -S "$ENV_VARS" ./tools/benchmark.sh overwrite "$PARAMS_GC"
 
+function run_benchmark {
 env -u DURATION -S "$ENV_VARS" ./benchmark.sh mixgraph "$PARAMS_GC"
 # readwhilewriting
 # env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
@@ -229,6 +233,18 @@ env -u DURATION -S "$ENV_VARS" ./benchmark.sh mixgraph "$PARAMS_GC"
 
 # fwdrange
 # env -S "$ENV_VARS_D" ./tools/benchmark.sh fwdrange "$PARAMS_GC"
+
+
+
+}
+if [ "$is_replay" = true ]; then
+  # replay
+  env -u DURATION -S "$ENV_VARS" ./benchmark.sh replay "$PARAMS_GC"
+else
+  run_benchmark
+
+fi
+
 
 # save logs to output directory
 cp "$db_dir"/LOG* "$output_dir/"

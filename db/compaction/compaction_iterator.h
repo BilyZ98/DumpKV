@@ -208,6 +208,28 @@ class CompactionIterator {
       const SequenceNumber preserve_time_min_seqno = kMaxSequenceNumber,
       const SequenceNumber preclude_last_level_min_seqno = kMaxSequenceNumber);
 
+CompactionIterator(
+      InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
+      SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
+      SequenceNumber earliest_write_conflict_snapshot,
+      SequenceNumber job_snapshot, const SnapshotChecker* snapshot_checker,
+      Env* env, bool report_detailed_time, bool expect_valid_internal_key,
+      CompactionRangeDelAggregator* range_del_agg,
+      std::vector<BlobFileBuilder*> blob_file_builder, bool allow_data_in_errors,
+      bool enforce_single_del_contracts,
+      const std::atomic<bool>& manual_compaction_canceled,
+      BoosterHandle booster_handle,
+      FastConfigHandle fast_config_handle,
+      ColumnFamilyData* cfd,
+      const Compaction* compaction = nullptr,
+      const CompactionFilter* compaction_filter = nullptr,
+      const std::atomic<bool>* shutting_down = nullptr,
+      const std::shared_ptr<Logger> info_log = nullptr,
+      const std::string* full_history_ts_low = nullptr,
+      const SequenceNumber preserve_time_min_seqno = kMaxSequenceNumber,
+      const SequenceNumber preclude_last_level_min_seqno = kMaxSequenceNumber);
+
+
   CompactionIterator(
       InternalIterator* input, const Comparator* cmp, MergeHelper* merge_helper,
       SequenceNumber last_sequence, std::vector<SequenceNumber>* snapshots,
@@ -371,8 +393,8 @@ class CompactionIterator {
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
-  BoosterHandle booster_handle_;
-  FastConfigHandle fast_config_handle_;
+  BoosterHandle booster_handle_ =nullptr;
+  FastConfigHandle fast_config_handle_ =nullptr;
   const autovector<MemTable*>* mems_;
   SequenceIterWrapper input_;
   const Comparator* cmp_;
