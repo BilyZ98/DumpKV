@@ -891,6 +891,7 @@ set(SOURCES
         tools/sst_dump_tool.cc
         tools/trace_analyzer_tool.cc
         tools/compaction_trace_analyzer_tool.cc
+        tools/test_model.cc
         trace_replay/block_cache_tracer.cc
         trace_replay/compaction_tracer.cc
         trace_replay/io_tracer.cc
@@ -1644,6 +1645,11 @@ if(WITH_TRACE_TOOLS)
   target_link_libraries(compaction_analyzer${ARTIFACT_SUFFIX}
     ${ROCKSDB_LIB} ${GFLAGS_LIB} ${FOLLY_LIBS})
 
+  add_executable(test_model${ARTIFACT_SUFFIX}
+    tools/test_model.cc)
+  target_link_libraries(test_model${ARTIFACT_SUFFIX}
+    ${ROCKSDB_LIB} ${GFLAGS_LIB} ${FOLLY_LIBS})
+
 endif()
 
 if(WITH_CORE_TOOLS OR WITH_TOOLS)
@@ -1669,5 +1675,20 @@ if(WITH_BENCHMARK)
 endif()
 
 # file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/input.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/input.txt)
-file( COPY   ${CMAKE_BINARY_DIR}/compile_commands.json 
-  DESTINATION ${PROJECT_SOURCE_DIR}/)
+# file( COPY   ${CMAKE_BINARY_DIR}/compile_commands.json 
+#   DESTINATION ${PROJECT_SOURCE_DIR}/)
+add_custom_command(
+  OUTPUT   ${PROJECT_SOURCE_DIR}/compile_commands.json
+  COMMAND ${CMAKE_COMMAND} -E copy
+  ${CMAKE_BINARY_DIR}/compile_commands.json
+  ${PROJECT_SOURCE_DIR}/compile_commands.json
+  DEPENDS ${CMAKE_BINARY_DIR}/compile_commands.json
+)
+
+message("cmake binary dir: ${CMAKE_BINARY_DIR}")
+
+add_custom_target(
+  copy_compile_commands ALL
+  DEPENDS ${CMAKE_BINARY_DIR}/compile_commands.json
+)
+

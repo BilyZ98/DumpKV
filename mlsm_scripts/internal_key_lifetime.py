@@ -36,6 +36,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
     compaction_keys_access_info = {}
     int_key_id = 0
     uniq_key_map = {}
+    op_keys_without_seq_count = {}
     with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compaction:
         lines = f.readlines()
         compaction_lines = f_compaction.readlines()
@@ -69,6 +70,7 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 int_seq_num = int(sequence_number)
                 assert(int_seq_num > 0)
                 key_with_seq = key + "_" + sequence_number
+                op_keys_without_seq_count[key] = op_keys_without_seq_count.get(key, 0) + 1
                 if key_with_seq in compaction_keys_access_info:
                     compaction_keys_access_info[key_with_seq]['insert_time'] = int(access_time)
                     compaction_keys_access_info[key_with_seq]['period_num_writes'] = period_num_writes
@@ -86,6 +88,17 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
         for i in range(num_key_ranges):
             next_key_idx = int(float(i/num_key_ranges) * len(sorted_user_keys))
             key_ranges.append( sorted_user_keys[next_key_idx] )
+
+        arr = [0] * (num_key_ranges + 1)
+        for key, count in op_keys_without_seq_count.items():
+            key_range_id = bisect.bisect_left(key_ranges, key)
+            arr[key_range_id] += count
+
+        for i in range(num_key_ranges):
+            print("key_range: {}, count: {}".format(key_ranges[i], arr[i]))
+
+        exit(0)
+
 
         with open(key_range_file, 'w') as f:
             for key in key_ranges:
@@ -290,6 +303,64 @@ if __name__  == "__main__":
     # compaction_trace_files.append(compaction_trace_dir_prefix + str(gc_threshold) + "/compaction_human_readable_trace.txt")
 
 
+#include <LightGBM/prediction_early_stop.h>
+#include <LightGBM/dataset.h>
+#include <LightGBM/boosting.h>
+#include <LightGBM/objective_function.h>
+#include <LightGBM/metric.h>
+
+#include <cstdio>
+#include <ctime>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+
+# int main(int argc, char* argv[]) {
+#     // Load model
+#     std::unique_ptr<LightGBM::Boosting> boosting(LightGBM::Boosting::CreateBoosting("gbdt", "saved_model.txt"));
+
+#     // Load data
+#     std::unique_ptr<LightGBM::Dataset> data(LightGBM::Dataset::CreateFromCSV("test_data.csv"));
+
+#     // Get number of features
+#     int num_feature = boosting->NumberOfFeature();
+
+#     // Check number of features in data
+#     if (num_feature != data->num_total_features()) {
+#         throw std::runtime_error("Number of features in model and data do not match.");
+#     }
+
+#     // Get number of data points
+#     int num_data = data->num_data();
+
+#     // Create output vector
+#     std::vector<double> output(num_data);
+
+#     // Predict
+#     boosting->Predict(nullptr, num_iteration, &output);
+
+#     // Load actual values
+#     std::vector<double> actual_values = load_actual_values("actual_values.csv");
+
+#     // Calculate accuracy
+#     double correct_predictions = 0;
+#     for (int i = 0; i < num_data; ++i) {
+#         if (output[i] == actual_values[i]) {
+#             correct_predictions++;
+#         }
+#     }
+#     double accuracy = correct_predictions / num_data;
+
+#     // Print accuracy
+#     std::cout << "Accuracy: " << accuracy << std::endl;
+
+#     return 0;
+# }
 
 
 

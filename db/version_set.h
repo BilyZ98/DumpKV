@@ -205,6 +205,8 @@ class VersionStorageInfo {
   // Decrease the current stat from a to-be-deleted file-meta
   void RemoveCurrentStats(FileMetaData* file_meta);
 
+  void SortBlobFiles();
+
   // Updates internal structures that keep track of compaction scores
   // We use compaction scores to figure out which compaction to do next
   // REQUIRES: db_mutex held!!
@@ -427,6 +429,11 @@ class VersionStorageInfo {
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaDataWithLifetime(
       uint64_t blob_file_number, uint64_t lifetime) const {
     // auto it = GetBlobFileMetaDataLBWithLifetime(blob_file_number, lifetime);
+    // should change this .  Because now blob_files_ might not be sorted.
+    auto blob_file_meta_data = FastGetBlobFileMetaData(blob_file_number);
+    return blob_file_meta_data;
+
+     
     const auto it = GetBlobFileMetaDataLB(blob_file_number);
 
     assert(it == blob_files_.end() || *it);
@@ -705,6 +712,8 @@ class VersionStorageInfo {
 
   // Vector of blob files in version sorted by blob file number.
   BlobFiles blob_files_;
+
+  bool sort_blob_files_used_ = false;
 
   std::vector<BlobFiles> lifetime_blob_files_;
 

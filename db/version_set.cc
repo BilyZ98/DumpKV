@@ -3712,6 +3712,14 @@ void VersionStorageInfo::AddBlobFile(
   blob_files_.emplace_back(std::move(blob_file_meta));
 }
 
+void VersionStorageInfo::SortBlobFiles() {
+    std::sort(blob_files_.begin(), blob_files_.end(),
+              [](const std::shared_ptr<BlobFileMetaData>& a,
+                 const std::shared_ptr<BlobFileMetaData>& b) {
+                return a->GetBlobFileNumber() < b->GetBlobFileNumber();
+              });
+
+}
 void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta) {
   assert(blob_file_meta);
   assert(blob_file_meta->GetBlobFileNumber() > 0);

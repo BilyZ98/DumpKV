@@ -111,6 +111,7 @@ struct ImmutableDBOptions {
   const std::string& GetWalDir() const;
   const std::string& GetWalDir(const std::string& path) const;
   uint64_t num_classification = 1;
+  uint64_t num_features = 0;
   BoosterHandle booster_handle = nullptr;
   FastConfigHandle booster_fast_config_handle = nullptr;
 

@@ -1947,9 +1947,7 @@ values in blob files as well.
 oh my god, we are not finished yet. Need to finish the computegarbagescore() to 
 pick the blob files to be gced.
 
-[Todo] log blob files and sst files for each garbage collection.
-May need to change gc implementation as well. Current gc implementation 
-is not good for our idea.
+
 
 Will call trace replay to replay the trace so that we don't need to implement
 the logics to read trace file and put keys back to db.
@@ -1967,6 +1965,7 @@ solution, initialize cfh of db in Open() function
 [Solved]
 
 [Todo] submit pr to fix db_bench_tool when running with replay
+[Status: Not started]
 
 [Error to be solved] initialize lifetime_blob_files_ vector to have lifetime bucket num size
 [Fixed]
@@ -2212,6 +2211,7 @@ that is supposed to be dead .
 [Todo] Fast convert KeyFeatures to vector of double to do prediction
 Proposal: Maybe store features as vector in mem add function.
 So that we don't store struct .
+[Status: Not started]
 
 
 
@@ -2275,6 +2275,7 @@ Challenges
 
 
 [Todo] Need to log classification of keys during flush job and compaction
+[Status: Not started]
 
 
 [Bug] no blob file is generated.
@@ -2414,8 +2415,599 @@ Source: Conversation with Bing, 11/15/2023
 [Todo] Get total file size from sstfilemanagerimpl instead of getting it from bash command.
 Call GetTotalSize()
 sst_file_manager is in immutable_db_options_;
+[Status: Not started]
 
 
 [Todo] Find out the root cause for the situation that only one label is generated for all keys.
+[Done]
 
 [Todo] Need to check key range id.
+Possible root cause. 
+1. The model is good, the problem comes from the data we feed into the model in the run time.
+    because timestamp has changed from what we feed into the model in the training process. 
+
+2. features? I have not check the features we generated during the run time.
+
+3. key ranges ? I have not check if the key range id return from the function is what 
+Need to log key features so that I can check offiline.
+we expect.
+Need to learn to write a custom reader and writer again.
+
+Need to check if deafult_cf->GetComparator() works expectedly for user key comparison
+
+Experiment results show that all write keys in op trace is classified as 0 
+which is not what I expect. So next step is to figure out why this happens 
+and fix it in our rocksdb code.
+```
+key range: 0, count: 2499190
+```
+Turns out it's not that key range id function return 0 for each key,
+it's that I didn't load key ranges data and didn't make key range id 
+function work. Start doing this again.
+```
+key range: 13, count: 25037
+key range: 92, count: 24837
+key range: 33, count: 25022
+key range: 79, count: 25049
+key range: 56, count: 25082
+key range: 85, count: 25026
+key range: 26, count: 24991
+key range: 93, count: 25154
+key range: 64, count: 25073
+key range: 6, count: 24989
+key range: 65, count: 25065
+key range: 60, count: 25014
+key range: 1, count: 25154
+key range: 66, count: 24907
+key range: 95, count: 24952
+key range: 58, count: 25098
+key range: 87, count: 24904
+key range: 47, count: 24851
+key range: 75, count: 25173
+key range: 16, count: 24896
+key range: 94, count: 25143
+key range: 23, count: 24864
+key range: 46, count: 25038
+key range: 2, count: 25174
+key range: 67, count: 25054
+key range: 39, count: 25038
+key range: 27, count: 25017
+key range: 29, count: 24818
+key range: 50, count: 24792
+key range: 49, count: 25063
+key range: 84, count: 24937
+key range: 74, count: 25020
+key range: 48, count: 24900
+key range: 22, count: 25102
+key range: 96, count: 25081
+key range: 38, count: 24827
+key range: 44, count: 24990
+key range: 43, count: 24995
+key range: 78, count: 25043
+key range: 76, count: 24974
+key range: 21, count: 24996
+key range: 59, count: 25020
+```
+Get key range results. Actually it works as expected.
+Another problem is that I generate key ranges based on
+all keys in op instead of each unique user key. -> no this problem
+It's strange that each key range has equal amount of keys written.
+Difference between accuracy and precision
+```
+Actually, accuracy and precision are different concepts in the context of machine learning and statistics:
+
+- **Accuracy** is a measure of how many predictions your model got right out of all predictions. It's calculated as `(True Positives + True Negatives) / (True Positives + False Positives + True Negatives + False Negatives)`. In other words, it's the proportion of true results (both true positives and true negatives) among the total number of cases examined.
+
+- **Precision**, also known as the positive predictive value, is the proportion of true positive predictions among all positive predictions. It's calculated as `True Positives / (True Positives + False Positives)`. Precision is about being precise. So, even if you managed to capture only one positive result, and there are no false positives, then you are 100% precise.
+
+In summary, accuracy measures the overall correctness of the classifier, while precision measures the classifier's exactness. Low precision indicates a high number of false positives, low accuracy indicates a high number of false positives and false negatives.
+```
+
+Write all prediction scores which are double value to log file and 
+found that only first value is non zero. Need to read doc about lightgbm
+and then update my logics in current implementation to put the values in
+right blob_file_builder
+```
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.814 0.000 0
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.814 0.000 0
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.814 0.000 0
+0x00000000000A2812303030303030303030303030 1697375786228141 14 0 0.814 0.000 0
+0x000000000040BDC1303030303030303030303030 1697375786228366 85 0 0.814 0.000 0
+0x000000000040BDC1303030303030303030303030 1697375786228366 85 0 0.814 0.000 0
+0x000000000003F69A303030303030303030303030 1697375786228580 6 0 0.812 0.000 0
+0x000000000003F69A303030303030303030303030 1697375786228580 6 0 0.812 0.000 0
+0x0000000000045C75303030303030303030303030 1697375786228760 6 0 0.812 0.000 0
+0x0000000000045C75303030303030303030303030 1697375786228760 6 0 0.812 0.000 0
+```
+
+
+```
+ 545266 0.005
+  51629 0.006
+   3730 0.008
+   1862 0.012
+   2146 0.013
+   2326 0.022
+    563 0.032
+    903 0.034
+   1011 0.043
+    856 0.046
+     29 0.051
+    256 0.052
+   2570 0.053
+    276 0.054
+   1026 0.055
+     81 0.056
+    380 0.057
+    116 0.058
+    199 0.059
+    219 0.060
+```
+So what does zero mean? Does it mean long or short lifetime?
+zero means short lifetime.
+
+There is still only one lifetime class given by model after I fix the
+index issue in lifetime_blob_builders selectino.
+
+So now I suspect that it might be because of the timestamp issue.
+I only get 0.005 score after adding 1000 sec to original timestamp.
+So this proves that timestamp affects the classification results in an
+significant degree.
+
+So now I have two choices.
+1. discard timestamp features
+2. trasnform timestamp to other format so that timestamp can still contribute
+to the prediction when timestamp in running is different than that in training set.
+```
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.005 0.000 0
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.005 0.000 0
+0x0000000000441501303030303030303030303030 1697375786227496 90 0 0.005 0.000 0
+0x00000000000A2812303030303030303030303030 1697375786228141 14 0 0.005 0.000 0
+0x000000000040BDC1303030303030303030303030 1697375786228366 85 0 0.005 0.000 0
+0x000000000040BDC1303030303030303030303030 1697375786228366 85 0 0.005 0.000 0
+0x000000000003F69A303030303030303030303030 1697375786228580 6 0 0.005 0.000 0
+0x000000000003F69A303030303030303030303030 1697375786228580 6 0 0.005 0.000 0
+0x0000000000045C75303030303030303030303030 1697375786228760 6 0 0.005 0.000 0
+0x0000000000045C75303030303030303030303030 1697375786228760 6 0 0.005 0.000 0
+➜  build git:(main) ✗ cut -d ' ' -f 5,5 ./model_output.txt | sort | uniq -c
+5000000 0.005
+```
+
+Prediction results after adding 10000 micro sec to the timestamp
+fed into model. It's quite normal.
+```
+545392 0.005
+  51610 0.006
+   3730 0.008
+   1862 0.012
+   2146 0.013
+   2326 0.022
+    563 0.032
+    903 0.034
+   1011 0.043
+    856 0.046
+     29 0.051
+    285 0.052
+   2548 0.053
+    292 0.054
+   1019 0.055
+     84 0.056
+    380 0.057
+    116 0.058
+    199 0.059
+    219 0.060
+   1992 0.061
+    981 0.062
+   3421 0.063
+   1787 0.064
+   1800 0.065
+   2372 0.066
+   2700 0.067
+   1931 0.068
+   2139 0.069
+   5522 0.070
+   2935 0.071
+   4111 0.072
+   1034 0.073
+    841 0.074
+   3728 0.075
+```
+[Status: Done]
+
+
+
+First test results even without model prediction
+
+with_model
+wamp is 2.1
+```
+0		71MB	2GB	2.2	2.1	5.4	264	264	5	2	418629665.0						419	0.0	0	0.5	0.0	0.4	replay.t1.s1	2023-11-16T12:14:13	8.0.0		5288d1b35a	0.9
+```
+wamp is 3.1
+without gc 
+```
+11943	(	69MB	2GB	4.2	3.1	10.3	100	100	2	4	83.7	22.2	53	76	144	793581122	419	0.0	0	0.3	0.0	0.3	mixgraph.t1.s1	2023-10-15T21:16:26	8.0.0		5288d1b35a	0.9
+```
+
+
+I think I could just not write key feature tracer but test the model 
+prediction performance by just loading the model and then feed in
+the data from the original no model trace.
+
+OR I can just write down the features in memory vector and then simply write them out
+for each flush job.
+
+[Todo] Load model in cpp to test if python and cpp code work the same way and 
+get the same results
+It's the same. 
+<Status: Done>
+
+I will first test model prediction with cpp code. 
+And then I may write keyfeatures logging to see what's wrong with my code
+Current op trace header
+```
+[hex_key, op_tyep, cf_id, value_size, timestamp, sequence, write_rate_mb_per_sec]
+```
+so now I can get hex_key and write_rate_mb_per_sec from op trace.
+And then I can load key ranges from  key_ranges.txt
+
+I get to know what's my favorite coding style.
+I tend to first come up with a initial thought about code structure,
+and then I will start doing implementation with my initial blur idea.
+It's not perfect.
+I will first gather essential piece of code and code piece that's not 
+so clear to me to build a more concrete code structure .
+So now I have more clear view of the final code implementation.
+The next step is to do  build  process to correct grammar and compilation
+errors.
+And then I will continue this loop.
+
+Learn about object oriented programming technique from TraceAnalyzer.
+```
+record->Accept(Handler, TraceRecordResult*);
+```
+record is a class that can be subclassed according to trace type such 
+as write or read.
+Accept() is also a abstrct function. It leaves handler implementation to
+users.
+WriteQueryTraceRecord inherits record and implments Accept() 
+ This Accept() just calls handler->Handle() which is implemented by TraceAnalyzer
+TraceAnalyzer also implement Handler interface so that TraceAnalyzer  
+`TraceAnalyzer::Handle(WriteQueryTraceRecord& record, TraceRecordResult*) ` calls 
+`batch.IterateWithStartSequence(Handler* handler)`
+This Handler is another handler which deal with how to write trace info to file.
+TraceAnalyzer also implement this Handler interface as well.
+`Handler::PutCFWithFeatures()` is another interface and used in 
+`IterateWithStartSequence(WriteBatch* wb, WriteBatch::Handler* handler, ...)`
+So lots of interface function calling in this process.
+
+[Todo] Need to check out replay code. I suspect that writewithsequence trace
+type is not written into rocksdb in replay. 
+Does replay accurately read records and put keys into rocksdb?
+Because I use different value type .
+Checked the replayer code and writewithsequence trace records are 
+also written to rocksdb. So no loss of writes.
+```
+Status TraceExecutionHandler::Handle(
+    const WriteQueryTraceRecord& record,
+    std::unique_ptr<TraceRecordResult>* result) {
+  if (result != nullptr) {
+    result->reset(nullptr);
+  }
+  uint64_t start = clock_->NowMicros();
+
+  WriteBatch batch(record.GetWriteBatchRep().ToString());
+  Status s = db_->Write(write_opts_, &batch);
+
+  uint64_t end = clock_->NowMicros();
+
+  if (s.ok() && result != nullptr) {
+    result->reset(new StatusOnlyTraceExecutionResult(s, start, end,
+                                                     record.GetTraceType()));
+  }
+
+  return s;
+}
+```
+Keys are written into rocksdb.
+[Done]
+
+
+confusion matrics in model performance 
+```
+The matrix that contains True Positives (TP), True Negatives (TN), False Positives (FP), and False Negatives (FN) is known as a **Confusion Matrix**¹². It's a specific table layout that allows visualization of the performance of an algorithm, typically a supervised learning one¹². Each row of the matrix represents the instances in an actual class while each column represents the instances in a predicted class, or vice versa¹². It's a powerful tool for measuring the reliability of your model¹².
+
+Source: Conversation with Bing, 11/21/2023
+(1) Confusion matrix - Wikipedia. https://en.wikipedia.org/wiki/Confusion_matrix.
+(2) Confusion Matrix in Machine Learning - GeeksforGeeks. https://www.geeksforgeeks.org/confusion-matrix-machine-learning/.
+(3) How to find TP,TN, FP and FN values from 8x8 Confusion Matrix. https://stats.stackexchange.com/questions/134486/how-to-find-tp-tn-fp-and-fn-values-from-8x8-confusion-matrix.
+(4) Taking the Confusion Out of Confusion Matrices | by Allison Ragan .... https://towardsdatascience.com/taking-the-confusion-out-of-confusion-matrices-c1ce054b3d3e.
+```
+
+
+
+[Todo] Increase timestamp of records in trace file and do prediction again 
+to see how time stamp affect the prediction results.
+All keys are classified to zero after increase timestamp 10 million microsecs.
+The conclusion is that current timestamp do significantly affect the classification
+results.
+[Status: Done]
+
+
+
+[Todo] Train model without timestamp feature and check the performance.
+Get really low recall for short lifetime keys.
+Threshold for distinquishing short and long is 50s
+Even with one key range feature we still get relatively high precision 
+for short and long lifetime keys.
+I think all of keys are classified as long. LOL.
+```
+Starting predicting...
+              precision    recall  f1-score   support
+
+           0       0.65      0.05      0.09     53058
+           1       0.72      0.99      0.83    130775
+
+    accuracy                           0.72    183833
+   macro avg       0.69      0.52      0.46    183833
+weighted avg       0.70      0.72      0.62    183833
+
+0.6860720187413802
+```
+
+Need to fix bug in which there is segmentation faultwhile 
+accessing blob_file_meta.
+blob file number is 36 but there is no 36 blob file 
+in db dir.
+Need to find out why 36 is deleted from VersionStorageInfo
+```
+gdb) p blob_index.file_number()
+$2 = 36
+```
+Don't know if write_rate_mb_per_sec is the same as that in op trace file.
+
+
+Creation information for blob file 36
+```
+2023/11/22-21:52:35.676132 1003597 EVENT_LOG_v1 {"time_micros": 1700661155676123, "cf_name": "default", "job": 8, "event": "blob_file_creation", "file_number": 36, "total_blob_count": 52, "total_blob_bytes": 45008, "file_checksum": "", "file_checksum_func_name": "Unknown", "status": "OK"}
+2023/11/22-21:52:35.676148 1003597 [db/blob/blob_file_builder.cc:419] [default] [JOB 8] Generated blob file #36: 52 total blobs, 45008 total bytes, lifetime label: 0
+2023/11/22-21:52:35.677490 1003597 EVENT_LOG_v1 {"time_micros": 1700661155677485, "cf_name": "default", "job": 8, "event": "blob_file_creation", "file_number": 35, "total_blob_count": 113585, "total_blob_bytes": 97878460, "file_checksum": "", "file_checksum_func_name": "Unknown", "status": "OK"}
+2023/11/22-21:52:35.677503 1003597 [db/blob/blob_file_builder.cc:419] [default] [JOB 8] Generated blob file #35: 113585 total blobs, 97878460 total bytes, lifetime label: 1
+2023/11/22-21:52:35.677842 1003597 EVENT_LOG_v1 {"time_micros": 1700661155677819, "cf_name": "default", "job": 8, "event": "table_file_creation", "file_number": 34, "file_size": 3998763, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 465269, "largest_seqno": 581610, "table_properties": {"data_size": 3846499, "index_size": 9111, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 142085, "raw_key_size": 3181836, "raw_average_key_size": 28, "raw_value_size": 1018986, "raw_average_value_size": 8, "num_data_blocks": 472, "num_entries": 113637, "num_filter_entries": 113637, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1700661131, "oldest_key_time": 1700661131, "file_creation_time": 1700661150, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "f60ea76d-6d38-4cee-a9e4-42580208ce7d", "db_session_id": "QM282AVS1T33D7F4LP1T", "orig_file_number": 34, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 35}
+2023/11/22-21:52:35.677965 1003597 [db/flush_job.cc:1035] [default] [JOB 8] Flush lasted 5065610 microseconds, and 5061408 cpu microseconds.
+2023/11/22-21:52:35.677970 1003597 [db/flush_job.cc:1051] [default] [JOB 8] Flush generated 2blob files  
+
+```
+
+Deletion information for blob file 36
+Job started because of ForcedBlobGC
+```
+2023/11/22-21:52:40.395128 1003596 EVENT_LOG_v1 {"time_micros": 1700661160395120, "job": 14, "event": "compaction_started", "compaction_reason": "ForcedBlobGC", "files_L1": [32], "score": 0.568426, "input_data_size": 3409830, "oldest_snapshot_seqno": -1}
+
+2023/11/22-21:52:43.015951 1003596 [db/compaction/compaction_job.cc:1641] [default] [JOB 14] Generated table #51: 97114 keys, 3409830 bytes, temperature: kUnknown
+2023/11/22-21:52:43.016003 1003596 EVENT_LOG_v1 {"time_micros": 1700661163015974, "cf_name": "default", "job": 14, "event": "table_file_creation", "file_number": 51, "file_size": 3409830, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 1, "largest_seqno": 465262, "table_properties": {"data_size": 3279584, "index_size": 7769, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 121413, "raw_key_size": 2719192, "raw_average_key_size": 28, "raw_value_size": 871527, "raw_average_value_size": 8, "num_data_blocks": 402, "num_entries": 97114, "num_filter_entries": 97114, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1700661056, "oldest_key_time": 0, "file_creation_time": 1700661160, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "f60ea76d-6d38-4cee-a9e4-42580208ce7d", "db_session_id": "QM282AVS1T33D7F4LP1T", "orig_file_number": 51, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 50}
+2023/11/22-21:52:43.016806 1003596 EVENT_LOG_v1 {"time_micros": 1700661163016801, "cf_name": "default", "job": 14, "event": "blob_file_creation", "file_number": 50, "total_blob_count": 97114, "total_blob_bytes": 81813845, "file_checksum": "", "file_checksum_func_name": "Unknown", "status": "OK"}
+2023/11/22-21:52:43.016819 1003596 [db/blob/blob_file_builder.cc:419] [default] [JOB 14] Generated blob file #50: 97114 total blobs, 81813845 total bytes, lifetime label: 0
+2023/11/22-21:52:43.017696 1003596 (Original Log Time 2023/11/22-21:52:43.017214) [db/compaction/compaction_job.cc:1714] [default] [JOB 14] Compacted 1@1 files to L1 => 3409830 bytes
+2023/11/22-21:52:43.017702 1003596 (Original Log Time 2023/11/22-21:52:43.017571) [db/compaction/compaction_job.cc:867] [default] compacted to: files[1 8 0 0 0 0 0 0] max score 0.57, MB/sec: 32.5 rd, 1.3 wr, level 1, files in(0, 1) out(1 +0 blob) MB in(0.0, 3.3 +78.0 blob) out(3.3 +0.0 blob), read-write-amplify(1.1) write-amplify(0.0) OK, records in: 97114, records dropped: 0 output_compression: NoCompression
+2023/11/22-21:52:43.017705 1003596 (Original Log Time 2023/11/22-21:52:43.017577) [db/compaction/compaction_job.cc:892] [default] Blob file summary: head=38, tail=35
+2023/11/22-21:52:43.017712 1003596 (Original Log Time 2023/11/22-21:52:43.017601) EVENT_LOG_v1 {"time_micros": 1700661163017582, "job": 14, "event": "compaction_finished", "compaction_time_micros": 2621714, "compaction_time_cpu_micros": 2619979, "output_level": 1, "num_output_files": 1, "total_output_size": 3409830, "num_input_records": 97114, "num_output_records": 97114, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [1, 8, 0, 0, 0, 0, 0, 0], "blob_file_head": 38, "blob_file_tail": 35}
+2023/11/22-21:52:43.017782 1003596 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000036.blob immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2023/11/22-21:52:43.017789 1003596 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 14] Delete /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000036.blob type=10 #36 -- OK
+2023/11/22-21:52:43.017797 1003596 EVENT_LOG_v1 {"time_micros": 1700661163017794, "job": 14, "event": "blob_file_deletion", "file_number": 36}
+```
+Try to know which files are being compacted in this gc.
+This file has link to blob file 36.
+
+I saw a filemetadata that has oldest blob file number 35.
+
+gdb process was shutdown by my mistake.
+Now the missing blob file number is 38.
+Need to figure out how blob file is linked and unlinked from sst.
+I think oldest blob file number in each sst is updated in ApplyBlobfileDeletion()?
+linkedsst in each blob file is updated in ApplyFileAddition()?
+So how does this blobfile:38 is deleted?
+
+```
+1/23-15:32:42.657540 698368 [db/compaction/compaction_job.cc:1641] [default] [JOB 14] Generated table #52: 97114 keys, 3409848 bytes, temperature: kUnknown
+2023/11/23-15:32:42.657591 698368 EVENT_LOG_v1 {"time_micros": 1700724762657563, "cf_name": "default", "job": 14, "event": "table_file_creation", "file_number": 52, "file_size": 3409848, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 1, "largest_seqno": 465262, "table_properties": {"data_size": 3279606, "index_size": 7765, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 121413, "raw_key_size": 2719192, "raw_average_key_size": 28, "raw_value_size": 871527, "raw_average_value_size": 8, "num_data_blocks": 402, "num_entries": 97114, "num_filter_entries": 97114, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1700724655, "oldest_key_time": 0, "file_creation_time": 1700724759, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "80e5b69b-af8d-4869-b8f0-9521a51b3a76", "db_session_id": "HAXRW2BTBV4ZI0TP7O2E", "orig_file_number": 52, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 51}
+2023/11/23-15:32:42.658571 698368 EVENT_LOG_v1 {"time_micros": 1700724762658565, "cf_name": "default", "job": 14, "event": "blob_file_creation", "file_number": 51, "total_blob_count": 97114, "total_blob_bytes": 81813853, "file_checksum": "", "file_checksum_func_name": "Unknown", "status": "OK"}
+2023/11/23-15:32:42.658582 698368 [db/blob/blob_file_builder.cc:419] [default] [JOB 14] Generated blob file #51: 97114 total blobs, 81813853 total bytes, lifetime label: 0
+2023/11/23-15:32:42.659481 698368 (Original Log Time 2023/11/23-15:32:42.658933) [db/compaction/compaction_job.cc:1714] [default] [JOB 14] Compacted 1@1 files to L1 => 3409848 bytes
+2023/11/23-15:32:42.659488 698368 (Original Log Time 2023/11/23-15:32:42.659341) [db/compaction/compaction_job.cc:867] [default] compacted to: files[1 7 0 0 0 0 0 0] max score 0.57, MB/sec: 31.4 rd, 1.3 wr, level 1, files in(0, 1) out(1 +0 blob) MB in(0.0, 3.3 +78.0 blob) out(3.3 +0.0 blob), read-write-amplify(1.1) write-amplify(0.0) OK, records in: 97114, records dropped: 0 output_compression: NoCompression
+2023/11/23-15:32:42.659491 698368 (Original Log Time 2023/11/23-15:32:42.659347) [db/compaction/compaction_job.cc:892] [default] Blob file summary: head=40, tail=37
+2023/11/23-15:32:42.659499 698368 (Original Log Time 2023/11/23-15:32:42.659373) EVENT_LOG_v1 {"time_micros": 1700724762659352, "job": 14, "event": "compaction_finished", "compaction_time_micros": 2716971, "compaction_time_cpu_micros": 2714167, "output_level": 1, "num_output_files": 1, "total_output_size": 3409848, "num_input_records": 97114, "num_output_records": 97114, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [1, 7, 0, 0, 0, 0, 0, 0], "blob_file_head": 40, "blob_file_tail": 37}
+2023/11/23-15:32:42.660299 698368 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000038.blob immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2023/11/23-15:32:42.660319 698368 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 14] Delete /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000038.blob type=10 #38 -- OK
+2023/11/23-15:32:42.660330 698368 EVENT_LOG_v1 {"time_micros": 1700724762660327, "job": 14, "event": "blob_file_deletion", "file_number": 38}
+2023/11/23-15:32:42.661042 698368 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000034.sst immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2023/11/23-15:32:42.661050 698368 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 14] Delete /mnt/nvme0n1/mlsm/test_blob/with_model_gc_1.0_0.8/000034.sst type=2 #34 -- OK
+2023/11/23-15:32:42.661057 698368 EVENT_LOG_v1 {"time_micros": 1700724762661055, "job": 14, "event": "table_file_deletion", "file_number": 34}
+```
+delete sst:34 and blob:38 
+
+
+job:7 generate blob:33 and sst:34 and sst:39
+
+job:8
+blob:38 is generated with sst:36. blob:37 is generated as well.
+blob:38  lifetime:0
+blob:37 lifetime:1
+
+job:14 deletes blob:38 and blob:33 and sst:34
+Why blob:38 is deleted?
+blob_file_head is 40 and blob_file_tail is 37 but blob_file:51 is created in this job
+```
+2023/11/23-15:32:42.659499 698368 (Original Log Time 2023/11/23-15:32:42.659373) EVENT_LOG_v1 {"time_micros": 1700724762659352, "job": 14, "event": "compaction_finished", "compaction_time_micros": 2716971, "compaction_time_cpu_micros": 2714167, "output_level": 1, "num_output_files": 1, "total_output_size": 3409848, "num_input_records": 97114, "num_output_records": 97114, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [1, 7, 0, 0, 0, 0, 0, 0], "blob_file_head": 40, "blob_file_tail": 37}
+```
+
+suspect that some blobs are frocebly deleted at the end of the job.
+This doesn't make sense. blob:37 still exists.
+
+PurgeObsoleteFiles(job_context) is called in BackgroundCompaction()
+Try to find out how blob:38 is pushed into deleted_files
+```
+  versions_->GetObsoleteFiles(
+      &job_context->sst_delete_files, &job_context->blob_delete_files,
+      &job_context->manifest_delete_files, job_context->min_pending_output);
+
+
+```
+
+```
+void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
+                                  std::vector<ObsoleteBlobFileInfo>* blob_files,
+                                  std::vector<std::string>* manifest_filenames,
+                                  uint64_t min_pending_output) {
+  assert(files);
+  assert(blob_files);
+  assert(manifest_filenames);
+  assert(files->empty());
+  assert(blob_files->empty());
+  assert(manifest_filenames->empty());
+
+  std::vector<ObsoleteFileInfo> pending_files;
+  for (auto& f : obsolete_files_) {
+    if (f.metadata->fd.GetNumber() < min_pending_output) {
+      files->emplace_back(std::move(f));
+    } else {
+      pending_files.emplace_back(std::move(f));
+    }
+  }
+  obsolete_files_.swap(pending_files);
+
+  std::vector<ObsoleteBlobFileInfo> pending_blob_files;
+  for (auto& blob_file : obsolete_blob_files_) {
+    if (blob_file.GetBlobFileNumber() < min_pending_output) {
+      blob_files->emplace_back(std::move(blob_file));
+    } else {
+      pending_blob_files.emplace_back(std::move(blob_file));
+    }
+  }
+  obsolete_blob_files_.swap(pending_blob_files);
+
+  obsolete_manifests_.swap(*manifest_filenames);
+}
+```
+When is blob:38 pushed into obsolete_blob_files_?
+
+
+obsolete_blob_files_ is updated in AddObsolteBlobFile() and AddObsolteBlobFileWithLifetime()
+But I don't think AddObsolteBlobFile() is called.
+AddObsolteBlobFileWithLifetime() is called when SharedBlobFileMetaData is deleted.
+SharedBlobFileMetaData is created in ApplyBlobFileAddition() function()
+
+contents of mutable_blob_file_metas_ is accessed in MergeBlobFileMetas()
+So where is MergeBlobFileMetas() is called?
+
+```
+
+void VersionBuilder::Rep::SaveBlobFilesTo(VersionStorageInfo* vstorage) const {
+    GetMinOldestBlobFileNumber()
+        MergeBlobFileMetas(, process_base, process_mutable, process_both)
+            auto base_it = base_vstorage_->GetBlobFileMetaDataLB()
+            auto mutable_it = mutable_blob_file_metas_.lower_bound(first_blob_file)
+```
+This is problematic.
+This returned min blob file number in all blob_files.
+Why this GetMinOldestBlobFileNumber() is called?
+I think a blob file will be pushed to obsolete_blob_files_ once there is
+no linked_sst in it.
+Difference between BlobFileMetaData and MutableBlobFileMetaData
+BlobFileMetaData can not be updated.
+MutableBlobFileMetaData has interface that can link sst and unlink sst.
+It can also add garbage
+
+VersionBuilder  has base_vstorage_ and then it saves all blob files to
+
+I think LinkSst() is called in ApplyFileAddition in rocksdb
+Where is UnlinkSst() is called?
+UnlinkSst() is called in ApplyFileDeletion()
+
+Print all blob file number for each job. and blob file numbers for each lifetime label.
+
+Thinking about how oldest_blob_file_number is updated for each FileMetaData
+
+Maybe it's that a FileMetaData doesn't know which blob file is the oldest to it
+because it could be that there is two blob file opening at the same time while 
+compaction iterator is traversing. 
+
+oldest_blob_file_number of FileMetaData is updated at FileMetaData::UpdateBoundaries()
+
+```
+Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
+                                      SequenceNumber seqno,
+                                      ValueType value_type) {
+  if (value_type == kTypeBlobIndex) {
+    BlobIndex blob_index;
+    const Status s = blob_index.DecodeFrom(value);
+    if (!s.ok()) {
+      return s;
+    }
+
+    if (!blob_index.IsInlined() && !blob_index.HasTTL()) {
+      if (blob_index.file_number() == kInvalidBlobFileNumber) {
+        return Status::Corruption("Invalid blob file number");
+      }
+
+      if (oldest_blob_file_number == kInvalidBlobFileNumber ||
+          oldest_blob_file_number > blob_index.file_number()) {
+        oldest_blob_file_number = blob_index.file_number();
+      }
+    }
+  }
+
+  if (smallest.size() == 0) {
+    smallest.DecodeFrom(key);
+  }
+  largest.DecodeFrom(key);
+  fd.smallest_seqno = std::min(fd.smallest_seqno, seqno);
+  fd.largest_seqno = std::max(fd.largest_seqno, seqno);
+
+  return Status::OK();
+}
+```
+So we can make sure that FileMetaData has smallest blob file number. 
+But FileMetaData only stores oldest_blob_file_number of all the blob files
+it refers to.
+
+Another experiment after change some code.
+job 99
+sst:263, blob:264 with lifetime:1, blob:265 with lifetime:0.
+
+job 111
+delete sst:261 , blob:260, blob:265
+looks like blob:265 is not added to the latest version storage because it has no
+linksst to 263. It is the oldest blob file with no linkedsst.
+I think I find the root cause why this bug happens
+
+Start another experiment and the bug still shows up. 
+Analyzed tht log and find out that it's because I don't call 
+GetMinOldestBlobFileNumber() for all blob files. So blob files are  
+deleted with no linkesst even though there are blob files whose blob file
+number are smaller than that with linkedsst.
+Solution: call GetMinOldestBlobFileNumber() instead of GetMinOldestBlobFileNumber(lifetime)
+There is no segmentation fault after I call GetMinOldestBlobFileNumber() to get 
+minimum oldest blob file number of blob file that has link to sst.
+Great;
+[Status: Done]
+
+
+[Todo] Need to log garbage count for each blob file in current garbage collection process
+[Status: Not started]
+
+[Todo] Try to run experiments to get comparison between our method and baseline method interm of 
+write amplification and read write rate.
+[Status: Not started]
+
+
+
+[Todo]
+Try adding more features to improve classification accuracy and recall rate.
+
+[Status: Not started]
+
+[Todo] log blob files and sst files for each garbage collection.
+May need to change gc implementation as well. Current gc implementation 
+is not good for our idea.
+[Status: Not started]

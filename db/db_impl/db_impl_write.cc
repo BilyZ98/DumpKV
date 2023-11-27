@@ -725,9 +725,10 @@ Status DBImpl::LoadModel(std::string file_path) {
     }
   // lightgbm_fastConfig_ = new FastConfigHandle();
   std::string params = "num_threads=1";
+  assert(immutable_db_options_.num_features > 0);
   int fast_single_row =  LGBM_BoosterPredictForMatSingleRowFastInit(
       lightgbm_handle_, C_API_PREDICT_NORMAL, 0, 0,
-      C_API_DTYPE_FLOAT64, 3, params.c_str(), &lightgbm_fastConfig_
+      C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, params.c_str(), &lightgbm_fastConfig_
     );
   if(fast_single_row != 0 ) {
     return Status::IOError("Failed to init fast single row");

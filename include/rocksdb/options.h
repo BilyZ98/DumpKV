@@ -1403,6 +1403,8 @@ struct DBOptions {
 
   uint64_t classification_num = 2; 
 
+  uint64_t num_features = 2;
+
 };
 
 // Options to control the behavior of a database (passed to DB::Open)

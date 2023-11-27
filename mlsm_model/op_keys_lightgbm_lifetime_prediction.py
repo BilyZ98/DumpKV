@@ -26,9 +26,10 @@ def train_model(data_file_path):
     # X_train, X_test, y_train, y_test = train_test_split(housing.data, housing.target, test_size=0.2, random_state=0)
 
 
-    features = data.iloc[:, [3,6,8]]
+    # features = data.iloc[:, [3,6,8]]
+    features = data.iloc[:, [6,8]]
     # features['key_id'] = pd.to_numeric(features['key_id']) 
-    features['insert_time'] = pd.to_numeric(features['insert_time'])
+    # features['insert_time'] = pd.to_numeric(features['insert_time'])
     features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
     features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
     # features['key'] = features['key'].apply(lambda x: int(x,16))

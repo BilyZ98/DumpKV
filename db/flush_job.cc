@@ -331,12 +331,50 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
   stream.EndArray();
 
   const auto& blob_files = vstorage->GetBlobFiles();
+  const auto& lifetime_blob_files = vstorage->GetLifetimeBlobFiles();
   if (!blob_files.empty()) {
     assert(blob_files.front());
     stream << "blob_file_head" << blob_files.front()->GetBlobFileNumber();
 
     assert(blob_files.back());
     stream << "blob_file_tail" << blob_files.back()->GetBlobFileNumber();
+
+    stream << "blob_files";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetBlobFileNumber() ;
+    }
+    stream.EndArray();
+
+    for(size_t i=0; i < lifetime_blob_files.size(); ++i) {
+      std::string key = "lifetime_blob_" + std::to_string(i);
+      stream << key; 
+      stream.StartArray();
+      for(const auto& blob_file:lifetime_blob_files[i]) {
+        stream << blob_file->GetBlobFileNumber() ;
+      }
+      stream.EndArray();
+    }
+    
+
+    stream << "blob_files";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetBlobFileNumber() ;
+    }
+    stream.EndArray();
+
+    for(size_t i=0; i < lifetime_blob_files.size(); ++i) {
+      std::string key = "lifetime_blob_" + std::to_string(i);
+      stream << key; 
+      stream.StartArray();
+      for(const auto& blob_file:lifetime_blob_files[i]) {
+        stream << blob_file->GetBlobFileNumber() ;
+      }
+      stream.EndArray();
+    }
+    
+
   }
 
   stream << "immutable_memtables" << cfd_->imm()->NumNotFlushed();

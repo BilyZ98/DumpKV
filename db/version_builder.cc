@@ -516,10 +516,19 @@ class VersionBuilder::Rep {
     // Make sure that all blob files in the version have non-garbage data and
     // the links between them and the table files are consistent.
     const auto& blob_files = vstorage->GetBlobFiles();
+    uint64_t  prev_blob_file_number = kInvalidBlobFileNumber;
     for (const auto& blob_file_meta : blob_files) {
       assert(blob_file_meta);
 
       const uint64_t blob_file_number = blob_file_meta->GetBlobFileNumber();
+      if (blob_file_number <= prev_blob_file_number) {
+        std::ostringstream oss;
+        oss << "Blob files are not sorted properly: files #"
+            << prev_blob_file_number << ", #" << blob_file_number;
+
+        return Status::Corruption("VersionBuilder", oss.str());
+      }
+      prev_blob_file_number = blob_file_number;
 
       if (blob_file_meta->GetGarbageBlobCount() >=
           blob_file_meta->GetTotalBlobCount()) {
@@ -539,6 +548,35 @@ class VersionBuilder::Rep {
         return Status::Corruption("VersionBuilder", oss.str());
       }
     }
+
+    const auto& lifetime_blob_files = vstorage->GetLifetimeBlobFiles();
+    const uint64_t blob_files_count = blob_files.size();
+    uint64_t lifetime_blob_files_count = 0;
+    for (const auto& cur_lifetime_blob_files : lifetime_blob_files) {
+        lifetime_blob_files_count += cur_lifetime_blob_files.size();
+        uint64_t lifetime_prev_blob_file_number = kInvalidBlobFileNumber; 
+        for (const auto& blob_file_meta : cur_lifetime_blob_files) {
+        assert(blob_file_meta);
+
+        const uint64_t blob_file_number = blob_file_meta->GetBlobFileNumber();
+        if (blob_file_number <= lifetime_prev_blob_file_number) {
+          std::ostringstream oss;
+          oss << "Lifetime blob files are not sorted properly: files #"
+              << prev_blob_file_number << ", #" << blob_file_number;
+
+          return Status::Corruption("VersionBuilder", oss.str());
+        }
+        lifetime_prev_blob_file_number = blob_file_number;
+      }
+    }
+    if(lifetime_blob_files_count != blob_files_count) {
+      std::ostringstream oss;
+      oss << "Lifetime blob files count is not equal to blob files count, lifetime:"
+          << lifetime_blob_files_count << " vs. blob_files:" << blob_files_count;
+
+      return Status::Corruption("VersionBuilder", oss.str());
+    }
+
 
     Status ret_s;
     TEST_SYNC_POINT_CALLBACK("VersionBuilder::CheckConsistencyBeforeReturn",
@@ -981,6 +1019,7 @@ class VersionBuilder::Rep {
 
     while (base_it != base_it_end && mutable_it != mutable_it_end) {
       if(mutable_it->second->GetLifetimeLabel() != lifetime) {
+        assert(false);
         continue;
       }
       const auto& base_meta = *base_it;
@@ -1029,6 +1068,7 @@ class VersionBuilder::Rep {
 
     while (mutable_it != mutable_it_end ) {
       if( mutable_it->second->GetLifetimeLabel() != lifetime) {
+        assert(false);
         continue;
       }
       const auto& mutable_meta = *mutable_it->second;
@@ -1293,13 +1333,14 @@ class VersionBuilder::Rep {
 
    size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
 
-  
+   const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
+
+ 
     for(size_t i=0; i < lifetime_bucket_size; i++) {
       vstorage->ReserveBlobForLifetimeBuckets(base_vstorage_->GetBlobFiles(i).size() + lifetime_mutable_blob_file_metas_[i].size()); 
-      const uint64_t oldest_blob_file_with_linked_ssts =
-            GetMinOldestBlobFileNumber(i);
+      // const uint64_t oldest_blob_file_with_linked_ssts =
+      //       GetMinOldestBlobFileNumber(i);
       //   GetMinOldestBlobFileNumber();
-
 
       MergeBlobFileMetasWithLifetime(oldest_blob_file_with_linked_ssts, process_base,
                          process_mutable, process_both, i);
@@ -1438,6 +1479,8 @@ class VersionBuilder::Rep {
     SaveSSTFilesTo(vstorage);
 
     SaveBlobFilesTo(vstorage);
+
+    vstorage->SortBlobFiles();
 
     SaveCompactCursorsTo(vstorage);
 

@@ -885,6 +885,7 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
           .c_str());
 
   const auto& blob_files = vstorage->GetBlobFiles();
+  const auto& lifetime_blob_files = vstorage->GetLifetimeBlobFiles();
   if (!blob_files.empty()) {
     assert(blob_files.front());
     assert(blob_files.back());
@@ -957,6 +958,24 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
 
     assert(blob_files.back());
     stream << "blob_file_tail" << blob_files.back()->GetBlobFileNumber();
+
+    stream << "blob_files";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetBlobFileNumber() ;
+    }
+    stream.EndArray();
+
+    for(size_t i=0; i < lifetime_blob_files.size(); ++i) {
+      std::string key = "lifetime_blob_" + std::to_string(i);
+      stream << key; 
+      stream.StartArray();
+      for(const auto& blob_file:lifetime_blob_files[i]) {
+        stream << blob_file->GetBlobFileNumber() ;
+      }
+      stream.EndArray();
+    }
+    
   }
 
   if (compaction_stats_.has_penultimate_level_output) {

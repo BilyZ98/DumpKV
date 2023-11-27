@@ -1223,7 +1223,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     // features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
     // features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
 
-    feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
+    // feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
     feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
     feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
 
@@ -1248,7 +1248,8 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       assert(false);
     }
 
-    int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+    // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+    int maxIndex = out_result[0] > 0.5 ? 1: 0;
 
     
      s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
