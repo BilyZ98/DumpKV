@@ -3002,12 +3002,280 @@ write amplification and read write rate.
 
 
 
-[Todo]
-Try adding more features to improve classification accuracy and recall rate.
-
-[Status: Not started]
 
 [Todo] log blob files and sst files for each garbage collection.
 May need to change gc implementation as well. Current gc implementation 
 is not good for our idea.
+
+We can get garbage collected blob files from LOG. And I added blob files
+for each lifetime classification as well. 
+So next step is to change gc implementation. This might significant impact 
+the read and write rate of rocksdb. 
+It would be better if we can show that for these two implementation we all achieve
+better performance than baseline method then we are good.
+
+[Status: Ongoing ]
+
+
+[Todo] Get relationship between key range and their key lifetime
+
+Get valid duration distribution all write keys.
+And find that 50% of keys have lifetime shorter than 100 secs.
+80% of keys have lifetime shorter than 200 secs.
+This is very different from what we get from compaction trace.
+Need to retrain the model to do evaluation..
+
+count of write op with overwrite.
+```
+919164 op_valid_duration.txt
+```
+
+count of all write ops
+So more than 50% of keys don't have a overwrite in our trace 
+which means more than 50% of keys are valid of all write.
+```
+ awk '$2 == 1 {count++} END {print count}' ./trace-human_readable_trace.txt
+2499190
+```
+
+No significant difference for lifetime distribution across different key ranges 
+for this workload.
+Let's try some other workload.
+
+Didn't write op_valid_duration.txt to test_blob_no_model folder. Do it again.
+I did a sanity check for the output op_valid_duration.txt file and found that 
+the distribution of lifetime is not updated.
+
+lifetime distribution for keys after adjusting the lifetime threshold from 0.5*1e8 to 2.0*1e8
+```
+  with_gc_1.0_0.8 awk 'BEGIN {short_count=0; long_count=0;} {if ($8 == 0) {short_count++} else {long_count++} } END {print "shot_count:" short_count " long_count:" long_count}' ./op_valid_duration.txt
+shot_count:738175 long_count:180989
+```
+Let's train the model and then test the performance again.
+no keys are classified as long with new dataset which is very bad.
+```
+[LightGBM] [Info] Number of positive: 144514, number of negative: 590816
+[LightGBM] [Debug] Dataset::GetMultiBinFromAllFeatures: sparse rate 0.002247
+[LightGBM] [Debug] init for col-wise cost 0.005916 seconds, init for row-wise cost 0.017670 seconds
+[LightGBM] [Warning] Auto-choosing row-wise multi-threading, the overhead of testing was 0.010846 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Debug] Using Dense Multi-Val Bin
+[LightGBM] [Info] Total Bins 335
+[LightGBM] [Info] Number of data points in the train set: 735330, number of used features: 2
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.196529 -> initscore=-1.408128
+[LightGBM] [Info] Start training from score -1.408128
+
+/home/zt/.local/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1469: UndefinedMetricWarning:Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/home/zt/.local/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1469: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+/home/zt/.local/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1469: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+              precision    recall  f1-score   support
+
+           0       0.80      1.00      0.89    147359
+           1       0.00      0.00      0.00     36474
+
+    accuracy                           0.80    183833
+   macro avg       0.40      0.50      0.44    183833
+weighted avg       0.64      0.80      0.71    183833
+
+/home/zt/.local/lib/python3.10/site-packages/sklearn/metrics/_classification.py:1469: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 in labels with no predicted samples. Use `zero_division` parameter to control this behavior.
+  _warn_prf(average, modifier, msg_start, len(result))
+0.40079583099878696
+```
+[Status: Done ]
+
+
+
+[Todo] Implement key range seletion algorithim in Leaper
 [Status: Not started]
+
+
+[Todo] Read machine learning to predict latency for io request in ssd paper 
+to learn how to get reflection point.
+This can help us to get reflection point for lifetime distribution as well.
+[Status: Not started]
+
+[Todo]
+Try adding more features to improve classification accuracy and recall rate.
+- time elapse for cur write interval and previous write 
+- read/write count/rate of the previous interval .
+add ../mlsm_scripts/op_valid_duraion.py script to plot figure 
+for lifetime for each key range.
+add ../mlsm_scripts/op_key_range_read_write_rate.py to get 
+read/write rate for different key range.
+
+- time elapse from the start of the database
+Added time elapse feature data to train model. Not working at all.
+[Status: Not started]
+
+[Todo]
+Garbage definition in writing paper.
+[Status: Not started]
+
+
+
+
+[Todo] Download twitter memcached trace 
+https://github.com/twitter/cache-trace
+https://ftp.pdl.cmu.edu/pub/datasets/twemcacheWorkload/open_source/
+[Status: Ongoing]
+
+[Todo] Analyze twitter memcached trace .
+trace link:  https://github.com/twitter/cache-trace
+Get key range information.
+There is namespace for each key. Maybe we can use this as feture.
+Get lifetime for each key range.
+Get read/write rate for each key range.
+
+trace format :
+timestamp: the time when the cache receives the request, in sec
+anonymized key: the original key with anonymization
+key size: the size of key in bytes
+value size: the size of value in bytes
+client id: the anonymized clients (frontend service) who sends the request
+operation: one of get/gets/set/add/replace/cas/append/prepend/delete/incr/decr
+TTL: the time-to-live (TTL) of the object set by the client, it is 0 when the request is not a write request.
+Note that during key anonymization, we preserve the namespaces, for example, if the anonymized key is nz:u:eeW511W3dcH3de3d15ec, the first two fields nz and u are namespaces, note that the namespaces are not necessarily delimited by :, different workloads use different delimiters with different number of namespaces.
+
+A sample of the traces are attached under samples.
+
+Read paper A large scale analysis of hundreds of in-memory cache clusters at Twitter
+to know more about write heavy traces in this dataset.
+
+read/write ratio in cluster12.sort trace dataset.
+write:read = 4:1  which is really write heavy.
+```
+➜  cluster head -n1000000 ./cluster12.sort |  cut -d ',' -f 6,6  | sort | uniq -c
+ 198797 get
+ 801203 set
+➜  cluster head -n5000000 ./cluster12.sort |  cut -d ',' -f 6,6  | sort | uniq -c
+1006713 get
+3993287 set
+➜  cluster head -n10000000 ./cluster12.sort |  cut -d ',' -f 6,6  | sort | uniq -c
+2032644 get
+7967356 set
+```
+
+There is no many writes for each namespace in twitter trace
+```
+first_name_space count:  1581831
+set group count:  1679043
+
+
+```
+
+Write trace is not skewed enough
+```
+➜  twitter git:(main) ✗ python3 op_key_valid_duration.py
+set_group_sort count:  79607
+group by key_id done
+key_id_group count:  78721
+➜  twitter git:(main) ✗
+➜  twitter git:(main) ✗
+➜  twitter git:(main) ✗
+➜  twitter git:(main) ✗ python3 op_key_valid_duration.py
+set_group_sort count:  801203
+group by key_id done
+key_id_group count:  790048
+```
+overwrite raio is only 1.2%
+[Satus: Ongoing]
+
+
+[Todo] Get overwrite ratio for wiki dataset.
+wiki trace link
+https://github.com/sunnyszy/lrb
+```
+ head -n10000000 ./wiki2019_remapped.tr |  cut -d ' ' -f 4,4  | sort | uniq -c
+4040075 0
+5678747 1
+ 131013 2
+  18926 3
+ 131203 4
+     20 5
+      4 6
+     12 7
+```
+trace format 
+```
+Request traces are expected to be in a space-separated format with 3 columns and additionally columns for extra features.
+
+time should be a long long int, but can be arbitrary (for future TTL feature, not currently in use)
+id should be a long long int, used to uniquely identify objects
+size should be uint32, this is object's size in bytes
+extra features are optional uint16 features. LRB currently interprets them as categorical features (e.g., object type).
+```
+
+```
+time	id	size	[extra_feature(s)]
+1	1	120	
+2	2	64	
+3	1	120	
+4	3	14	
+4	1	120
+```
+too little information.
+
+This wiki request trace is not good for our task.
+Because nearly 50% of request are labelled as 1
+and 28% of keys are accessed more than once. 
+This is not true from what I get from twitter cache 
+access trace.
+```
+tail_100 :          time  key_id  value_size  op_type  key_range_idx
+965270   555      68       15328        1              0
+68         0      69       15446        1              0
+70         0      71       10594        1              0
+71         0      72     2093687        1              0
+72         0      73      330152        1              0
+...      ...     ...         ...      ...            ...
+339556   194     251        9785        1              0
+340139   195     251        9785        1              0
+340507   195     251        9785        1              0
+342459   196     251        9785        1              0
+343010   196     251        9785        1              0
+
+[900 rows x 5 columns]
+key_149           time  key_id  value_size  op_type  key_range_idx
+148        0     149        4978        1              0
+7050       4     149        4978        1              0
+50124     28     149        4978        1              0
+51077     29     149        4978        1              0
+115718    65     149        4978        1              0
+164790    94     149        4978        1              0
+234043   133     149        4978        1              0
+282017   161     149        4978        1              0
+
+group by key_id done
+set_group_sort count:
+ 570895
+key_id_group count:  411459
+```
+[Status: Paused ]
+
+
+
+[Todo]
+Analyze ibm cos trace dataset.
+Get overwrite ratio for keys
+[Status: Ongoing]
+
+
+
+
+[Todo]
+Analyze MSR IO dataset
+http://iotta.snia.org/traces/block-io/388
+[Status: Not started]
+
+
+[Todo]
+Try YCSB-A which has read/write ratio 50:50
+[Status: Not started]
+
+read write relationship . how many read for a key before it is rewritten?
+
+

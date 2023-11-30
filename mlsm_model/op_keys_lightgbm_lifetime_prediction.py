@@ -27,11 +27,12 @@ def train_model(data_file_path):
 
 
     # features = data.iloc[:, [3,6,8]]
-    features = data.iloc[:, [6,8]]
+    features = data.iloc[:, [6,8,10]]
     # features['key_id'] = pd.to_numeric(features['key_id']) 
     # features['insert_time'] = pd.to_numeric(features['insert_time'])
     features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
     features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
+    features['time_elapse_from_begin'] = pd.to_numeric(features['time_elapse_from_begin'])
     # features['key'] = features['key'].apply(lambda x: int(x,16))
     # astype('category')
     # labels = data.iloc[:, 8]

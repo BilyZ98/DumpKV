@@ -21,6 +21,8 @@ num_key_ranges = 100
 # lifetime_limits = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 lifetime_limits = [1, 10, 100, 1000]
 
+long_lifetime_border = 2 * 1e8
+
 def callGetInternalKeyLifetime(op_trace_file, compaction_trace_file, output_dir):
 
     cur_push_dir = os.getcwd()
@@ -37,6 +39,8 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
     int_key_id = 0
     uniq_key_map = {}
     op_keys_without_seq_count = {}
+    start_time = None
+
     with open(op_trace_file, 'r') as f, open(compaction_trace_file, 'r') as f_compaction:
         lines = f.readlines()
         compaction_lines = f_compaction.readlines()
@@ -57,6 +61,11 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
 
 
         print("The number of keys in compaction trace: ", len(compaction_keys_access_info))
+
+
+        first_line = lines[0]
+        trace_infos = first_line.split()
+        start_time = int(trace_infos[4])
 
 
         for line in lines:
@@ -97,12 +106,12 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
         for i in range(num_key_ranges):
             print("key_range: {}, count: {}".format(key_ranges[i], arr[i]))
 
-        exit(0)
+        # exit(0)
 
 
-        with open(key_range_file, 'w') as f:
-            for key in key_ranges:
-                f.write(key + "\n")
+        # with open(key_range_file, 'w') as f:
+        #     for key in key_ranges:
+        #         f.write(key + "\n")
         # exit(0)
 
         for key, _ in compaction_keys_access_info.items():
@@ -144,8 +153,9 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                     # print("something wrong!")
                     # assert(False)
                 
+    valid_durations = []
     with open(op_valid_duration_file, 'w') as f:
-        f.write('key key_id sequence_number insert_time invalid_time valid_duration period_num_writes is_long_live key_range_idx lifetime_exp_increase_label\n')
+        f.write('key key_id sequence_number insert_time invalid_time valid_duration period_num_writes is_long_live key_range_idx lifetime_exp_increase_label time_elapse_from_begin\n')
         for key, infos in op_keys_access_info.items():
             for i in range(len(infos) - 1):
                 seq_i = infos[i][0]
@@ -160,9 +170,16 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
                 cur_key_period_num_writes = infos[i][2]
                 key_id = uniq_key_map[key]
                 lifetime_label_idx = bisect.bisect_left(lifetime_limits, valid_duration/1e6)
-                if valid_duration > 0.5 * 1e8:
+
+                elapse_from_start_time = insert_time - start_time
+                if valid_duration > long_lifetime_border:
                     is_long_live = 1
-                f.write('{} {} {} {} {} {} {} {} {} {}\n'.format(key, key_id, seq_i, insert_time, invalid_time, valid_duration, cur_key_period_num_writes, is_long_live, key_range_idx, lifetime_label_idx))
+                f.write('{} {} {} {} {} {} {} {} {} {} {}\n'.format(key, key_id, seq_i, insert_time, invalid_time, valid_duration, cur_key_period_num_writes, is_long_live, key_range_idx, lifetime_label_idx, elapse_from_start_time))
+                valid_durations.append(valid_duration)
+
+    exit(0)
+
+
 
     valid_durations = []
     actual_lifetimes = []
@@ -172,7 +189,6 @@ def GetInternalKeyLifetime(op_trace_file, compaction_trace_file ):
 
     output_file_name = "internal_key_lifetime.txt"
     with open(output_file_name, 'w') as f:
-        long_lifetime_border = 0.5 * 1e8
         f.write('key sequence_number insert_time compaction_time invalid_time valid_duration actual_lifetime period_num_writes is_long_live key_range_idx lifetime_exp_increase_label\n')
         for key, infos in compaction_keys_access_info.items():
 
