@@ -3432,6 +3432,17 @@ awk -F ',' '{if ($4 == "Write") {print  }}' ./hm_0.csv  |   cut -d ',' -f 5,5   
  152769 3154137088
  152770 3154132992
 ```
+
+
+![image](https://github.com/BilyZ98/rocksdb_kv_sep/assets/26542149/e5210d3e-85d0-4f2b-92b4-3a8d0412355e)
+MSR has multple traces and each trace has different read/write ratio.
+![image](https://github.com/BilyZ98/rocksdb_kv_sep/assets/26542149/4ff19299-5b83-459b-b92d-6918508d0ea8)
+These traces show write intensive characteristics.
+1. prn -> print server
+2. hm -> hardware monitoring
+3. prxy -> firewall / web proxy 
+4. src1 -> source control
+5. rsrch -> research proejcts
 [Status: Ongoing]
 
 
