@@ -3121,7 +3121,7 @@ Garbage definition in writing paper.
 [Todo] Download twitter memcached trace 
 https://github.com/twitter/cache-trace
 https://ftp.pdl.cmu.edu/pub/datasets/twemcacheWorkload/open_source/
-[Status: Ongoing]
+[Status: Done]
 
 [Todo] Analyze twitter memcached trace .
 trace link:  https://github.com/twitter/cache-trace
@@ -3181,7 +3181,7 @@ set_group_sort count:  801203
 group by key_id done
 key_id_group count:  790048
 ```
-overwrite raio is only 1.2%
+overwrite ratio is only 1.2%
 [Satus: Ongoing]
 
 
@@ -3254,6 +3254,7 @@ set_group_sort count:
  570895
 key_id_group count:  411459
 ```
+28% overwrite
 [Status: Paused ]
 
 
@@ -3261,6 +3262,86 @@ key_id_group count:  411459
 [Todo]
 Analyze ibm cos trace dataset.
 Get overwrite ratio for keys
+Need to write shell script or python script
+to get overwrite rate for multiple trace data files.
+```
+Processing IBMObjectStoreTrace000Part0 file...                                                                                                                                           [31/1815]  10800 REST.COPY.OBJECT
+  23566 REST.DELETE.OBJECT
+ 962187 REST.GET.OBJECT
+44760170 REST.HEAD.OBJECT
+  66010 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace001Part0 file...
+ 468959 REST.GET.OBJECT
+ 479438 REST.HEAD.OBJECT
+ 629333 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace002Part0 file...
+    119 REST.DELETE.OBJECT
+ 376250 REST.GET.OBJECT
+    126 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace003Part0 file...
+   1325 REST.COPY.OBJECT
+1487695 REST.GET.OBJECT
+  12539 REST.HEAD.OBJECT
+  12244 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace004Part0 file...
+9900394 REST.GET.OBJECT
+  24313 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace005Part0 file...
+      6 REST.COPY.OBJECT
+ 223338 REST.GET.OBJECT
+52776655 REST.HEAD.OBJECT
+      1 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace005Part1 file...
+   9806 REST.DELETE.OBJECT
+ 280718 REST.GET.OBJECT
+52699190 REST.HEAD.OBJECT
+  10286 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace005Part2 file...
+     12 REST.COPY.OBJECT
+     44 REST.DELETE.OBJECT
+ 218976 REST.GET.OBJECT
+52780868 REST.HEAD.OBJECT
+    100 REST.PUT.OBJECT
+Processing IBMObjectStoreTrace005Part3 file...
+ 209348 REST.GET.OBJECT
+52790652 REST.HEAD.OBJECT
+Processing IBMObjectStoreTrace005Part4 file...
+ 207990 REST.GET.OBJECT
+```
+
+000 trace:
+```
+Processing IBMObjectStoreTrace000Part0 file...                                                                                            [31/1815]  10800 REST.COPY.OBJECT
+  23566 REST.DELETE.OBJECT
+ 962187 REST.GET.OBJECT
+44760170 REST.HEAD.OBJECT
+  66010 REST.PUT.OBJECT
+➜  ibm_cos_trace awk '{if ($2 == "REST.PUT.OBJECT") {print  }}' ./IBMObjectStoreTrace000Part0 |   cut -d ' ' -f 3,3   | sort | uniq -c | wc -l
+64703
+```
+overwrite rate:2%
+
+```
+IBMObjectStoreTrace001Part0 has most writes compared to other trace files.
+all put count:
+```
+
+```
+
+Processing IBMObjectStoreTrace001Part0 file...
+ 468959 REST.GET.OBJECT
+ 479438 REST.HEAD.OBJECT
+ 629333 REST.PUT.OBJECT
+
+uniq write trace count:
+➜  ibm_cos_trace wc -l ibm_trace_001_put_key_count.log
+629328 ibm_trace_001_put_key_count.log
+```
+0 overwrite rate.
+
+Need to check  readme as well.There are multiple files for this ibm trace.
+I want to combine all trace files together to see if overwrite rate can 
+be higher than 10% in total.
 [Status: Ongoing]
 
 
@@ -3269,13 +3350,208 @@ Get overwrite ratio for keys
 [Todo]
 Analyze MSR IO dataset
 http://iotta.snia.org/traces/block-io/388
-[Status: Not started]
+```
+3. I/O trace file format
+
+The files are gzipped csv (comma-separated text) files. The fields in
+the csv are:
+
+Timestacmp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime
+
+Timestamp is the time the I/O was issued in "Windows filetime"
+Hostname is the hostname (should be the same as that in the trace file name)
+DiskNumber is the disknumber (should be the same as in the trace file name)
+Type is "Read" or "Write"
+Offset is the starting offset of the I/O in bytes from the start of the logical
+disk.
+Size is the transfer size of the I/O request in bytes.
+ResponseTime is the time taken by the I/O to complete, in Windows filetime
+units.
+
+```
+This data format is not very good for rocksdb 
+because it doesn't  have object id for each write.
+We can create object by composing disk number and offset but it's 
+not so real
+```
+➜  MSR-Cambridge  cut -d ',' -f 4,4  ./hm_0.csv  | sort | uniq -c
+1417748 Read
+2575568 Write
+
+➜  MSR-Cambridge awk -F ',' '{if ($4 == "Write") {print  }}' ./hm_0.csv  |   cut -d ',' -f 5,5   | sort  | uniq -c  | wc -l
+178395
+```
+93% overwrite ratio for each uniq start offset in ssd.
+
+```
+ MSR-Cambridge awk -F ',' '{if ($4 == "Write") {print  }}' ./hm_0.csv  |   cut -d ',' -f 5,5  -r--r--r-- 1 zt zt 139M Oct 30  2008 prxy_0.csv.gz                                               │ | sort  | uniq -c  | wc -l
+-r--r--r-- 1 zt zt 2.0G Oct 30  2008 prxy_1.csv.gz                                               │178395
+```
+
+```
+awk -F ',' '{if ($4 == "Write") {print  }}' ./hm_0.csv  |   cut -d ',' -f 5,5   | sort  | uniq -c  | sort -n -k1,1 |  tee ./hm_0_overwrite_cout.log
+  10095 210767872
+  10262 211292160
+  10263 200953856
+  10308 1068385280
+  10361 12024070144
+  10399 1064436736
+  10545 1076269056
+  10571 1068384256
+  10873 13574994432
+  11170 3221770240
+  11400 13570785280
+  11457 3233579008
+  11498 3224940544
+  13503 3282030592
+  14923 13574999040
+  17466 13574987776
+  17496 1023483904
+  18839 1064435712
+  18897 1023476224
+  18897 1024086016
+  18897 1024087040
+  18897 1024091136
+  18897 1042001920
+  19172 11812225024
+  19281 6334689280
+  19324 3227922432
+  19801 3224608768
+  20482 3229863936
+  20485 3227648000
+  21783 571084800
+  21784 1417940992
+  21784 432615424
+  21784 663928832
+  21784 702128128
+  21785 1316483072
+  37794 1023475712
+  42248 3154124800
+  42249 3154128896
+  56691 200626176
+ 152769 3154137088
+ 152770 3154132992
+```
+[Status: Ongoing]
 
 
 [Todo]
+https://github.com/brianfrankcooper/YCSB/wiki/Running-a-Workload
 Try YCSB-A which has read/write ratio 50:50
-[Status: Not started]
+
+Total update count:
+```
+4999945 READ
+5000055 UPDATE
+```
+
+uniq key count:
+```
+✗ awk '{if ($1 == "UPDATE") {print }}' ./workloada-run-10000000-10000000.log.formated|   cut -d ' ' -f 2,2   | sort | uniq -c | wc -l
+2214153
+```
+28/50 = 56%  overwrite rate
+[Status: Ongoing]
 
 read write relationship . how many read for a key before it is rewritten?
+
+
+1. wrong assumption
+2. wrong definition of garbage
+
+I need to find a write heavy workload.
+
+Thinkging about how to get extra storage space to store dataset..
+
+Will be nice if we can have a cloud storage to use or 
+dfs to use.
+What's the current status of cloud storage.
+blob object storage.
+cloud database.
+
+[Todo] overwrite ratio in mixed graph trace
+Use trace information from mixgraph workload and get that 50% of
+the keys are conly accessed once .
+I will adjust the distribution parameters to get more keys 
+accessed at least twice .
+
+```
+➜  with_gc_1.0_0.8 cut -d ' ' -f 2,2  ./trace-human_readable_trace.txt | sort | uniq -c
+2500810 0
+2499190 1
+➜  with_gc_1.0_0.8 awk -F ',''{if ($4 == "Write") {print  }}' ./hm_0.csv  |   cut -d ',' -f 5,5   | sort  | uniq -c  | wc -l
+➜  with_gc_1.0_0.8 awk '{if ($2 == "1") {print  }}' ./trace-human_readable_trace.txt |   cut -d ' ' -f 1,1   | sort  | uniq -c  | wc -l
+1580027
+```
+overwrite ratio:
+41% overwrite rate
+
+
+[Status: Done]
+
+[Todo] Analyze UMass trace
+https://traces.cs.umass.edu/index.php/Storage/Storage
+trace format
+```
+➜  umass_finalcial head -n10 Financial1.spc
+0,303567,3584,w,0.000000
+1,55590,3072,w,0.000000
+0,303574,3584,w,0.026214
+1,240840,3072,w,0.026214
+1,55596,3072,r,0.078643
+0,303581,3584,w,0.117964
+1,55596,3072,w,0.117964
+0,303588,3584,w,0.530841
+1,55596,3072,w,0.530841
+0,303595,3584,w,0.550502
+```
+
+```
+➜  umass_finalcial cut -d ',' -f 4,4  ./Financial1.spc | sort | uniq -c
+1235633 r
+4099354 w
+```
+
+```
+➜  umass_finalcial awk -F ',' '{if ($4 == "w") {print  }}' ./Financial1.spc |   cut -d ',' -f 1,1   | sort  | uniq -c  | wc -l
+24
+```
+[Status: Done]
+Write a paper about write statistics in workload ?
+
+What kind of datasets are used in other lsm-tree research paper?
+
+
+```
+https://datasetsearch.research.google.com/search?src=0&query=object%20storage&docid=L2cvMTFrc2tzNmowXw%3D%3D
+```
+
+
+https://www.usenix.org/system/files/hotstorage20_paper_eytan.pdf
+This FIFO vs. LRU paper uses MSR trace to evaluate cache perfromance.
+So I think we could do that for our rocksdb sotrage enginer as well.
+```
+
+Group Name  Traces #    Accesses Millions   Objects Millions    Objects Size Gigabytes
+MSR   3   68   24    905
+SYSTOR  3   235 154 4538
+TPCC    8   94  76  636
+IBM COS 99  858 149 161,869
+```
+
+*The object sizes also show great variance. The overall
+ distribution of object sizes in shown in Figure 3. We see that
+ a vast majority of the objects (85%) in the traces are smaller
+ than a megabyte, Yet these objects only account for 3% of the
+ of the stored capacity. Note that since object storage traces
+ reference objects of variable size one should adopt a strategy
+ for handling such variable sized data within a cache. In our
+ simulation we break large objects into fixed size 4MB blocks
+ and treat each one separately at the cache layer. Requests
+ smaller than 4MB take up their actual length in the cache.
+ This is aligned with the fact that GET requests to the IBM
+ COS often include range reads in which only a part of an
+ object is read*
+
 
 
