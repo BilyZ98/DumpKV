@@ -1,10 +1,23 @@
 IBM runs one of the world's leading object store cloud based service - IBM Cloud Object Storage.  We have taken anonymized traces from the IBM Cloud Object Storage service on the IBM Cloud and used them to study data flows in and out of the object store.  This insight we gained from the traces was pivotal in our research into large scale cache systems, some of which was published in HotStorage 2020 under the title "It's Time to Revisit LRU vs. FIFO" (https://www.usenix.org/system/files/hotstorage20_paper_eytan.pdf).
 
 
-The data set is composed of 98 traces containing around 1.6 Billion requests for 342 Million unique objects.  The traces themselves are about 88 GB in size.  Each trace contains the REST operations issued against a single bucket in IBM Cloud Object Storage during a single week in 2019.  All the traces were collected during the same week in 2019.  The traces are names IBMObjectStoreTrace<trace_number>Part<part_number> where most traces are contained in a single file, and therefore have just one part, and four traces are broken into multiple parts. 
+The data set is composed of 98 traces containing around 1.6 Billion requests for 342 Million
+unique objects.  The traces themselves are about 88 GB in size.  
+Each trace contains the REST operations issued against a single bucket 
+in IBM Cloud Object Storage during a single week in 2019.  
+All the traces were collected during the same week in 2019.  
+The traces are names IBMObjectStoreTrace<trace_number>Part<part_number> 
+where most traces are contained in a single file, 
+and therefore have just one part, and four traces are broken into multiple parts. 
 
 
-Each trace was selected based on a single criteria - that it contain some read (i.e. GET OBJECT) requests.  Each trace contains GET OBJECT, PUT OBJECT, HEAD OBJECT, DELETE OBJECT requests taken over a week long period, where each request includes a time stamp,  the request type, the object id, a starting offset and an ending offset, and the total object size.  Only successful requests (i.e. those requests that returned a return code of 200) are listed.  This data set is intended to enable studying cache behavior, and therefore requests that were not served are of no interest.  
+Each trace was selected based on a single criteria - that it contain some read 
+(i.e. GET OBJECT) requests.  Each trace contains GET OBJECT, PUT OBJECT, 
+HEAD OBJECT, DELETE OBJECT requests taken over a week long period, 
+where each request includes a time stamp,  the request type, the object id, a starting offset and an ending offset, and the total object size.  
+Only successful requests (i.e. those requests that returned a return code of 200) are listed.  
+This data set is intended to enable studying cache behavior, and therefore requests that were not 
+served are of no interest.  
 
 
 Bucket names are omitted, and objects are represented as ids generated through a one-way hash function.  The format of the each trace record is <time stamp of request>, <request type>, <object ID>, <optional: size of object>, <optional: beginning offset>, <optional: ending offset>.  The timestamp is the number of milliseconds from the point where we began collecting the traces. For example:

@@ -3182,6 +3182,8 @@ group by key_id done
 key_id_group count:  790048
 ```
 overwrite ratio is only 1.2%
+
+Need to check other write heavy workload.
 [Satus: Ongoing]
 
 
@@ -3255,6 +3257,8 @@ set_group_sort count:
 key_id_group count:  411459
 ```
 28% overwrite
+
+Need to see if there is correlation of lifetime in each key range.
 [Status: Paused ]
 
 
@@ -3342,6 +3346,11 @@ uniq write trace count:
 Need to check  readme as well.There are multiple files for this ibm trace.
 I want to combine all trace files together to see if overwrite rate can 
 be higher than 10% in total.
+
+Each trace is from each unique bucket.
+So we cannot combine all traces together to analyze the overwrite rate.
+Two key ids share same id don't mean they are the same object because they 
+are in different buckets.
 [Status: Ongoing]
 
 
@@ -3443,12 +3452,77 @@ These traces show write intensive characteristics.
 3. prxy -> firewall / web proxy 
 4. src1 -> source control
 5. rsrch -> research proejcts
+
+Need to write python script to build unique key for each write request to offset in each disk.
+
+
+prxy_0 data set
+```
+➜  MSR-Cambridge cut -d ',' -f 4,4  ./prxy_0.csv | sort | uniq -c
+ 383524 Read
+12135444 Write
+```
+number of uniqe offset in prxy_0 dataset
+```
+➜  msr git:(main) ✗ python3 write_analysis.py
+count of write:  12135444
+count of read:  383524
+count of disknumber_offset:  137388
+```
+overwrite rate: (12135444 - 137388) / 12135444 = 98.8%
+avg of write size:  avg of size:  4759.97633378721
+
+
+prxy_1 data set read write count:
+```
+➜  MSR-Cambridge cut -d ',' -f 4,4  ./prxy_1.csv | sort | uniq -c
+110414460 Read
+58224504 Write
+```
+overwrite rate: (58224504 -    297490) / 58224504 = 99%
+avg of size: 13366.629207798833
+
+
+
+prn_0
+```
+count of write:  4983406
+count of read:  602480
+avg of size:  9903.85422981792
+count of disknumber_offset:  614901
+
+count of write:  4983406
+count of read:  602480
+count of disknumber_offset:  614901
+```
+overwrite ratio: 87%
+
+
+[sub todo] plot Write size cdf
+[status: partially done]
+
+[sub todo] relationship between write offset and write size  .
+[status: partially done]
+
+[sub todo] relationship between key range and lifetime
+
+[sub todo]  check trace replay code to see if timestamp can be replayed 
+timestamp can be replayed
+[sub status: Done]
+
+exactly
+
+read write relationship for each offset. cdf? 
+
 [Status: Ongoing]
 
 
 [Todo]
 https://github.com/brianfrankcooper/YCSB/wiki/Running-a-Workload
+paper title:SSD-Based Workload Characteristics and Their Performance Implications
+What's the discovery about write correlation?
 Try YCSB-A which has read/write ratio 50:50
+1 billion ops. 50 million writes which is similar to that in prxy_1 in msr dataset.
 
 Total update count:
 ```
@@ -3462,8 +3536,48 @@ uniq key count:
 2214153
 ```
 28/50 = 56%  overwrite rate
+What's the overwrite count and std of overwrite date?
+
+```
+>>> df_count_sort.shape
+(3758712, 2)
+```
+This is different from what I get from command line
+Fix the bug and filter write data before count number of write
+for each key.
+```
+➜  ycsb_a git:(main) ✗ python3 -i write_access_count.py
+>>> df_count_sort.shape
+(2214153, 2)
+```
+
+number of keys whose write count is greater than 2
+```
+>>> selected_rows.shape
+(428537, 2)
+```
+ratio: 19%
 [Status: Ongoing]
 
+[Todo] Analyze ssd trace from ycsb_a workload running on rocksdb 
+
+```
+ tr -s ' '  < ssdtrace-{00,01}  |  cut -d ' ' -f 7,7  | sort | uniq -c | tee  read_write_count.log
+  12798 FWFS
+     32 FWS
+23190515 N
+51202140 R
+     58 RA
+   2324 RM
+76803261 RS
+   2411 RSM
+   6410 W
+  25691 WFS
+ 150715 WM
+3406151 WS
+```
+Need to process large amount of data
+[Status: Ongoing]
 read write relationship . how many read for a key before it is rewritten?
 
 
@@ -3527,7 +3641,9 @@ trace format
 ➜  umass_finalcial awk -F ',' '{if ($4 == "w") {print  }}' ./Financial1.spc |   cut -d ',' -f 1,1   | sort  | uniq -c  | wc -l
 24
 ```
+Too little data. Abandon this one
 [Status: Done]
+
 Write a paper about write statistics in workload ?
 
 What kind of datasets are used in other lsm-tree research paper?
@@ -3564,5 +3680,126 @@ IBM COS 99  858 149 161,869
  COS often include range reads in which only a part of an
  object is read*
 
+How does leaper generate key ranges?
+Leaper initializes key ranges size as 10 initially. 
+For each key range one bit is used to labelle whether it's accessed 
+in current time interval. It then double the size of the key range 
+and recomputes the access bit for each new key range.
+The key range size exponentially increases, the matrics size decrease,
+so the access info decreases. It stops doubling key range size 
+once zeros in 2*A / zeros in A < alpha(0.6)
 
 
+Read Learning relaxed Belady for CDN caching paper to learn how to prepare 
+data for model training.
+One thing that is interesting is that it builds a learned cache system 
+that can continuosly train from new data and upadate online model.  
+The paper says that distribution can change over time.
+
+[Todo]
+Download lrb code and then check how edc feature data is calculated.
+
+```
+max_hash_edc_idx = 65535
+uint8_t base_edc_window = 10;
+ uint32_t memory_window = 67108864;
+
+
+    static void set_hash_edc() {
+        max_hash_edc_idx = (uint64_t) (memory_window / pow(2, base_edc_window)) - 1;
+        hash_edc = vector<double>(max_hash_edc_idx + 1);
+        for (int i = 0; i < hash_edc.size(); ++i)
+            hash_edc[i] = pow(0.5, i);
+    }
+
+
+       MetaExtra(const uint32_t &distance) {
+        _past_distances = vector<uint32_t>(1, distance);
+        for (uint8_t i = 0; i < n_edc_feature; ++i) {
+            uint32_t _distance_idx = min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+            _edc[i] = hash_edc[_distance_idx] + 1;
+        }
+    }
+
+
+     edc_windows = vector<uint32_t>(n_edc_feature);
+        for (uint8_t i = 0; i < n_edc_feature; ++i) {
+            edc_windows[i] = pow(2, base_edc_window + i);
+        }
+
+
+      void update(const uint32_t &distance) {
+        uint8_t distance_idx = _past_distance_idx % max_n_past_distances;
+        if (_past_distances.size() < max_n_past_distances)
+            _past_distances.emplace_back(distance);
+        else
+            _past_distances[distance_idx] = distance;
+        assert(_past_distances.size() <= max_n_past_distances);
+        _past_distance_idx = _past_distance_idx + (uint8_t) 1;
+        if (_past_distance_idx >= max_n_past_distances * 2)
+            _past_distance_idx -= max_n_past_distances;
+        for (uint8_t i = 0; i < n_edc_feature; ++i) {
+            uint32_t _distance_idx = min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+            _edc[i] = _edc[i] * hash_edc[_distance_idx] + 1;
+        }
+    }
+```
+size of hash_edc is 65536
+hash_edc = [1, 0.5, 1/4, 1/8, ...]
+distance is timestamp diff
+size of edc_windows is 10 . I think the meaning of edc_windows is that how long each 
+edc_windows cover in terms of time
+code understood.
+Will reimplement this code in python tomorrow.
+Need to check what ？
+Need to check what's the unit for the timestamp. millisecond?? s ?  microsecond? 
+I will add edc count features to dataset.
+The most important thing right now is to run model.
+Prediction targeet
+1. time 
+2. log(time to next request)
+3. short and long ( binary or exponentially increase duration )
+
+
+Need to add 10 more delta columns to features. add 10 more edc columns to features.
+Get overflow error. Need to fix this. Fixed. Turns out it's because I write it 
+like this `edc += edc * edc_windos + 1`
+the correct calculation is `edc = edc * edc_windows + 1`
+
+get edc for read and write as features.
+
+Fixed another bug which causes number of rows in dataframe double because 
+of misunderstanding of loc and iloc method.
+
+[Status: Done]
+
+
+Train model with msr prn_0 data.
+binary classification model.
+Get a relatively good prediction results with 20 feature columns
+Another problem is that how to determine the short and long 
+if we don't know the threshold unless we get the data. 
+We could gather quite amount of data and make the assumption that 
+the lifete data distribution is long tail and skewed.
+```
+              precision    recall  f1-score   support
+
+       False       0.90      0.89      0.90    787778
+        True       0.61      0.62      0.62    208904
+
+    accuracy                           0.84    996682
+   macro avg       0.75      0.76      0.76    996682
+weighted avg       0.84      0.84      0.84    996682
+
+0.754550580551913
+```
+This is not right. I didn't provide right lifetime because I write dataframe
+to csv file concurrently.
+
+Need to get write amplification results with different model.
+If we have more than 2 lifetime categories, we need to make sure 
+each category blob files are GCed when they are expired.
+
+Generated data file with keys write count is bigger than 1 this is biased.
+Need to gnerate another file with all write accesses. I will make those one 
+write access key as long lifetime key.

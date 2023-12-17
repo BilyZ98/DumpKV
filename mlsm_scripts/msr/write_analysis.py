@@ -1,0 +1,192 @@
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import bisect
+import os
+import bisect
+import sys
+import multiprocessing as mp
+
+server_trace = 'prxy_0'
+server_traces = ['prxy_0', 'prxy_1', 'prn_0']
+
+
+
+def GetLifetimeForWrite(server_trace):
+
+    data_path = '/mnt/nvme0n1/workloads/msr/MSR-Cambridge/{}.csv'.format(server_trace)
+    df = pd.read_csv(data_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
+    df_group_by_type = df.groupby('type')
+    df_write = df_group_by_type.get_group('Write')
+    df_read = df_group_by_type.get_group('Read')
+    print('count of write: ', len(df_write))
+    print('count of read: ', len(df_read))
+    print('avg of size: ', df_write['size'].mean())
+    df_group_by_disknumber_offset = df_write.groupby(['disknumber', 'offset'])
+    group_offset_arr = np.array([])
+    group_mean_lifetime_arr = np.array([])
+    all_lifetime_arr = np.array([])
+    # count = len(df_group_by_disknumber_offset)
+    count = 10000
+    print('count of group: ', count)
+    cur_count = 0
+    plt.figure()
+    plt.xlabel('lifetime')
+    plt.ylabel('cdf')   
+    for key, item in df_group_by_disknumber_offset:
+        if cur_count >= count:
+            break
+        cur_count += 1
+        if cur_count % 100 == 0:
+            print('cur_count: ', cur_count)
+        item['prev_timestamp'] = item['timestamp'].shift(1)
+        item['lifetime'] = item['timestamp'] - item['prev_timestamp']
+        mean_lifetime = item['lifetime'].mean()
+        non_nan_count, nan_count = item['lifetime'].count(), item['lifetime'].isna().sum()
+        assert(nan_count == 1)
+        assert(item['lifetime'].isna().iloc[0] == True)
+
+        # print('key: ', key, 'mean lifetime: ', mean_lifetime, 'count: ', len(item))
+        group_offset_arr = np.append(group_offset_arr, key[1])
+        group_mean_lifetime_arr = np.append(group_mean_lifetime_arr, mean_lifetime)
+        all_lifetime_arr = np.append(all_lifetime_arr, item['lifetime'])
+        # if non_nan_count ==  0:
+        #     continue
+
+        # 
+        # cdf_x = np.sort(np.array(item['lifetime']))
+        # # if cdf_x == None:
+        # #     print('key:{}, item:\n {}  '.format(key, item))
+        # #     print('cdf_x: ', cdf_x)
+        # #     continue
+
+        # cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+        # plt.plot(cdf_x, cdf_y, label='write:{}, key:{}'.format(len(item), key))
+
+        # plt.legend()
+
+
+
+        # print('mean lifetime: ', mean_lifetime, )
+        
+    save_path = 'msr_write_all_keys_cdf_{}.png'.format(server_trace )
+    # plt.savefig(save_path)
+    plt.close()
+
+    cdf_x = np.sort(all_lifetime_arr)
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='write:{}, key:{}'.format(len(all_lifetime_arr), 'all'))
+    plt.legend()
+    save_path = 'msr_write_all_cdf_{}.png'.format(server_trace )
+    plt.savefig(save_path)
+    plt.close()
+
+
+    plt.figure()
+    plt.plot(group_offset_arr, group_mean_lifetime_arr, ',')
+    plt.xlabel('offset')
+    plt.ylabel('mean lifetime')
+    save_path = 'msr_write_lifetime_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+
+
+def GetReadRatio(server_trace):
+    data_path = '/mnt/nvme0n1/workloads/msr/MSR-Cambridge/{}.csv'.format(server_trace)
+    df = pd.read_csv(data_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
+    df_group_by_type = df.groupby('type')
+    df_read = df_group_by_type.get_group('Read')
+    print('count of read: ', len(df_read))
+    print('avg of size read: ', df_read['size'].mean())
+    df_group_by_disknumber_offset = df_read.groupby(['disknumber', 'offset'])
+    df_group_by_disknumber_offset_count = df_group_by_disknumber_offset.size().reset_index(name='counts')
+    df_group_by_disknumber_offset_count_sort = df_group_by_disknumber_offset_count.sort_values(by=['counts'], ascending=True)
+    num_row, num_col = df_group_by_disknumber_offset_count.shape
+    cdf_x = np.array(df_group_by_disknumber_offset_count_sort['counts'])
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='read:{}, key:{}'.format(len(df_group_by_disknumber_offset_count), 'all'))
+    plt.xlabel('write count')
+    plt.ylabel('cdf')
+    plt.legend()
+    save_path = 'msr_read_count_cdf_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+
+def GetOverwriteRatio():
+    df = pd.read_csv(data_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
+    df_group_by_type = df.groupby('type')
+    df_write = df_group_by_type.get_group('Write')
+    df_read = df_group_by_type.get_group('Read')
+    print('count of write: ', len(df_write))
+    print('count of read: ', len(df_read))
+    print('avg of size: ', df_write['size'].mean())
+    df_group_by_disknumber_offset = df_write.groupby(['disknumber', 'offset'])
+    df_group_by_disknumber_offset_count = df_group_by_disknumber_offset.size().reset_index(name='counts')
+    df_group_by_disknumber_offset_count_sort = df_group_by_disknumber_offset_count.sort_values(by=['counts'], ascending=True)
+    num_row, num_col = df_group_by_disknumber_offset_count.shape
+    cdf_x = np.array(df_group_by_disknumber_offset_count_sort['counts'])
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df_write), len(df_group_by_disknumber_offset_count)))
+    plt.xlabel('write count')
+    plt.ylabel('cdf')
+    plt.legend()
+    save_path = 'msr_write_cdf_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+    plt.figure()
+    df_group_by_disknumber_offset_count_sort_95 = df_group_by_disknumber_offset_count_sort.iloc[:int(num_row * 0.95)]
+    cdf_x = np.array(df_group_by_disknumber_offset_count_sort_95['counts'])
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df_write), len(df_group_by_disknumber_offset_count)))
+    plt.xlabel('write count')
+    plt.ylabel('cdf')
+    plt.legend()
+    save_path = 'msr_write_cdf_95_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+
+    df_write_size_sort = df_write.sort_values(by=['size'], ascending=True)
+    num_row, num_col = df_write_size_sort.shape
+    cdf_x = np.array(df_write_size_sort['size'])
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df_write), len(df_group_by_disknumber_offset_count)))
+    plt.xlabel('write size')
+    plt.ylabel('cdf')
+    plt.legend()
+    save_path = 'msr_write_size_cdf_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+
+    plt.figure()
+    df_write_95 = df_write_size_sort.iloc[:int(num_row * 0.95)]
+    num_row, num_col = df_write_95.shape
+    cdf_x = np.array(df_write_95['size'])
+    cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df_write), len(df_group_by_disknumber_offset_count)))
+    plt.xlabel('write size')
+    plt.ylabel('cdf')
+    plt.legend()
+    save_path = 'msr_write_size_cdf_95_{}.png'.format(server_trace)
+    plt.savefig(save_path)
+    plt.close()
+
+
+
+     
+
+
+    print('count of disknumber_offset: ', len(df_group_by_disknumber_offset))
+
+
+def ProcessAllTraces():
+    pool = mp.Pool(processes=3)
+    pool.map(GetReadRatio, server_traces)
+
+    pool.close()
+    pool.join()
+
+ProcessAllTraces()
+
+# GetLifetimeForWrite()
+# GetOverwriteRatio()
