@@ -31,7 +31,7 @@ edc_count = 10
 edc_columns = [edc_prefix + str(i) for i in range(0, edc_count)]
 delta_columns = [delta_prefix + str(i) for i in range(0, delta_count)]
 
-feature_columns = edc_columns + delta_columns
+feature_columns = edc_columns + delta_columns + ['pre_read_count']
 
 
 long_lifetime_threshold = 0.2 * 1e5
@@ -52,8 +52,8 @@ def train_model(data_file_path):
 
     # astype('category')
     # labels = data.iloc[:, 8]
-    labels = data.loc[:, 'lifetime'].shift(-1) > long_lifetime_threshold
-    # lbaels = labels.astype(int)
+    # labels = data.loc[:, 'lifetime'].shift(-1) > long_lifetime_threshold
+    labels = data.loc[:, 'lifetime_next'] > long_lifetime_threshold
     std_dev = np.std(labels)
     print('std_dev: ', std_dev)
     labels = pd.to_numeric(labels)
@@ -80,6 +80,9 @@ def train_model(data_file_path):
         'boosting_type': 'gbdt',
         'objective': 'binary',
         'metric': {'auc' },
+        'class_weight': 'balanced',
+        # 'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
         # 'metric': {'multi_logloss'},
         'num_leaves': 31,
         'learning_rate': 0.05,

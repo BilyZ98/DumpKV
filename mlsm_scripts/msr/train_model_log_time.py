@@ -1,4 +1,5 @@
 
+import pdb
 
 
 import lightgbm as lgb
@@ -51,17 +52,29 @@ def train_model(data_file_path):
 
     # astype('category')
     # labels = data.iloc[:, 8]
-    labels = data.loc[:, 'lifetime'].shift(-1)
-    print('pre len(labels): ', len(labels))
-    labels = labels.dropna(subset=['lifetime'])
-    print('after len(labels): ', len(labels))
+    labels = data.loc[:, 'lifetime_next']
+    # data[data == np.inf] = LARGE_FINITE_NUMBER
+    LARGE_FINITE_NUMBER = 1e40
+    labels = labels.replace([np.inf, -np.inf], LARGE_FINITE_NUMBER)
+    log_labels = np.log1p(labels)
+    de_duped_labels = log_labels.drop_duplicates()
+    de_duped_labels = de_duped_labels.sort_values()
+    filter_labels = labels.loc[labels < 1e10]
+    print('std_dev of filter_labels: ', np.std(filter_labels))
+    # pdb.set_trace()
 
 
     # lbaels = labels.astype(int)
     std_dev = np.std(labels)
-    print('std_dev: ', std_dev)
-    labels = pd.to_numeric(labels)
-    x_train, x_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=0)
+    print('std_dev of labels: ', std_dev)
+    std_dev_log = np.std(log_labels)
+    print('std_dev of log labels: ', std_dev_log)
+
+    
+
+    
+    # labels = pd.to_numeric(labels)
+    x_train, x_test, y_train, y_test = train_test_split(features, log_labels, test_size=0.2, random_state=0)
 
     # Create dataset for LightGBM
     lgb_train = lgb.Dataset(x_train, y_train)
@@ -82,11 +95,13 @@ def train_model(data_file_path):
     # }
     params = {
         'boosting_type': 'gbdt',
-        'objective': 'binary',
-        'metric': {'auc' },
+        'objective': 'regression',
+        'metric': {'l2' },
         # 'metric': {'multi_logloss'},
         'num_leaves': 31,
         'learning_rate': 0.05,
+        'feature_fraction': 0.9,
+        'bagging_fraction': 0.8,
         # 'num_class': 4,
         'feature_fraction': 0.9,
         'verbose': 10
@@ -111,7 +126,7 @@ def train_model(data_file_path):
         print(precision_score(y_test, y_pred, average='macro'))
         # save_model_name = "op_keys_multi_lifetime_lightgbm_classification_key_range_model.txt"
         save_model_name = output_model_name + "_multi.txt"
-    else:
+    elif params['objective'] == 'binary':
         
         y_pred = gbm.predict(x_test, num_iteration=gbm.best_iteration)
         print(classification_report(y_test, y_pred.round() ))
@@ -119,6 +134,24 @@ def train_model(data_file_path):
         # print(classification_report(y_test, y_pred))
         print(precision_score(y_test, y_pred.round(), average='macro'))
         save_model_name = output_model_name + "_binary.txt"
+    elif params['objective'] == 'regression':
+        y_pred = gbm.predict(x_test, num_iteration=gbm.best_iteration)
+        print("mean_squared_error: ", mean_squared_error(y_test, y_pred) ** 0.5)
+        y_pred_orig = np.expm1(y_pred)
+        y_test_orig = np.expm1(y_test)
+        print("mean_squared_error orig: ", mean_squared_error(y_test_orig, y_pred_orig) ** 0.5)
+        y_test_orig = y_test_orig.reset_index(drop=True)
+        filter_y_test = y_test_orig[y_test_orig < 1e10]
+        filter_y_test_indexes = filter_y_test.index.tolist()
+        filter_y_pred = y_pred_orig[filter_y_test_indexes]
+        assert len(filter_y_test) == len(filter_y_pred)
+
+
+        print("mean_squared_error orig filter: ", mean_squared_error(filter_y_test, filter_y_pred) ** 0.5)
+        save_model_name = output_model_name + "_regression.txt"
+    else:
+        print('objective is not supported')
+        return
 
     # print('The rmse of prediction is:', mean_squared_error(y_test, y_pred) ** 0.5)
 
