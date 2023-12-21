@@ -3803,3 +3803,326 @@ each category blob files are GCed when they are expired.
 Generated data file with keys write count is bigger than 1 this is biased.
 Need to gnerate another file with all write accesses. I will make those one 
 write access key as long lifetime key.
+
+
+Train model with dataset in which keys have at lest two writes.
+msr prn_0  binary classification
+metric: auc
+```
+
+[LightGBM] [Debug] Trained a tree with leaves = 31 and depth = 12
+[LightGBM] [Debug] Trained a tree with leaves = 31 and depth = 10
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.93      0.99      0.96    787787
+        True       0.72      0.34      0.47     85914
+
+    accuracy                           0.92    873701
+   macro avg       0.83      0.66      0.71    873701
+weighted avg       0.91      0.92      0.91    873701
+
+0.8270840041098789
+```
+adjust class_weight to balanced , no change to results score 
+metric: auc
+```
+[LightGBM] [Debug] Trained a tree with leaves = 31 and depth = 10
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.93      0.99      0.96    787787
+        True       0.72      0.34      0.47     85914
+
+    accuracy                           0.92    873701
+   macro avg       0.83      0.66      0.71    873701
+weighted avg       0.91      0.92      0.91    873701
+
+0.8270840041098789
+```
+
+Change scale_pos_weight to 9. precision drops.
+```
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'auc' },
+        # 'class_weight': 'balanced',
+        'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
+        # 'metric': {'multi_logloss'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        # 'num_class': 4,
+        'feature_fraction': 0.9,
+        'verbose': 10
+
+    }
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.99      0.75      0.85    787787
+        True       0.28      0.90      0.43     85914
+
+    accuracy                           0.76    873701
+   macro avg       0.63      0.82      0.64    873701
+weighted avg       0.92      0.76      0.81    873701
+
+0.6333894510161541
+```
+
+
+```
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'binary_logloss' },
+        # 'class_weight': 'balanced',
+        'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
+        # 'metric': {'multi_logloss'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        # 'num_class': 4,
+        'feature_fraction': 0.9,
+        'verbose': 10
+
+    }
+[LightGBM] [Debug] Trained a tree with leaves = 31 and depth = 14
+Starting predicting...
+         precision    recall  f1-score   support
+
+       False       0.99      0.75      0.85    787787
+        True       0.28      0.90      0.43     85914
+
+    accuracy                           0.76    873701
+   macro avg       0.63      0.82      0.64    873701
+weighted avg       0.92      0.76      0.81    873701
+
+0.6333894510161541
+```
+
+```
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'binary_logloss' },
+        # 'class_weight': 'balanced',
+        # 'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
+        # 'metric': {'multi_logloss'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        # 'num_class': 4,
+        'feature_fraction': 0.9,
+        'verbose': 10
+
+    }
+
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.93      0.99      0.96    787787
+        True       0.72      0.34      0.47     85914
+
+    accuracy                           0.92    873701
+   macro avg       0.83      0.66      0.71    873701
+weighted avg       0.91      0.92      0.91    873701
+
+0.8270840041098789
+
+```
+
+Try combination of all meta params to train models.
+Don't think I need to train with more params because 
+amount of data is small.
+
+I will try to add more features to training data.
+And then I will train model. After that  I will integrate this 
+model into rocksdb and see what is  wamp and space amp .
+
+
+[Todo]
+Chage train target to regression. 
+
+mean square error of log lifetime label
+```
+Starting predicting...
+mean_squared_error:  25.130439360393265
+```
+
+filter rows whose liftime is longer than 1e10
+This does not really help. Let's integrate this model into rocksdb
+and see what will happen.
+```
+mean_squared_error:  25.130439360393265
+mean_squared_error orig:  3.516151516217961e+39
+mean_squared_error orig filter:  8.663232997948649e+30
+```
+mean_filter_y_pred shows significant deviation from mean_filter_y_test.
+Is there some bug in code that causes this?
+I am not sure. 
+I will integrate model into rocksdb now.
+```
+mean_squared_error:  3.8821685264259616
+mean_squared_error orig:  416551.7144696365
+mean_filter_y_test:  154525.92445634614
+std_dev_filter_y_test:  391516.58894319227
+mean_filter_y_pred:  3851.075198892032
+std_dev_filter_y_pred:  16569.78845839742
+mean_squared_error orig filter:  416551.7144696365
+```
+[Status: Done]
+
+[Todo]
+Add read delta and edcs to features. 
+[Status: Not started]
+
+
+Train model on full data including keys with one writw and at least two writes.
+acc is lower for short term keys but higher for long term keys.
+```
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'auc' },
+        'class_weight': 'balanced',
+        # 'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
+        # 'metric': {'multi_logloss'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        # 'num_class': 4,
+        'feature_fraction': 0.9,
+        'verbose': 10
+
+    }
+
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.90      0.90      0.90    787263
+        True       0.61      0.62      0.62    209419
+
+    accuracy                           0.84    996682
+   macro avg       0.76      0.76      0.76    996682
+weighted avg       0.84      0.84      0.84    996682
+
+0.755314872887799
+```
+
+
+Want to set up k8s cluster but didn't make my time to do that.
+
+
+[Todo]
+Train binary model with pre_read_count extra feature
+no improvement compared  to that without this this pre_read_count column.
+Will add edcs and deltas of previous row with read to each write row.
+```
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'auc' },
+        'class_weight': 'balanced',
+        # 'scale_pos_weight': float(9),
+        # 'class_weight': {0:9, 1:1},
+        # 'metric': {'multi_logloss'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        # 'num_class': 4,
+        'feature_fraction': 0.9,
+        'verbose': 10
+
+    }
+
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.90      0.90      0.90    787263
+        True       0.61      0.62      0.62    209419
+
+    accuracy                           0.84    996682
+   macro avg       0.76      0.76      0.76    996682
+weighted avg       0.84      0.84      0.84    996682
+
+0.755533092738467
+```
+[Status: Done]
+
+
+[Todo]
+Test impact of number of features to model performance.
+[Status: Not started]
+
+
+[Todo]
+ Add edcs and deltas of previous row with read to each write row.
+[Status: Not started]
+
+
+
+Adjust large_finite_number from 1e40 to 2 * larget_seen lifetime in dataset 
+to reduce large number impact on the model training.
+
+[Todo]
+Add value size to training data.
+[Status: Not started]
+
+
+How many data does LRB use to train model and test? 
+LRB trains model again after it accumulates 128k samples.
+
+I need to design a way to label key lifetime as well. This will be contribution
+of my paper as well
+
+
+I need to train model on traces that can be replayed in one hour for testing now.
+I will do ycsb or mixgraph now want to adjust the skewness of the distribution.
+
+[Todo]
+Set dist_a and dist_b params to adjust skewness of mixgraph workload 
+and run workload.
+
+Actually I can just run key gen function to see how key distribution is for
+different key distribution params.
+small value of dist_a and dist_b make key distribution less skewed.
+I will set dist_a = dist_b = 0.1
+```
+byteorder: little
+bytearray(b'\x00\x00\x00\x00\x00\x00\xdc\\aaaaaaaa'): 9988
+bytearray(b'\x00\x00\x00\x00\x00\x00\xc1\taaaaaaaa'): 755
+bytearray(b'\x00\x00\x00\x00\x00\x01b\xb6aaaaaaaa'): 453
+bytearray(b'\x00\x00\x00\x00\x00\x01Gcaaaaaaaa'): 315
+bytearray(b'\x00\x00\x00\x00\x00\x01,\x10aaaaaaaa'): 255
+bytearray(b'\x00\x00\x00\x00\x00\x00G\x1daaaaaaaa'): 228
+bytearray(b'\x00\x00\x00\x00\x00\x00+\xcaaaaaaaaa'): 191
+bytearray(b'\x00\x00\x00\x00\x00\x00\x10waaaaaaaa'): 177
+bytearray(b'\x00\x00\x00\x00\x00\x00\xb2$aaaaaaaa'): 155
+bytearray(b'\x00\x00\x00\x00\x00\x00{~aaaaaaaa'): 121
+bytearray(b'\x00\x00\x00\x00\x00\x00\x96\xd1aaaaaaaa'): 119
+bytearray(b'\x00\x00\x00\x00\x00\x01\x01\xd8aaaaaaaa'): 117
+bytearray(b'\x00\x00\x00\x00\x00\x00\xe6\x85aaaaaaaa'): 109
+bytearray(b'\x00\x00\x00\x00\x00\x01\x1d+aaaaaaaa'): 108
+bytearray(b'\x00\x00\x00\x00\x00\x01l\xdfaaaaaaaa'): 86
+bytearray(b'\x00\x00\x00\x00\x00\x01Q\x8caaaaaaaa'): 79
+bytearray(b'\x00\x00\x00\x00\x00\x00l\x99aaaaaaaa'): 75
+bytearray(b'\x00\x00\x00\x00\x00\x00\x01\x92aaaaaaaa'): 71
+bytearray(b'\x00\x00\x00\x00\x00\x00QFaaaaaaaa'): 68
+bytearray(b'\x00\x00\x00\x00\x00\x00\xd7\xa0aaaaaaaa'): 68
+bytearray(b'\x00\x00\x00\x00\x00\x00\xbcMaaaaaaaa'): 67
+bytearray(b'\x00\x00\x00\x00\x00\x01B\xa7aaaaaaaa'): 64
+```
+[Status: Done]
+
+
+[Todo]
+Train model on mixgraph trace and see the results.
+
+[Status: Ongoing]
+
+
+[Todo]
+reply trace of mixgraph and test model performance
+[Status: Not started]
+

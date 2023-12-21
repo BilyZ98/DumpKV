@@ -54,12 +54,14 @@ def train_model(data_file_path):
     # labels = data.iloc[:, 8]
     labels = data.loc[:, 'lifetime_next']
     # data[data == np.inf] = LARGE_FINITE_NUMBER
-    LARGE_FINITE_NUMBER = 1e40
-    labels = labels.replace([np.inf, -np.inf], LARGE_FINITE_NUMBER)
-    log_labels = np.log1p(labels)
-    de_duped_labels = log_labels.drop_duplicates()
+    de_duped_labels = labels.drop_duplicates()
     de_duped_labels = de_duped_labels.sort_values()
-    filter_labels = labels.loc[labels < 1e10]
+    sec_large = de_duped_labels.iloc[-2]
+    LARGE_FINITE_NUMBER = 2 * sec_large
+    labels = labels.replace([np.inf], LARGE_FINITE_NUMBER)
+
+    log_labels = np.log1p(labels)
+    filter_labels = labels.loc[labels < sec_large]
     print('std_dev of filter_labels: ', np.std(filter_labels))
     # pdb.set_trace()
 
@@ -141,13 +143,14 @@ def train_model(data_file_path):
         y_test_orig = np.expm1(y_test)
         print("mean_squared_error orig: ", mean_squared_error(y_test_orig, y_pred_orig) ** 0.5)
         y_test_orig = y_test_orig.reset_index(drop=True)
-        filter_y_test = y_test_orig[y_test_orig < 1e10]
-        filter_y_test_indexes = filter_y_test.index.tolist()
-        filter_y_pred = y_pred_orig[filter_y_test_indexes]
-        assert len(filter_y_test) == len(filter_y_pred)
+
+        print('mean y_test_orig: ', np.mean(y_test_orig))
+        print('std_dev y_test_orig: ', np.std(y_test_orig))
+        print('mean y_pred_orig: ', np.mean(y_pred_orig))
+        print('std_dev y_pred_orig: ', np.std(y_pred_orig))
 
 
-        print("mean_squared_error orig filter: ", mean_squared_error(filter_y_test, filter_y_pred) ** 0.5)
+
         save_model_name = output_model_name + "_regression.txt"
     else:
         print('objective is not supported')
