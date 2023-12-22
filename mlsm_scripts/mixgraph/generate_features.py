@@ -151,18 +151,17 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     # df_group_by_disknumber_offset = df_group_by_disknumber_offset.sort_values(by=['timestamp'])
     # df_group_by_disknumber_offset = df_group_by_disknumber_offset.reset_index(drop=True)
 
-    df_group_by_disknumber_offset['unix_timestamp'] = df_group_by_disknumber_offset['timestamp'].apply(windows_file_time_to_unix)
-    # # df_group_by_disknumber_offset['unix_timestamp'] = df_group_by_disknumber_offset['timestamp'].apply_parallel(data_frame_windows_file_time_to_unix)
 
     # df_group_by_disknumber_offset['prev_timestamp'] = df_group_by_disknumber_offset['unix_timestamp'].shift(1)
     # df_group_by_disknumber_offset['latter_timestamp'] = df_group_by_disknumber_offset['unix_timestamp'].shift(-1)
     # df_group_by_disknumber_offset['lifetime'] = df_group_by_disknumber_offset['unix_timestamp'] - df_group_by_disknumber_offset['prev_timestamp']
     # df_group_by_disknumber_offset['lifetime_next'] = df_group_by_disknumber_offset['latter_timestamp'] - df_group_by_disknumber_offset['unix_timestamp']
-    df_group_by_type = df_group_by_disknumber_offset.groupby('type')
+    df_group_by_type = df_group_by_disknumber_offset.groupby('op_type')
+    write_group_name = '1'
 
-    if 'Write' not in df_group_by_type.groups:
+    if write_group_name not in df_group_by_type.groups:
         return
-    df_group_write = df_group_by_type.get_group('Write')
+    df_group_write = df_group_by_type.get_group(write_group_name)
     # df_group_read = df_group_by_type.get_group('Read')
     # df_group_write = df_group_by_disknumber_offset.get_group('Write')
     # df_group_read['prev_timestamp'] = df_group_read['unix_timestamp'].shift(1)
@@ -170,7 +169,7 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     # df_group_read['lifetime'] = df_group_read['unix_timestamp'] - df_group_read['prev_timestamp']
     # df_group_read['lifetime_next'] = df_group_read['latter_timestamp'] - df_group_read['unix_timestamp']
 
-    df_group_write['prev_timestamp'] = df_group_write['unix_timestamp'].shift(1)
+    df_group_write['prev_timestamp'] = df_group_write['timestamp'].shift(1)
     df_group_write['latter_timestamp'] = df_group_write['unix_timestamp'].shift(-1)
     df_group_write['lifetime'] = df_group_write['unix_timestamp'] - df_group_write['prev_timestamp']
     df_group_write['lifetime_next'] = df_group_write['latter_timestamp'] - df_group_write['unix_timestamp']
@@ -189,11 +188,6 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     with open(output_path, 'a') as f:
         df_group_to_write_without_last_row = df_group_write.iloc[:-1]
         df_group_to_write_without_last_row.to_csv(f, index=False, header=f.tell()==0)
-    # if cur_counter == 1:
-    #     df_group_by_disknumber_offset.to_csv(output_path, index=False)
-    #     print('key:', df_group_by_disknumber_offset['offset'].loc[0], df_group_by_disknumber_offset.iloc[0])
-    # else:
-    #     df_group_by_disknumber_offset.to_csv(output_path, index=False,  mode='a', header=False)
 
     return df_group_write
 
@@ -203,10 +197,10 @@ def GenerateFeatures(server_trace):
     cur_path = server_trace
 
     # [key, op_type, cf_id, value_size, timestamp, seq, write_rate]
-    df = pd.read_csv(cur_path, header=None, names=['key'])
+    df = pd.read_csv(cur_path, header=None, names=['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate'])
     # df = pd.read_csv(cur_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
 
-    group_by_columns = [ 'disknumber', 'offset']
+    group_by_columns = [ 'key']
     # df_group_by_type = df.groupby(['type'])
     # df_write = df_group_by_type.get_group('Write')
     # df_group_by_disknumber_offset = df_group_by_type.groupby(['disknumber', 'offset'])
