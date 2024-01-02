@@ -1,8 +1,9 @@
 
+import dask
 import dask.dataframe as dd
 
 
-# import pandas as pd
+import pandas as pd
 import pdb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,12 +12,13 @@ import sys
 import bisect
 import multiprocessing as mp
 import time
+from dask.multiprocessing import get
 from multiprocesspandas import applyparallel
+from dask.distributed import Client, LocalCluster
 
 
-
-data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/trace-human_readable_trace.txt"
-output_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/feat_output/features_{}.csv"
+data_path = "/mnt/nvme/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/trace-human_readable_trace.txt"
+output_path = "/mnt/nvme/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/feat_output/features1_{}.csv"
 # output_path = '/mnt/nvme0n1/workloads/msr/MSR-Cambridge/{}_read_write__lifetime.csv'
 max_hash_edc_idx = 65535
 base_edc_window = 10
@@ -107,7 +109,7 @@ def GetEDC(df_group_by_disknumber_offset):
     edc_column_idxs = []
     for edc_column in edc_columns:
         # df_group_by_disknumber_offset[edc_column] = 0
-        df_group_by_disknumber_offset.loc[:, edc_column] = 0
+        df_group_by_disknumber_offset.loc[:, edc_column] = float(0.0)
         # df_group_by_disknumber_offset.loc[:, edc_column] = df_group_by_disknumber_offset.loc[:, edc_column].astype(np.float64)
         edc_column_idxs.append(df_group_by_disknumber_offset.columns.get_loc(edc_column))
 
@@ -148,11 +150,12 @@ def GetEDC(df_group_by_disknumber_offset):
     
 
 # rocksdb trace timestamp is micros I think
-def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
+def ApplyGetLifetime(df_group_by_disknumber_offset, output_path, all_output_path):
 
 
     
     # pdb.set_trace()
+    #print('columns name ', df_group_by_disknumber_offset)
     df_group_by_disknumber_offset = df_group_by_disknumber_offset.reset_index(drop=True)
     df_group_by_disknumber_offset = df_group_by_disknumber_offset.reset_index()
     # df_group_by_disknumber_offset = df_group_by_disknumber_offset.sort_values(by=['timestamp'])
@@ -183,7 +186,8 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     df_group_write['latter_timestamp'] = df_group_write['timestamp'].shift(-1)
     df_group_write['lifetime'] = df_group_write['timestamp'] - df_group_write['prev_timestamp']
     df_group_write['lifetime_next'] = df_group_write['latter_timestamp'] - df_group_write['timestamp']
-    df_group_write['pre_read_count'] = df_group_write['index'] - df_group_write['index'].shift(1).fillna(0) - 1
+    df_group_write['pre_read_count'] = df_group_write['index'] - df_group_write['index'].shift(1) - 1
+    df_group_write['pre_read_count'] = df_group_write['pre_read_count'].fillna(0)
 
 
     # df_group_read = df_group_read.apply(ApplyGetEDC)
@@ -201,16 +205,21 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
         df_group_to_write_without_last_row = df_group_write.iloc[:-1]
         df_group_to_write_without_last_row.to_csv(f, index=False, header=f.tell()==0)
 
-    return df_group_write
+    with open(all_output_path, 'a') as f:
+        df_group_write.to_csv(f, index=False, header=f.tell()==0)
+    return None
+    #return df_group_write
 
 
 def GenerateFeatures(server_trace ):
     # cur_path =  data_path.format(server_trace)
+    #cluster = LocalCluster(n_workers=3, threads_per_worker=1, memory_limit='64GB')
+    #client = Client(cluster)
     cur_path = server_trace
 
     # [key, op_type, cf_id, value_size, timestamp, seq, write_rate]
     df = dd.read_csv(cur_path, sep=' ',header=None, names=['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate'])
-    df = df.repartition(npartitions=40)
+    df = df.repartition(npartitions=1)
     # df = pd.read_csv(cur_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
     # df = df.head(1000)
     print('df', df)
@@ -220,7 +229,7 @@ def GenerateFeatures(server_trace ):
     # df_write = df_group_by_type.get_group('Write')
     # df_group_by_disknumber_offset = df_group_by_type.groupby(['disknumber', 'offset'])
     df_group_by_disknumber_offset = df.groupby(group_by_columns)
-    #applyparallel
+
 
     trace_output_path = output_path.format( 'with_at_least_2_write')
     all_trace_output_path = output_path.format( 'all')
@@ -233,14 +242,22 @@ def GenerateFeatures(server_trace ):
 
     with open(trace_output_path, 'w') as f:
         f.truncate(0)
-    # df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
-    df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, output_path=trace_output_path )
-    # df_concat =  pd.concat(df_return)
-    print('type of df_return: ', type(df_return))
 
-    print('head of df_return: ', df_return.head(), 'len of df_return: ', len(df_return) )
-    df_return.to_csv(all_trace_output_path, index=False)
+    with open(all_trace_output_path, 'w') as f:
+        f.truncate(0)
+    #df_return = df_group_by_disknumber_offset.map_partitions(lambda df: df.apply( ApplyGetLifetime, output_path=trace_output_path)).compute(scheduler='threads') 
+    #df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
+
+    with dask.config.set(scheduler='threads', num_workers=40, memory_limit='64GB'):
+        df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, output_path=trace_output_path, all_output_path=all_trace_output_path).compute()
+        # df_concat =  pd.concat(df_return)
+        print('type of df_return: ', type(df_return))
+
+        print('head of df_return: ', df_return.head(), 'len of df_return: ', len(df_return) )
+        #df_return.to_csv(all_trace_output_path, index=False)
     # df_concat.to_csv(output_path.format(server_trace), index=False)
+    #client.close()
+    #cluster.close()
 
 
 if __name__ == '__main__': 
