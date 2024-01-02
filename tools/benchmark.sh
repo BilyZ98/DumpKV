@@ -179,6 +179,8 @@ compression_type=${COMPRESSION_TYPE:-zstd}
 min_level_to_compress=${MIN_LEVEL_TO_COMPRESS:-"-1"}
 compression_size_percent=${COMPRESSION_SIZE_PERCENT:-"-1"}
 
+model_path=${MODEL_PATH:-""}
+features_file_path=${FEATURES_FILE_PATH:-""}
 
 compaction_trace_file=${COMPACTION_TRACE_FILE:-""}
 op_trace_file=${OP_TRACE_FILE:-""}
@@ -1081,6 +1083,8 @@ function run_change_with_replay {
   time_cmd=$( get_cmd $log_file_name.time )
 # gdb --args
 # --seed=$( date +%s ) \
+  local num_features=21
+  local num_classes=2
   cmd="$time_cmd    gdb --args  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
@@ -1090,6 +1094,10 @@ function run_change_with_replay {
        --report_file=${log_file_name}.r.csv \
        --trace_file=${op_trace_file_name} \
        --compaction_trace_file=${compaction_trace_file} \
+       --model_path=${model_path} \
+       --features_data_file_path=${features_file_path} \
+       --num_features=${num_features} \
+       --num_classes=${num_classes} \
        2>&1 | tee -a $log_file_name"
   if [[ "$job_id" != "" ]]; then
     echo "Job ID: ${job_id}" > $log_file_name

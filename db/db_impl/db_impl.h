@@ -1285,6 +1285,7 @@ class DBImpl : public DB {
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
   BoosterHandle lightgbm_handle_;
+  std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
   FastConfigHandle lightgbm_fastConfig_ ;
   // Need to allocate memory for keys 
   // Call AllocateKey?
@@ -1471,6 +1472,7 @@ class DBImpl : public DB {
   //   uint64_t timestamp;
 
   // };
+  Status ReadFeaturesFromFile(const std::string &file_path);
   Status LoadModel(std::string file_path) ;
   // Whether the batch requires to be assigned with an order
   enum AssignOrder : bool { kDontAssignOrder, kDoAssignOrder };

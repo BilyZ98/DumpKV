@@ -292,6 +292,8 @@ CompactionIterator(
   void SetMemTables(const autovector<MemTable*>* mems);
 
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
+  void SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
+
 
   // Getters
   const Slice& key() const { return key_; }
@@ -330,6 +332,12 @@ CompactionIterator(
   // blob file (i.e. if it passed the value size check). Returns true if the
   // value got extracted to a blob file, false otherwise.
   bool ExtractLargeValueIfNeededImpl();
+
+
+
+  bool GetFeatures( std::vector<double>* features);
+
+
 
   // Extracts large values as described above, and updates the internal key's
   // type to kTypeBlobIndex if the value got extracted. Should only be called
@@ -393,6 +401,7 @@ CompactionIterator(
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+  const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   BoosterHandle booster_handle_ =nullptr;
   FastConfigHandle fast_config_handle_ =nullptr;
   const autovector<MemTable*>* mems_;

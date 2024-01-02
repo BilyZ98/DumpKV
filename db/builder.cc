@@ -238,6 +238,7 @@ Status BuildTable(
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
+    c_iter.SetFeatures(tboptions.features);
     // c_iter.SetModel(tboptions.booster_handle);
     // c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
     // c_iter.SetMemTables(imm_memtables);

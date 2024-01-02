@@ -4116,13 +4116,344 @@ bytearray(b'\x00\x00\x00\x00\x00\x01B\xa7aaaaaaaa'): 64
 [Status: Done]
 
 
+
+
+
+[Todo]
+Fix bug about free invalid pointer error when deleting merging iterator.
+Free invalid pointer still occurs when we try to delete the internal iterator
+immediately after it's created.
+
+so we can track down the creation code to see what's wrong.
+Turns out we should not call delete directly.
+Memory of internal iterator is managed by Arena class. 
+We should just call destructor of iterator.
+[Status: Done]
+
+
+[Todo]
+Look for parallel apply in dask framework
+```
+ddf = dd.from_pandas(df, npartitions=2)
+res = ddf.apply(myadd, axis=1, args=(2,), b=1.5, meta=('x', 'f8'))
+```
+Will try 30 npartitions
+parallel apply is still slow compared to purememory computation in pandas
+set num_workers=40 to have more threads
+[Status: Done]
+
+
+[Todo]
+Get lifetime distribution for keys in mixgraph workload trace.
+Use dask in k8s.
+Have problem with dask framework.
+This is so troublesome to use this framework.
+
+Restart containerd service with aliyun mirror.
+Steps
+edit containerd config
+```
+sudo vim /etc/containerd/config.toml
+update registry path to aliyun path.
+```
+
+Try run local cluster with simple script.
+Then I can run complex script in loca cluster .
+Can not connect to scheduler pod in k8s
+I can do distributed computing in local cluster but cannot do that 
+in k8s environment
+Reaized that I can just write data to file instead of returning data after 
+applying. Now my code doesn't use all memory on the system.
+But again, I can't start dask k8s cluster to submit job.
+It takes 10 hours to finish feature generation script
+Why is it so long ? 
+```
+
+real    619m37.584s
+user    617m47.719s
+sys     2m13.993s
+```
+[Status: Ongoing]
+
 [Todo]
 Train model on mixgraph trace and see the results.
+number of keys in mixgraph 20M keys
+```
+➜  with_gc_1.0_0.8 cut -d ' ' -f 1,1  ./trace-human_readable_trace.txt | sort | uniq -c | wc -l
+7561374
+```
+Binary classification results for data with at least two writes.
+Recall rate is super low. This is not good.
+```
+Starting predicting...
+              precision    recall  f1-score   support
+
+       False       0.79      1.00      0.88    958223
+        True       0.54      0.02      0.03    251970
+
+    accuracy                           0.79   1210193
+   macro avg       0.67      0.51      0.46   1210193
+weighted avg       0.74      0.79      0.71   1210193
+
+0.6659587378395888
+```
+Num of keys:  1872849 
+Num of write: 6050963
+
+Precision score increases to 0.88 after adding 
+keys with one write .
+Lots of keys are written only once.
+Num of keys: 3981727  
+Num of writes: 10001654
+This is weird. Num of writes is 4M more than that 
+in data with at least two writes.
+This is correct because it's not that keys in at least 
+two write file contains all writes of those keys.
+I discard the last writes of those keys
+```
+              precision    recall  f1-score   support
+
+       False       0.96      0.69      0.81    847793
+        True       0.81      0.98      0.89   1152538
+
+    accuracy                           0.86   2000331
+   macro avg       0.89      0.84      0.85   2000331
+weighted avg       0.88      0.86      0.85   2000331
+
+0.8868538795333816
+```
+
+
+[Status: Done]
+
+
+[Todo]
+reply trace of mixgraph and test model performance
+check replay to see how rocksdb convert hex format key to slice format key
+I think it calls hextostring() to achieve that.
+One problem occurs that how can I store past data and get features such 
+as edcs and deltas. How can I calculate features in the flight ?
+One naive solution is to store all data in memory and calculate them 
+once we do flush.
+How does lrb solve this problem?
+I think we can allocate some amount of memory and do sampling to 
+accumulate traning data. 
+This is similar to time-series lsm-tree engine looks like.
+We are making assumptions like short lifetime keys have similar 
+edcs and deltas.
+It's hard to directly load file into memory can index edcs for each key 
+because you need to iterating and index key from the file.
+
+I can load the feature file into memory and get feature related to key
+from file with key and seq number.
+
 
 [Status: Ongoing]
 
 
 [Todo]
-reply trace of mixgraph and test model performance
+Submit pr to fix the hextostring bug in rocksdb 
 [Status: Not started]
 
+[Todo]
+Add flags environment variable to db_bench so that 
+model path can be passed by shell running.
+[Statsu: Done]
+
+
+[Todo]
+Find out where are booster_handle is set in db_options so that it 
+is passed to compaciton iterator in compaction job.
+I don't set booster_handle in db_options because I don't use 
+that model in compaction job. 
+
+Set booster_handle in flush_job
+
+db_impl_compaction_flush.cc
+```
+
+    flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+```
+
+flush_job.cc
+```
+          job_context_->GetJobSnapshotSequence();
+      tboptions.compaction_tracer = compaction_tracer_;
+      tboptions.booster_handle = booster_handle_;
+      tboptions.lifetime_bucket_num = db_options_.num_classification;
+      tboptions.booster_fast_config_handle = fast_config_handle_;
+      tboptions.cfd = cfd_;
+      s = BuildTable(
+```
+[Status: Done]
+
+
+
+[Todo]
+Figure out replay code logcis and see if hex key is used in replay
+replayer_impl.cc:117
+```
+
+
+        if (options.num_threads <= 1) {
+    // num_threads == 0 or num_threads == 1 uses single thread.
+    std::chrono::system_clock::time_point replay_epoch =
+        std::chrono::system_clock::now();
+
+    while (s.ok()) {
+      Trace trace;
+      s = ReadTrace(&trace);
+      // If already at trace end, ReadTrace should return Status::Incomplete().
+      if (!s.ok()) {
+        break;
+      }
+
+
+```
+
+trace_replay.cc: 393
+```
+Status Tracer::WriteWithStartSequence(WriteBatch *write_batch, uint64_t start_seq, uint64_t write_rate) {
+  TraceType trace_type = kTraceWriteWithStartSequence;
+  if (ShouldSkipTrace(trace_type)) {
+    return Status::OK();
+  }
+  Trace trace;
+  trace.ts = clock_->NowMicros();
+  trace.type = trace_type;
+  TracerHelper::SetPayloadMap(trace.payload_map,
+                                  TracePayloadType::kWriteBatchStartSequence);
+  PutFixed64(&trace.payload, trace.payload_map);
+  PutFixed64(&trace.payload, start_seq);
+  PutFixed64(&trace.payload, write_rate);
+  // fprintf(stdout, "write rate is %lu\n", write_rate);
+  PutLengthPrefixedSlice(&trace.payload, Slice(write_batch->Data()));
+
+  return WriteTrace(trace);
+}
+```
+
+```
+
+Status ReplayerImpl::ReadTrace(Trace* trace) {
+  return TracerHelper::DecodeTrace(encoded_trace, trace); // ts, type, payload
+
+Status TracerHelper::DecodeTraceRecord(Trace* trace, int trace_file_version,
+        GetFixed64(&buf, &trace->payload_map);
+        GetFixed64(&buf, &start_sequence);
+        GetFixed64(&buf, &write_rate_mb_per_sec);
+        int64_t payload_map = static_cast<int64_t>(trace->payload_map);
+        Slice write_batch_data;
+        while(payload_map) {
+          uint32_t set_pos = static_cast<uint32_t>(log2(payload_map & -payload_map));
+          switch(set_pos) {
+            case TracePayloadType::kWriteBatchStartSequence: {
+              GetLengthPrefixedSlice(&buf, &write_batch_data);
+ 
+```
+
+
+So trace is written into trace file in ascii format.
+hex format is written to human-readable trace file
+[Status: Done]
+
+
+
+[Todo]
+Fix seq number writing bug.
+This means that I need to regenerate features data  file.
+Maybe I can just current file and get the key whose key is close
+to the one used in compaction process.
+ToString(hex=true)
+```
+// Return a string that contains the copy of the referenced data.
+std::string Slice::ToString(bool hex) const {
+  std::string result;  // RVO/NRVO/move
+  if (hex) {
+    result.reserve(2 * size_);
+    for (size_t i = 0; i < size_; ++i) {
+      unsigned char c = data_[i];
+      result.push_back(toHex(c >> 4));
+      result.push_back(toHex(c & 0xf));
+    }
+    return result;
+  } else {
+    result.assign(data_, size_);
+    return result;
+  }
+}
+```
+stringtohex
+```
+std::string LDBCommand::StringToHex(const std::string& str) {
+  std::string result("0x");
+  result.append(Slice(str).ToString(true));
+  return result;
+}
+
+
+```
+
+Turns out that I use the wrong trace file to replay.
+[Status: Done]
+
+
+[Todo]
+Where is ttl is defined?
+Need to update this as well.
+It's in compaction_iterator.cc
+```
+namespace ROCKSDB_NAMESPACE {
+const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
+  {0, 281},
+  {1, 1000}
+};
+// const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
+//   {0, 1},
+//   {1, 10},
+//   {2, 100},
+//   {3, 1000}
+// };
+
+// const std::vector<uint64_t> LifetimeSecs = { 1, 10 , 100, 1000};
+const std::vector<uint64_t> LifetimeSecs = { 281, 1000};
+
+
+```
+[Status: Done]
+
+
+[Todo]
+with_model
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
+0               158MB   4GB     7.7     1.8     4.1     1871    1759    33      6       1778574766.01918    0.0     0       2.9     0.2     64.0    replay.t1.s1    2024-01-1T15:46:37      8.0.0      1aacaadf6a       0.5
+```
+no_model 1.0_0.8
+```
+
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
+11245   1.2     158MB   4GB     28.1    4.4     16.2    804     802     21      27      88.9    140.9       284     536     2506    57160643251     1778    0.0     0       1.7     0.2     1.7     mixgraph.t1.s1      2023-12-20T17:37:09     8.0.0           fde21a6fe3      0.6
+```
+
+with_model with adjusted features num(inf -> uint64_t:max) and adjusted ttl for feach blob file(50->281, 100->1000)
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
+0               159MB   4GB     7.8     1.8     4.2     1818    1731    34      6       1778590275.01914    0.0     0       2.8     0.2     64.1    replay.t1.s1    2024-01-1T21:54:22      8.0.0      1aacaadf6a       0.5
+```
+There are more b_rgb than that in standard rocksdb ? why is that?
+b_wgb is much lower than that in standard rocksdb . why is that ? 
+c_mbps is very low. Is this because we need get features for each key?
+This might be the problem.
+
+[Todo]
+Need to update conversion code to turn 'inf' to a inf in uint64_t max
+Currently there is very low number of keys are labelled as long.
+The expriment shows that there are very low number of keys are labelled as long 
+lifetime which is what we expect.
+[Status: Done]
+
+
+Select blob files to do compaction , and then do a read during garbage collection
+process to test the validity of the valud and decide if the value should be
+written back to rocksdb or not.

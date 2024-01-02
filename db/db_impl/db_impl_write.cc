@@ -7,6 +7,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include <cinttypes>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+
+
 
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "db/db_impl/db_impl.h"
@@ -716,6 +722,74 @@ int DBImpl::GetKeyRangeId(const Slice& key) const {
   return dist;
 
 }
+
+std::vector<std::string> readCSVRow(const std::string &row) {
+    std::stringstream ss(row);
+    std::vector<std::string> result;
+    std::string value;
+
+    while (std::getline(ss, value, ',')) {
+        result.push_back(value);
+    }
+
+    return result;
+}
+
+std::vector<std::vector<std::string>> readCSV(const std::string &filename) {
+    std::ifstream file(filename);
+    std::vector<std::vector<std::string>> data;
+    std::string row;
+
+    while (std::getline(file, row)) {
+        data.push_back(readCSVRow(row));
+    }
+
+    return data;
+}
+
+Status DBImpl::ReadFeaturesFromFile(const std::string &file_path) {
+    std::ifstream file(file_path);
+    std::vector<std::vector<std::string>> data;
+    std::string row;
+    // std::vector<uint64_t> feat_col_indexes = { 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 };
+    uint64_t col_start_idx = 13;
+    uint64_t row_idx = 0;
+    uint64_t max_uint64 = std::numeric_limits<uint64_t>::max();
+    std::string inf_key = "inf";
+    uint64_t inf_count = 0;
+
+    while (std::getline(file, row)) {
+
+
+      if(row_idx > 2)  {
+        auto cur_row = readCSVRow(row);
+        std::string hex_key = cur_row[1];
+        // std::string key =  LDBCommand::HexToString(hex_key); 
+        uint64_t seq = std::stoull(cur_row[6]);
+        std::vector<double> cur_row_features;
+        bool has_inf = false;
+        for(size_t col_idx=col_start_idx; col_idx < cur_row.size(); col_idx++) {
+          uint64_t cur_val = max_uint64;
+          if(cur_row[col_idx].compare(inf_key) != 0) {
+            cur_val = std::stod(cur_row[col_idx]);
+          } else if(!has_inf) {
+              has_inf = true;
+              inf_count++;
+            
+          }
+          cur_row_features.push_back(cur_val);
+        }
+        cur_row_features.push_back(std::stod(cur_row[col_start_idx-1]));
+        features_[hex_key][seq] = std::move(cur_row_features);
+      }
+      row_idx++;
+    }
+  fprintf(stdout, "Read %lu features\n", row_idx-3);
+  fprintf(stdout, "Read %lu inf features\n", inf_count);
+  return Status::OK();
+
+}
+
 Status DBImpl::LoadModel(std::string file_path) {
     // LGBM_BoosterCreateFromModelfile
 
@@ -736,7 +810,7 @@ Status DBImpl::LoadModel(std::string file_path) {
     return Status::OK();
 
 
-  }
+}
 
 
 Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,

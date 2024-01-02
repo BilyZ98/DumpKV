@@ -8,6 +8,7 @@
 #include <iterator>
 #include <limits>
 #include <algorithm>
+#include "rocksdb/utilities/ldb_cmd.h"
 
 #include "db/blob/blob_fetcher.h"
 #include "db/blob/blob_file_builder.h"
@@ -23,8 +24,8 @@
 
 namespace ROCKSDB_NAMESPACE {
 const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
-  {0, 50},
-  {1, 100}
+  {0, 281},
+  {1, 1000}
 };
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
@@ -34,7 +35,7 @@ const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 // };
 
 // const std::vector<uint64_t> LifetimeSecs = { 1, 10 , 100, 1000};
-const std::vector<uint64_t> LifetimeSecs = { 50, 100};
+const std::vector<uint64_t> LifetimeSecs = { 281, 1000};
 
 
 CompactionIterator::CompactionIterator(
@@ -257,6 +258,11 @@ void CompactionIterator::SetMemTables(const autovector<MemTable*>* mems) {
 }
 void CompactionIterator::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
   compaction_tracer_ = tracer;
+}
+
+void CompactionIterator::SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
+  features_ = features;
+
 }
 
 
@@ -1181,6 +1187,34 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
 }
 
 
+bool CompactionIterator::GetFeatures( std::vector<double>* feature_vec ) {
+  uint64_t seq=  ikey().sequence;
+  // std::string user_key_str = user_key().ToString();
+  std::string user_key_str = LDBCommand::StringToHex(user_key().ToString());
+  assert(features_ != nullptr);
+  // feature_vec = features_[user_key_str][seq];
+  if(features_->find(user_key_str) == features_->end()) {
+    assert(false);
+    return false;
+  }
+  if(features_->at(user_key_str).find(seq) == features_->at(user_key_str).end()) {
+    assert(false);
+    return false;
+  }
+  *feature_vec = std::move(features_->at(user_key_str).at(seq));
+  return true;
+  // SequenceNumber seq =  ikey().sequence; 
+  //   bool get_feat = false;
+  //   KeyFeatures* key_feat = nullptr;
+  //   for(const auto &mem: *mems_) {
+
+  //     get_feat = mem->GetKeyFeatures(seq, &key_feat);
+  //     if(get_feat) {
+  //       break;
+  //     }
+  //     // feature_vec-
+  //   }
+}
 // Todo: Do prediction here  add value to the lifetime label blob file
 bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   // if (!blob_file_builder_) {
@@ -1203,19 +1237,10 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     std::vector<double> feature_vec;
     // Todo: get features from memtable
 
-    SequenceNumber seq =  ikey().sequence; 
-    bool get_feat = false;
-    KeyFeatures* key_feat = nullptr;
-    for(const auto &mem: *mems_) {
-
-      get_feat = mem->GetKeyFeatures(seq, &key_feat);
-      if(get_feat) {
-        break;
-      }
-      // feature_vec-
-    }
+    bool get_feat = GetFeatures(&feature_vec);
+    
     if(!get_feat) {
-      fprintf(stderr, " should get feat for seq %lu \n", seq);
+      fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
       // return false;
       assert(false);
     }
@@ -1224,8 +1249,8 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     // features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
 
     // feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
-    feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
-    feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
+    // feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
+    // feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
 
 
 

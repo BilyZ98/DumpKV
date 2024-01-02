@@ -153,6 +153,7 @@ struct TableBuilderOptions {
   FastConfigHandle booster_fast_config_handle = nullptr;
   uint64_t lifetime_bucket_num = 1; 
   ColumnFamilyData* cfd = nullptr;
+  const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features;
 
 };
 

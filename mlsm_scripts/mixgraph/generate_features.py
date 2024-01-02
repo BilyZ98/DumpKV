@@ -1,7 +1,8 @@
 
+import dask.dataframe as dd
 
 
-import pandas as pd
+# import pandas as pd
 import pdb
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ from multiprocesspandas import applyparallel
 
 
 data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/trace-human_readable_trace.txt"
+output_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/feat_output/features_{}.csv"
 # output_path = '/mnt/nvme0n1/workloads/msr/MSR-Cambridge/{}_read_write__lifetime.csv'
 max_hash_edc_idx = 65535
 base_edc_window = 10
@@ -78,6 +80,9 @@ def data_frame_windows_file_time_to_unix(df):
     df['unix_timestamp'] = df['timestamp'].apply(windows_file_time_to_unix)
     return df
 
+def convert_micro_to_sec(micro_timestamp):
+    sec_timestamp = micro_timestamp / 1e6
+    return sec_timestamp
 # def TransformLifetimeFromWindowsFiletimeToSeconds(df_group_by_disknumber_offset):
 #     df_group_by_disknumber_offset['timestamp'] = df_group_by_disknumber_offset['timestamp'] / 10000
 #     return df_group_by_disknumber_offset
@@ -87,7 +92,7 @@ def GetEDC(df_group_by_disknumber_offset):
     nan_count, non_nan_count = df_group_by_disknumber_offset['lifetime_next'].isnull().sum(), df_group_by_disknumber_offset['lifetime_next'].notnull().sum()
     assert(nan_count == 1)
     # assert(df_group_by_disknumber_offset['lifetime_next'].iloc[-1] == np.nan)
-    assert(pd.isnull(df_group_by_disknumber_offset['lifetime_next'].iloc[-1]))
+    # assert(pd.isnull(df_group_by_disknumber_offset['lifetime_next'].iloc[-1]))
 
 
     
@@ -137,6 +142,8 @@ def GetEDC(df_group_by_disknumber_offset):
 
         df_group_by_disknumber_offset.iloc[index, edc_column_idxs] = cur_edcs
 
+
+
     # return df_group_by_disknumber_offset 
     
 
@@ -157,7 +164,8 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     # df_group_by_disknumber_offset['lifetime'] = df_group_by_disknumber_offset['unix_timestamp'] - df_group_by_disknumber_offset['prev_timestamp']
     # df_group_by_disknumber_offset['lifetime_next'] = df_group_by_disknumber_offset['latter_timestamp'] - df_group_by_disknumber_offset['unix_timestamp']
     df_group_by_type = df_group_by_disknumber_offset.groupby('op_type')
-    write_group_name = '1'
+    # print('df_group_by_type', df_group_by_type.groups.keys())
+    write_group_name = 1 
 
     if write_group_name not in df_group_by_type.groups:
         return
@@ -169,10 +177,12 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     # df_group_read['lifetime'] = df_group_read['unix_timestamp'] - df_group_read['prev_timestamp']
     # df_group_read['lifetime_next'] = df_group_read['latter_timestamp'] - df_group_read['unix_timestamp']
 
+
+    df_group_write['timestamp'] = df_group_write['timestamp'].apply(convert_micro_to_sec)
     df_group_write['prev_timestamp'] = df_group_write['timestamp'].shift(1)
-    df_group_write['latter_timestamp'] = df_group_write['unix_timestamp'].shift(-1)
-    df_group_write['lifetime'] = df_group_write['unix_timestamp'] - df_group_write['prev_timestamp']
-    df_group_write['lifetime_next'] = df_group_write['latter_timestamp'] - df_group_write['unix_timestamp']
+    df_group_write['latter_timestamp'] = df_group_write['timestamp'].shift(-1)
+    df_group_write['lifetime'] = df_group_write['timestamp'] - df_group_write['prev_timestamp']
+    df_group_write['lifetime_next'] = df_group_write['latter_timestamp'] - df_group_write['timestamp']
     df_group_write['pre_read_count'] = df_group_write['index'] - df_group_write['index'].shift(1).fillna(0) - 1
 
 
@@ -180,6 +190,8 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     # df_group_write = GetEDC(df_group_write)
     GetEDC(df_group_write)
     cur_counter = increment_counter()
+
+    # df_group_write = df_group_write.compute()
 
     if cur_counter % 1000 == 0 :
         print('cur_counter: ', cur_counter)
@@ -192,23 +204,26 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path):
     return df_group_write
 
 
-def GenerateFeatures(server_trace):
+def GenerateFeatures(server_trace ):
     # cur_path =  data_path.format(server_trace)
     cur_path = server_trace
 
     # [key, op_type, cf_id, value_size, timestamp, seq, write_rate]
-    df = pd.read_csv(cur_path, header=None, names=['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate'])
+    df = dd.read_csv(cur_path, sep=' ',header=None, names=['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate'])
+    df = df.repartition(npartitions=40)
     # df = pd.read_csv(cur_path, header=None, names=['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'])
+    # df = df.head(1000)
+    print('df', df)
 
-    group_by_columns = [ 'key']
+    group_by_columns = ['key']
     # df_group_by_type = df.groupby(['type'])
     # df_write = df_group_by_type.get_group('Write')
     # df_group_by_disknumber_offset = df_group_by_type.groupby(['disknumber', 'offset'])
     df_group_by_disknumber_offset = df.groupby(group_by_columns)
     #applyparallel
 
-    trace_output_path = output_path.format(server_trace + 'with_at_least_2_write')
-    all_trace_output_path = output_path.format(server_trace + '_all')
+    trace_output_path = output_path.format( 'with_at_least_2_write')
+    all_trace_output_path = output_path.format( 'all')
     # timestamp,hostname,disknumber,type,offset,size,response_time,prev_timestamp,lifetime,
     # with open(trace_output_path, 'w') as f:
     #     f.write(','.join(['timestamp', 'hostname', 'disknumber', 'type', 'offset', 'size', 'response_time'  ,'unix_timestamp','prev_timestamp', 'lifetime'] + delta_columns + edc_columns) + '\n')
@@ -218,8 +233,8 @@ def GenerateFeatures(server_trace):
 
     with open(trace_output_path, 'w') as f:
         f.truncate(0)
-    df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
-    # df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, output_path=trace_output_path )
+    # df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
+    df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, output_path=trace_output_path )
     # df_concat =  pd.concat(df_return)
     print('type of df_return: ', type(df_return))
 

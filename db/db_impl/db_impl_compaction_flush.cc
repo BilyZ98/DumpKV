@@ -267,7 +267,8 @@ Status DBImpl::FlushMemTableToOutputFile(
   if (s.ok()) {
     flush_job.SetCompactionTracer(compaction_tracer_);
     // flush_job.SetBoosterHandle(this->lightgbm_handle_);
-    flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+    // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+    flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
     need_cancel = false;

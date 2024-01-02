@@ -1401,6 +1401,8 @@ struct DBOptions {
 
   std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt" ;
 
+  std::string data_file_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv";
+
   uint64_t classification_num = 2; 
 
   uint64_t num_features = 2;

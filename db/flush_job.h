@@ -82,6 +82,7 @@ class FlushJob {
   ~FlushJob();
 
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
+  void SetModelAndData(BoosterHandle handle, FastConfigHandle fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
   void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle);
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
@@ -133,6 +134,7 @@ class FlushJob {
   std::shared_ptr<CompactionTracer> compaction_tracer_;
   BoosterHandle booster_handle_;
   FastConfigHandle fast_config_handle_;
+  const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
 
   const std::string& dbname_;
   const std::string db_id_;

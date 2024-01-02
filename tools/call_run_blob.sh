@@ -30,7 +30,7 @@ function call_run_blob() {
 
 
 # with_gc and without_gc
-db_dir=/mnt/nvme0n1/mlsm/test_blob
+db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model
 num_keys=50000000
 enable_blob_file=1
 enable_blob_gc=true
@@ -98,13 +98,15 @@ function run_with_gc_dbbench {
 
 
 function run_with_model_replay {
-  db_dir="/mnt/nvme0n1/mlsm/test_blob"
   age_cutoff=1.0
   force_gc_threshold=0.8
 
   with_gc_dir=${db_dir}/with_model_gc_${age_cutoff}_${force_gc_threshold}
   wal_dir=$with_gc_dir
-  replay_trace_path="/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_trace.txt"
+  replay_trace_path="/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/op_trace.txt"
+  model_path="../mlsm_scripts/mixgraph/mixgraph_all_binary.txt_binary.txt"
+  features_file_path="/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv"
+
 
   local write_buffer_size=$((100 * 1024 * 1024))
   # echo "db_dir: $db_dir"
@@ -116,6 +118,8 @@ function run_with_model_replay {
    COMPACTION_TRACE_FILE=$compaction_trace_file \
    BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
    OP_TRACE_FILE=$replay_trace_path \
+   MODEL_PATH=$model_path \
+   FEATURES_FILE_PATH=$features_file_path \
    IS_REPLAY=true \
    ./run_blob_bench.sh
 

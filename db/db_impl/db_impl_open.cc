@@ -2089,6 +2089,13 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   } else {
     assert(false);
   }
+  if(s.ok() && db_options.data_file_path != "") {
+    // std::string data_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_data.txt";
+    s = impl->ReadFeaturesFromFile(db_options.data_file_path);
+  } else {
+    printf("failed to load features data, msg: %s\n", s.ToString().c_str());
+  }
+
   if(s.ok()) {
     printf("load model successfully\n");
   } else {
@@ -2100,7 +2107,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->LoadKeyRangeFromFile(db_options.key_range_path);
     // s = impl->LoadKeyRange(key_range_path);
   } else {
-    assert(false);
+    printf("failed to load key range, msg: %s\n", s.ToString().c_str());
   }
   if(s.ok()) {
     printf("load key range successfully\n");

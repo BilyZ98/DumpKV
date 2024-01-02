@@ -1126,6 +1126,21 @@ DEFINE_bool(report_bg_io_stats, false,
 DEFINE_bool(use_stderr_info_logger, false,
             "Write info logs to stderr instead of to LOG file. ");
 
+DEFINE_string(model_path, "",
+              "Path to the model file used by the ML-based compaction "
+              "policy. If empty, the default model will be used.");
+
+DEFINE_uint64(num_features, 0,
+              "Number of features used by the ML-based compaction policy. If "
+              "0, the default number of features will be used.");
+
+DEFINE_uint64(num_classes, 0,
+              "Number of classes used by the ML-based compaction policy. If 0, "
+              "the default number of classes will be used.");
+DEFINE_string(features_data_file_path, "",
+              "Path to the file containing the features data used by the "
+              "ML-based compaction policy. If empty, the default features "
+              "data will be used.");
 
 DEFINE_string(trace_file, "", "Trace workload to a file. ");
 
@@ -4145,6 +4160,10 @@ class Benchmark {
     assert(db_.db == nullptr);
 
     options.env = FLAGS_env;
+    options.model_path = FLAGS_model_path;
+    options.num_features = FLAGS_num_features;
+    options.classification_num = FLAGS_num_classes;
+    options.data_file_path = FLAGS_features_data_file_path;
     options.wal_dir = FLAGS_wal_dir;
     options.dump_malloc_stats = FLAGS_dump_malloc_stats;
     options.stats_dump_period_sec =

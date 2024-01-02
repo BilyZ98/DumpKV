@@ -136,6 +136,9 @@ blob_cache_size=${BLOB_CACHE_SIZE:-$((16 * G))}
 blob_cache_numshardbits=${BLOB_CACHE_NUMSHARDBITS:-6}
 prepopulate_blob_cache=${PREPOPULATE_BLOB_CACHE:-0}
 
+model_path=${MODEL_PATH:-""} 
+features_file_path=${FEATURES_FILE_PATH:-""}
+
 if [ "$enable_blob_files" == "1" ]; then
   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
 else
@@ -189,7 +192,13 @@ ENV_VARS="\
   NUM_KEYS=$num_keys \
   COMPACTION_TRACE_FILE=$compaction_trace_file\
   OP_TRACE_FILE=$op_trace_file \
-  IS_REPLAY=$is_replay "
+  IS_REPLAY=$is_replay \
+  MODEL_PATH=$model_path \
+  FEATURES_FILE_PATH=$features_file_path "
+# model_path=${MODEL_PATH:-""} 
+# features_file_path=${FEATURES_FILE_PATH:-""}
+
+
 
 ENV_VARS_D="$ENV_VARS DURATION=$duration"
 
