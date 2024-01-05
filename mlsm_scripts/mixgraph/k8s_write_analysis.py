@@ -20,10 +20,10 @@ import multiprocessing as mp
 
 
 
-data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/trace-human_readable_trace.txt"
+data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv"
 output_dir= "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/"
 lifetime_cdf_write_path = os.path.join(output_dir, 'lifetime_cdf_write.png')
-names = ['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate']
+# names = ['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate']
 
 
 def test_dask():
@@ -59,23 +59,25 @@ def test_dask():
     client.shutdown()
 
 def GetLifetimeCDFWrite(server_trace, output_dir):
-    cluster = LocalCluster(n_workers=3, threads_per_worker=10, memory_limit='64GB')
+    # cluster = LocalCluster(n_workers=3, threads_per_worker=10, memory_limit='64GB')
 
-    cluster.adapt(minimum=0, maximum=10)
-    client = Client(cluster)
+    # cluster.adapt(minimum=0, maximum=10)
+    # client = Client(cluster)
 
     # cluster = KubeCluster(pod_template="worker-spec.yaml" )
     # cluster.adapt(minimum=0, maximum=10)
     # client = Client(cluster)
 
-    df = dd.read_csv(server_trace, sep=' ', header=None, names=names)
+    df = dd.read_csv(server_trace, sep=',')
     write_value = 1
-    df_write = df[df['op_type'] == write_value]
-    # df_write = df.persist()
-    print('df_write ', df_write.loc[2])
+    # df_write = df[df['op_type'] == write_value]
+    df_write = df.persist()
+    print('df_write  lifetime next', df_write.loc[11])
     # print('count of write: ', len(df_write))
-    df_write['prev_timestamp'] = df_write['timestamp'].shift(1)
-    df_write['lifetime'] = df_write['timestamp'] - df_write['prev_timestamp']
+    # df_write['prev_timestamp'] = df_write['timestamp'].shift(1)
+    # df_write['lifetime'] = df_write['timestamp'] - df_write['prev_timestamp']
+
+
     df_write = df_write.persist()
     print('dfwritetype: ', type(df_write))
     print('df_write: ', df_write)
@@ -95,7 +97,7 @@ def GetLifetimeCDFWrite(server_trace, output_dir):
     plt.ylabel('cdf')
     plt.title('lifetime cdf of write')
 
-    cdf_x = df_write['lifetime'].values
+    cdf_x = df_write['lifetime_next'].values
     cdf_x = np.sort(cdf_x)
     cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
     # df_write['lifetime'].hist(cumulative=True, density=1, bins=1000)
@@ -116,8 +118,8 @@ def GetLifetimeCDFWrite(server_trace, output_dir):
     plt.close()
 
 
-    client.shutdown()
-    cluster.close()
+    # client.shutdown()
+    # cluster.close()
 
 
 

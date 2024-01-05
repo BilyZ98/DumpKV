@@ -1250,7 +1250,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
         write_hint_, io_tracer_, blob_callback_,
         BlobFileCreationReason::kCompaction, &blob_file_paths,
-        sub_compact->Current().GetBlobFileAdditionsPtr()));
+        sub_compact->Current().GetBlobFileAdditionsPtr(),
+          i, timestamp));
 
         blob_file_builders_raw[i] = blob_file_builders[i].get();
     }
@@ -1435,6 +1436,7 @@ auto c_iter = std::make_unique<CompactionIterator>(
   status = sub_compact->CloseCompactionFiles(status, open_file_func,
                                              close_file_func);
 
+
   for(size_t i=0; i < blob_file_builders.size(); i++) {
     if (blob_file_builders[i]) {
       if (status.ok()) {
@@ -1443,8 +1445,12 @@ auto c_iter = std::make_unique<CompactionIterator>(
         blob_file_builders[i]->Abandon(status);
       }
       blob_file_builders[i].reset();
+
     }
 
+  }
+  if(enable_blob_file_builder) {
+    sub_compact->Current().UpdateBlobStats();
   }
 
   // if (blob_file_builder) {

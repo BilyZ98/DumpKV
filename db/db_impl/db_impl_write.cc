@@ -769,7 +769,7 @@ Status DBImpl::ReadFeaturesFromFile(const std::string &file_path) {
         std::vector<double> cur_row_features;
         bool has_inf = false;
         for(size_t col_idx=col_start_idx; col_idx < cur_row.size(); col_idx++) {
-          uint64_t cur_val = max_uint64;
+          double cur_val = 0.0;
           if(cur_row[col_idx].compare(inf_key) != 0) {
             cur_val = std::stod(cur_row[col_idx]);
           } else if(!has_inf) {

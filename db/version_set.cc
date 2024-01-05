@@ -3530,9 +3530,10 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
       }
       uint64_t lifetime_ttl = lifetime_label_iter->second;
       size_t to_be_gced_idx = 0;
+      uint64_t micros_to_sec = 1000000;
       for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
-        uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / 1000000;
-        uint64_t now_sec = env_->NowMicros() / 1000000;
+        uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
+        uint64_t now_sec = env_->NowMicros() / micros_to_sec;
         assert(now_sec >= blob_file_creation_time_sec);
 
         uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
@@ -3723,6 +3724,7 @@ void VersionStorageInfo::SortBlobFiles() {
 void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta) {
   assert(blob_file_meta);
   assert(blob_file_meta->GetBlobFileNumber() > 0);
+  assert(blob_file_meta->GetCreationTimestamp() > 0);
   uint64_t lifetime_bucket_idx = blob_file_meta->GetLifetimeLabel();
   assert(lifetime_bucket_idx < lifetime_blob_files_.size());
   assert(lifetime_blob_files_[lifetime_bucket_idx].empty() ||
@@ -3730,11 +3732,11 @@ void VersionStorageInfo::AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileM
           lifetime_blob_files_[lifetime_bucket_idx].back()->GetBlobFileNumber() <
               blob_file_meta->GetBlobFileNumber()));
 
-    // blob_files_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta; 
-    blob_files_.emplace_back( blob_file_meta);
-    blob_file_numer_to_blob_meta_map_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta;
+  // blob_files_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta; 
+  blob_files_.emplace_back( blob_file_meta);
+  blob_file_numer_to_blob_meta_map_[blob_file_meta->GetBlobFileNumber()] = blob_file_meta;
 
-    lifetime_blob_files_[lifetime_bucket_idx].emplace_back(blob_file_meta);
+  lifetime_blob_files_[lifetime_bucket_idx].emplace_back(blob_file_meta);
 
 }
 

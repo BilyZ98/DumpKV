@@ -174,7 +174,9 @@ class VersionBuilder::Rep {
 
     explicit MutableBlobFileMetaData(
         const std::shared_ptr<SharedBlobFileMetaData>& shared_meta)
-        : shared_meta_(shared_meta) {}
+        : shared_meta_(shared_meta) {
+      assert(shared_meta_->GetCreationTimestamp() > 0);
+    }
 
     // To be used for pre-existing blob files
     explicit MutableBlobFileMetaData(
@@ -182,7 +184,9 @@ class VersionBuilder::Rep {
         : shared_meta_(meta->GetSharedMeta()),
           linked_ssts_(meta->GetLinkedSsts()),
           garbage_blob_count_(meta->GetGarbageBlobCount()),
-          garbage_blob_bytes_(meta->GetGarbageBlobBytes()) {}
+          garbage_blob_bytes_(meta->GetGarbageBlobBytes()) {
+      assert(shared_meta_->GetCreationTimestamp() > 0);
+    }
 
     const std::shared_ptr<SharedBlobFileMetaData>& GetSharedMeta() const {
       return shared_meta_;

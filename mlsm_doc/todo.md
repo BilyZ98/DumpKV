@@ -4173,7 +4173,7 @@ real    619m37.584s
 user    617m47.719s
 sys     2m13.993s
 ```
-[Status: Ongoing]
+[Status: Done]
 
 [Todo]
 Train model on mixgraph trace and see the results.
@@ -4248,7 +4248,7 @@ I can load the feature file into memory and get feature related to key
 from file with key and seq number.
 
 
-[Status: Ongoing]
+[Status: Done]
 
 
 [Todo]
@@ -4434,17 +4434,134 @@ no_model 1.0_0.8
 
 ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
 11245   1.2     158MB   4GB     28.1    4.4     16.2    804     802     21      27      88.9    140.9       284     536     2506    57160643251     1778    0.0     0       1.7     0.2     1.7     mixgraph.t1.s1      2023-12-20T17:37:09     8.0.0           fde21a6fe3      0.6
+
+Uptime(secs): 1777.9 total, 1.0 interval
+Cumulative writes: 9997K writes, 9997K keys, 9997K commit groups, 1.0 writes per commit group, ingest: 7.88 GB, 4.54 MB/s
+Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0    6.58 MB   0.5      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     81.7     79.92             79.54        82    0.975       0      0       0.0       6.1
+  L1      9/1   26.43 MB   0.9     14.4     0.3      0.4       0.6      0.2       0.0   1.0     31.0     30.9    476.06            474.84        20   23.803     18M  1514K      13.8      13.8
+  L2     45/3   125.06 MB   0.6      7.4     0.1      0.2       0.3      0.1       0.0   1.0     30.7     30.5    248.21            247.59        39    6.364     10M  1592K       7.1       7.1
+ Sum     56/4   158.07 MB   0.0     21.8     0.4      0.6       1.1      0.5       0.0   4.4     27.8     35.8    804.19            801.97       141    5.704     29M  3107K      20.8      27.0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+
 ```
 
 with_model with adjusted features num(inf -> uint64_t:max) and adjusted ttl for feach blob file(50->281, 100->1000)
 ```
 ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
 0               159MB   4GB     7.8     1.8     4.2     1818    1731    34      6       1778590275.01914    0.0     0       2.8     0.2     64.1    replay.t1.s1    2024-01-1T21:54:22      8.0.0      1aacaadf6a       0.5
+
+Uptime(secs): 1913.2 total, 8.0 interval
+Cumulative writes: 10M writes, 10M keys, 10M commit groups, 1.0 writes per commit group, ingest: 7.88 GB, 4.22 MB/s
+Cumulative compaction: 7.76 GB write, 4.16 MB/s write, 35.41 GB read, 18.95 MB/s read, 1817.5 seconds
 ```
+
+with_model with adjusted features num(inf -> uint64_t:max) and adjusted ttl for feach blob file(50->281, 100->1000)
++ adjusted feature value(inf->zero)
+```
+Completed replay (ID: ) in 8230 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50     p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date      version job_id  githash
+0               158MB   4GB     7.9     1.8     4.3     1804    1801    38      6       1778525570.0                                            1901    0.0     0       2.9     0.2     6.4     replay.t1.s1      2024-01-3T15:34:39      8.0.0           1aacaadf6a      0.5
+
+
+
+
+** DB Stats **
+Uptime(secs): 1893.1 total, 1.0 interval
+Cumulative writes: 9999K writes, 9999K keys, 9999K commit groups, 1.0 writes per commit group, ingest: 7.88 GB, 4.26 MB/s
+Cumulative WAL: 9999K writes, 0 syncs, 9999618.00 writes per sync, written: 7.88 GB, 4.26 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 5591 writes, 5592 keys, 5591 commit groups, 1.0 writes per commit group, ingest: 4.51 MB, 4.51 MB/s
+Interval WAL: 5591 writes, 0 syncs, 5591.00 writes per sync, written: 0.00 GB, 4.51 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.7    242.11            241.61        85    2.848       0      0       0.0       6.1
+  L1     10/1   29.17 MB   1.1     15.0     0.3      0.4       0.6      0.2       0.0   1.0     29.6     29.5    519.20            518.32        21   24.724     19M  1533K      14.3      14.3
+  L2     46/3   124.44 MB   0.6      7.9     0.1      0.2       0.3      0.1       0.0   1.0     29.8     29.7    269.77            269.28        55    4.905     11M  1550K       7.5       7.5
+ Sum     57/4   156.76 MB   0.0     22.9     0.4      0.6       1.2      0.5       0.0   4.6     22.7     28.9   1031.08           1029.20       161    6.404     30M  3084K      21.8      27.9
+ Int      0/0    0.00 KB   0.0      0.2     0.0      0.0       0.0      0.0       0.0 188865559.0     29.4     29.2      6.17              6.16         1    6.173    259K    45K       0.2       0.2
+
+
+```
+b_rgb doesn't change and is even worse after I update inf to 0.
+lifetime label: 1 blob files have more number of keys than original.
+There are 420 jobs during whole replay process which is more than that 
+in standard rocksdb.
+Standard rocksdb have 146 jobs.
+It should be time calculation problem.
+Let me check that.
+```
+Completed replay (ID: ) in 2020 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version     job_id  githash
+0               157MB   4GB     7.2     1.7     3.9     1023    1021    22      6       1778525335.01892    0.0     0       2.3     0.1     5.8     replay.t1.s1    2024-01-4T12:10:05      8.0.0      1aacaadf6a       0.5
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.6    243.75            243.25        85    2.868       0      0       0.0       6.1
+  L1      9/1   29.79 MB   1.1     14.9     0.3      0.4       0.6      0.2       0.0   0.0     29.8      1.2    511.07            510.16        21   24.337     19M  1522K      14.2       0.0
+  L2     46/3   124.10 MB   0.6      7.8     0.1      0.2       0.3      0.1       0.0   0.0     29.8      1.2    268.37            267.91        51    5.262     10M  1554K       7.4       0.0
+ Sum     56/4   157.04 MB   0.0     22.7     0.4      0.6       1.2      0.5       0.0   1.1     22.7      7.2   1023.19           1021.32       157    6.517     30M  3076K      21.6       6.1
+ Int      0/0    0.00 KB   0.0      0.2     0.0      0.0       0.0      0.0       0.0 6578094.0     29.3      1.2      5.31              5.29         1    5.306    226K    44K       0.1       0.0
+
+
+```
+167 jobs in this run which is close to no model..
+8 ForcedBlobGC jobs.
+But there is no ForcedBlobGC jobs in no model. I don't know hwy w_amp is 4.4 in 
+no model runnning.
+Is this because of some code changes
+stats meaning for each short key
+https://github.com/facebook/rocksdb/wiki/Compaction-Stats-and-DB-Status
+I don't know hwat Int mean.
+
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs       c_csecs b_rgb   b_wgb   usec_op p50     p99     p99.9p99.99   pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss  test     date    version job_id  githash
+0               157MB   4GB     29.1    4.5     15.7    1031 1029     22      28      1778525351.0                         1894     0.0     0       2.3     0.1     5.8     replay.t1.s1 2024-01-5T10:23:00       8.0.0           1aacaadf6a      0.5
+
+
+
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.7    242.11            241.61        85    2.848       0      0       0.0       6.1
+  L1     10/1   29.17 MB   1.1     15.0     0.3      0.4       0.6      0.2       0.0   1.0     29.6     29.5    519.20            518.32        21   24.724     19M  1533K      14.3      14.3
+  L2     46/3   124.44 MB   0.6      7.9     0.1      0.2       0.3      0.1       0.0   1.0     29.8     29.7    269.77            269.28        55    4.905     11M  1550K       7.5       7.5
+ Sum     57/4   156.76 MB   0.0     22.9     0.4      0.6       1.2      0.5       0.0   4.6     22.7     28.9   1031.08           1029.20       161    6.404     30M  3084K      21.8      27.9
+ Int      0/0    0.00 KB   0.0      0.2     0.0      0.0       0.0      0.0       0.0 188865559.0     29.4     29.2      6.17              6.16         1    6.173    259K    45K       0.2       0.2
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0     22.9     0.4      0.6       0.9      0.3       0.0   0.0     29.7     29.5    788.97            787.60        76   10.381     30M  3084K      21.8      21.8
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.7    242.11            241.61        85    2.848       0      0       0.0       6.1
+
+
+```
+
 There are more b_rgb than that in standard rocksdb ? why is that?
 b_wgb is much lower than that in standard rocksdb . why is that ? 
 c_mbps is very low. Is this because we need get features for each key?
 This might be the problem.
+mixgraph dataset analysis
+More than 50% of keys should be labelled as long. This is not the case from what
+we see in log.
+```
+True     5755504
+False    4246148
+```
 
 [Todo]
 Need to update conversion code to turn 'inf' to a inf in uint64_t max
@@ -4454,6 +4571,614 @@ lifetime which is what we expect.
 [Status: Done]
 
 
+[Todo]
 Select blob files to do compaction , and then do a read during garbage collection
 process to test the validity of the valud and decide if the value should be
 written back to rocksdb or not.
+[Status: Not started]
+
+[Todo]
+Train log time model 
+[Status: Not started]
+
+[Todo]
+Use log time model to predict lifetime of keys.
+Need to dynamically create lifetime classification blob files.
+[Status: Not started]
+
+Plot lifetime graph wrong, replot and get a graph no so skewed.
+I don't know how to set categories.
+I previsouly set 281 as short lifetime. I think it's ok.
+I don't know how to transform inf value to train model.
+How does lrb achieve that?
+
+[Todo]
+Learn how preparation of data for missing value is done in lrb.
+```
+void LRBCache::train() {
+    ++n_retrain;
+    auto timeBegin = chrono::system_clock::now();
+    if (booster) LGBM_BoosterFree(booster);
+    // create training dataset
+    DatasetHandle trainData;
+    LGBM_DatasetCreateFromCSR(
+            static_cast<void *>(training_data->indptr.data()),
+            C_API_DTYPE_INT32,
+            training_data->indices.data(),
+            static_cast<void *>(training_data->data.data()),
+            C_API_DTYPE_FLOAT64,
+            training_data->indptr.size(),
+            training_data->data.size(),
+            n_feature,  //remove future t
+            training_params,
+            nullptr,
+            &trainData);
+
+    LGBM_DatasetSetField(trainData,
+                         "label",
+                         static_cast<void *>(training_data->labels.data()),
+                         training_data->labels.size(),
+                         C_API_DTYPE_FLOAT32);
+
+
+```
+
+CSR represents compressed sparsed row 
+```
+Compressed Sparse Row (CSR): In the context of sparse matrices, the CSR 
+or Compressed Row Storage (CRS) or Yale format represents a matrix by three 
+(one-dimensional) arrays, that respectively contain nonzero values, 
+the extents of rows, and column indices3.
+
+
+import numpy as np
+from scipy.sparse import csr_matrix
+
+# Define the row, column, and data arrays
+row = np.array([0, 0, 1, 2, 2, 2])
+col = np.array([0, 2, 2, 0, 1, 2])
+data = np.array([1, 2, 3, 4, 5, 6])
+
+# Create the CSR matrix
+matrix = csr_matrix((data, (row, col)), shape=(3, 3))
+
+# Convert the CSR matrix to a dense array for display
+dense_matrix = matrix.toarray()
+
+print(dense_matrix)
+
+In the context of a Compressed Sparse Row (CSR) matrix, `row`, `col`, and `data` are arrays that represent the structure of the sparse matrix:
+
+- `row`: This is an array of **row indices** for each non-zero element in the matrix. It indicates the row location for each non-zero element.
+
+- `col`: This is an array of **column indices** for each non-zero element in the matrix. It indicates the column location for each non-zero element.
+
+- `data`: This is an array that contains the **values** of the non-zero elements in the matrix.
+
+Together, these three arrays allow the CSR format to represent a sparse matrix in a compact way, only storing the non-zero elements and their locations. This is particularly useful for large matrices where most of the elements are zero.
+```
+
+So inf value in my feature generated dataset is represented as zero in lrb dataset.
+Does this make sense?
+The papser says that delta_i which does not exist is represented as inf . This is a conflict.
+
+
+model training with csr format code example
+```
+void HypotheticalModel::train(const CSRMatrix& data) {
+    // Initialize weights randomly
+    std::vector<double> weights(data.num_cols(), 0.0);
+
+    // Set learning rate and number of epochs
+    double learning_rate = 0.01;
+    int epochs = 100;
+
+    // SGD loop
+    for (int epoch = 0; epoch < epochs; ++epoch) {
+        for (int i = 0; i < data.num_rows(); ++i) {
+            // Calculate prediction
+            double prediction = 0.0;
+            for (int idx = data.row_ptr(i); idx < data.row_ptr(i + 1); ++idx) {
+                prediction += weights[data.col_idx(idx)] * data.values(idx);
+            }
+
+            // Calculate error
+            double error = target[i] - prediction; // Assume target is some existing vector
+
+            // Update weights
+            for (int idx = data.row_ptr(i); idx < data.row_ptr(i + 1); ++idx) {
+                weights[data.col_idx(idx)] += learning_rate * error * data.values(idx);
+            }
+        }
+    }
+
+    // Save the trained weights to the model
+    this->weights = weights;
+}
+
+```
+[Status: Ongoing]
+
+
+[Todo]
+Do batch prediction instead of calling predict for each key
+Consider to use CSR data format for our dataset as well.
+[Status: Not started]
+
+
+Retrain model by replacing inf value with zero and get the same predictions results 
+as before.
+```
+              precision    recall  f1-score   support
+
+       False       0.96      0.69      0.81    847793
+        True       0.81      0.98      0.89   1152538
+
+    accuracy                           0.86   2000331
+   macro avg       0.89      0.84      0.85   2000331
+weighted avg       0.88      0.86      0.85   2000331
+
+0.8869472988081286
+```
+
+
+[Todo]
+Check ttl calculation code and fix the bug if possible to 
+avoid too many forcedblobgc job.
+
+log code 
+```
+    ROCKS_LOG_INFO(cfd->ioptions()->info_log.get(),
+                   "[%s]CF has reserved epoch number %" PRIu64
+                   " for files ingested "
+                   "behind since `Options::allow_ingest_behind` is true",
+                   cfd->GetName().c_str(), reserved_epoch_number);
+
+  assert(immutable_options_);
+  ROCKS_LOG_INFO(immutable_options_->logger,
+                 "[%s] [JOB %d] Generated blob file #%" PRIu64 ": %" PRIu64
+                 " total blobs, %" PRIu64 " total bytes, lifetime label: %" PRIu64  ,
+                 column_family_name_.c_str(), job_id_, blob_file_number,
+                 blob_count_, blob_bytes_, lifetime_label_);
+
+```
+blob_file_creation_time_sec is 0 which is not right. 
+There should be problems when we pass creation timestamp to 
+blob_file_additions.
+```
+(gdb) p elapsed_sec
+$5 = 1704288768
+(gdb) p now_sec
+$6 = 1704288768
+(gdb) p blob_file_creation_time_sec
+$7 = 0
+```
+[Status: Ongoing]
+
+
+
+[Todo]
+Figure out how now micros is calculated
+
+```
+class SystemClock : public Customizable {
+
+```
+
+```
+class CompositeEnv : public Env {
+ public:
+  // Initialize a CompositeEnvWrapper that delegates all thread/time related
+  // calls to env, and all file operations to fs
+  explicit CompositeEnv(const std::shared_ptr<FileSystem>& fs,
+                        const std::shared_ptr<SystemClock>& clock)
+      : Env(fs, clock) {}
+
+
+```
+Env is composite of fs and systemclock.
+This is why I don't see definition of nowmicros in env_posix.cc file.
+It should return correct micros tiemstamp.
+Is this because of construction issue? I don't pass teimstamp to blob file builder?
+Found the root cause of timestamp =0.
+I don't pass timestamp to blob file builder in compaction job. 
+```
+
+  if(enable_blob_file_builder ) {
+    for(size_t i =0; i < blob_file_builders.size(); i++){
+      uint64_t timestamp = env_->NowMicros();
+      blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
+      new BlobFileBuilder(
+        versions_, fs_.get(),
+        sub_compact->compaction->immutable_options(),
+        mutable_cf_options, &file_options_, db_id_, db_session_id_,
+        job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
+        write_hint_, io_tracer_, blob_callback_,
+        BlobFileCreationReason::kCompaction, &blob_file_paths,
+        sub_compact->Current().GetBlobFileAdditionsPtr(),
+          i, timestamp));
+
+        blob_file_builders_raw[i] = blob_file_builders[i].get();
+    }
+  }
+
+
+```
+[Status: Done]
+
+
+[Todo]
+Figure out how w_amp is calculated why there is difference between no_model
+and with_model db_bench run.
+definition of w_amp
+https://github.com/facebook/rocksdb/wiki/Compaction-Stats-and-DB-Status
+```
+W-Amp: (total bytes written to level N+1) / (total bytes read from level N). This is the write amplification from compaction between levels N and N+1
+```
+I see, there is problem with stats update. I might remove the code or don't update stats for blob write in my current code.
+
+internal_stats.cc
+where is w_amp defined. 
+Need to check bytes_written and bytes_written_blob in compaction job.
+Do we need to check flush job ?
+```
+  double w_amp =
+      (interval_stats.bytes_written + interval_stats.bytes_written_blob) /
+      static_cast<double>(interval_ingest);
+  PrintLevelStats(buf, sizeof(buf), "Int", 0, 0, 0, 0, w_amp, interval_stats);
+```
+
+similar to that of internal stats.
+```
+  if (level == 0) {
+        input_bytes = curr_ingest;
+      } else {
+        input_bytes = comp_stats_[level].bytes_read_non_output_levels +
+                      comp_stats_[level].bytes_read_blob;
+      }
+      double w_amp =
+          (input_bytes == 0)
+              ? 0.0
+              : static_cast<double>(comp_stats_[level].bytes_written +
+                                    comp_stats_[level].bytes_written_blob) /
+                    input_bytes;
+      std::map<LevelStatType, double> level_stats;
+      PrepareLevelStats(&level_stats, files, files_being_compacted[level],
+                        static_cast<double>(vstorage->NumLevelBytes(level)),
+                        compaction_score[level], w_amp, comp_stats_[level]);
+      (*levels_stats)[level] = level_stats;
+    }
+```
+I will check bytes_written and bytes_written_blob in version_set.cc, version_builder.cc and flush_job.cc, compaction_job.cc
+and blob_file_builder.cc
+0 blob output in log which prove my theory.
+```
+2024/01/04-12:31:21.174296 3684609 (Original Log Time 2024/01/04-12:31:21.174077) [db/compaction/compaction_job.cc:867] [default] compacted to: files[1 9 36 0 0 0 0 0] max score 1.13, MB/sec: 30.9 rd, 1.2 wr, level 2, files in(1, 3) out(3 +0 blob) MB in(4.4, 6.7 +217.6 blob) out(9.3 +0.0 blob), read-write-amplify(1.1) write-amplify(0.0) OK, records in: 323421, records dropped: 54693 output_compression: NoCompression
+```
+
+Method in internal_stats to update bytes_written
+```
+  compact_->compaction->SetOutputTableProperties(std::move(tp));
+
+  // Finish up all book-keeping to unify the subcompaction results
+  compact_->AggregateCompactionStats(compaction_stats_, *compaction_job_stats_);
+  UpdateCompactionStats();
+
+ 
+    void CompactionState::AggregateCompactionStats(
+        InternalStats::CompactionStatsFull& compaction_stats,
+        CompactionJobStats& compaction_job_stats) {
+      for (const auto& sc : sub_compact_states) {
+        sc.AggregateCompactionStats(compaction_stats);
+        compaction_job_stats.Add(sc.compaction_job_stats);
+      }
+    }
+
+        void Add(const CompactionOutputsStats& stats) {
+              this->num_output_files += static_cast<int>(stats.num_output_files);
+              this->num_output_records += stats.num_output_records;
+              this->bytes_written += stats.bytes_written;
+              this->bytes_written_blob += stats.bytes_written_blob;
+              this->num_output_files_blob +=
+                  static_cast<int>(stats.num_output_files_blob);
+            }
+```
+
+
+compactino_iterator has stats as well.
+```
+auto c_iter = std::make_unique<CompactionIterator>(
+      input, cfd->user_comparator(), &merge, versions_->LastSequence(),
+      &existing_snapshots_, earliest_write_conflict_snapshot_, job_snapshot_seq,
+      snapshot_checker_, env_, ShouldReportDetailedTime(env_, stats_),
+      /*expect_valid_internal_key=*/true, range_del_agg.get(),
+      blob_file_builders_raw, db_options_.allow_data_in_errors,
+      db_options_.enforce_single_del_contracts, manual_compaction_canceled_,
+      db_options_.booster_handle,
+      db_options_.booster_fast_config_handle,
+      cfd,
+      sub_compact->compaction, compaction_filter, shutting_down_,
+      db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
+      preclude_last_level_min_seqno_);
+
+while() {
+    status = sub_compact->AddToOutput(*c_iter, open_file_func, close_file_func);
+        return Current().AddToOutput(iter, open_file_func, close_file_func);
+            AddToOutput() {
+                if (!HasBuilder()) {
+                            s = open_file_func(*this);
+                            if (!s.ok()) {
+                              return s;
+                            }
+                          }
+
+            }
+          
+
+  assert(builder_ != nullptr);
+  const Slice& value = c_iter.value();
+  s = current_output().validator.Add(key, value);
+  if (!s.ok()) {
+    return s;
+  }
+  builder_->Add(key, value);
+
+  stats_.num_output_records++;
+  current_output_file_size_ = builder_->EstimatedFileSize();
+
+ 
+
+    c_iter->Next()
+
+}
+
+// there is no bytes_written update in this function.
+Status CompactionJob::FinishCompactionOutputFile(
+    const Status& input_status, SubcompactionState* sub_compact,
+    CompactionOutputs& outputs, const Slice& next_table_min_key) {
+  AutoThreadOperationStageUpdater stage_updater(
+      ThreadStatus::STAGE_COMPACTION_SYNC_FILE);
+  assert(sub_compact != nullptr);
+  assert(outputs.HasBuilder());
+
+  FileMetaData* meta = outputs.GetMetaData();
+  uint64_t output_number = meta->fd.GetNumber();
+  assert(output_number != 0);
+
+  ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
+  std::string file_checksum = kUnknownFileChecksum;
+  std::string file_checksum_func_name = kUnknownFileChecksumFuncName;
+
+  // Check for iterator errors
+  Status s = input_status;
+
+  // Add range tombstones
+  auto earliest_snapshot = kMaxSequenceNumber;
+  if (existing_snapshots_.size() > 0) {
+    earliest_snapshot = existing_snapshots_[0];
+  }
+  if (s.ok()) {
+    CompactionIterationStats range_del_out_stats;
+    // if the compaction supports per_key_placement, only output range dels to
+    // the penultimate level.
+    // Note: Use `bottommost_level_ = true` for both bottommost and
+    // output_to_penultimate_level compaction here, as it's only used to decide
+    // if range dels could be dropped.
+    if (outputs.HasRangeDel()) {
+      s = outputs.AddRangeDels(
+          sub_compact->start.has_value() ? &(sub_compact->start.value())
+                                         : nullptr,
+          sub_compact->end.has_value() ? &(sub_compact->end.value()) : nullptr,
+          range_del_out_stats, bottommost_level_, cfd->internal_comparator(),
+          earliest_snapshot, next_table_min_key, full_history_ts_low_);
+    }
+    RecordDroppedKeys(range_del_out_stats, &sub_compact->compaction_job_stats);
+    TEST_SYNC_POINT("CompactionJob::FinishCompactionOutputFile1");
+  }
+
+  const uint64_t current_entries = outputs.NumEntries();
+
+  s = outputs.Finish(s, seqno_time_mapping_);
+
+
+```
+
+
+bytes_wirtten is updated in Finish() in 
+This is really a mess. 
+I spent long time figuring out how to update stats in current code.
+```
+Status CompactionOutputs::Finish(const Status& intput_status,
+                                 const SeqnoToTimeMapping& seqno_time_mapping) {
+
+  const uint64_t current_bytes = builder_->FileSize();
+  if (s.ok()) {
+    meta->fd.file_size = current_bytes;
+    meta->marked_for_compaction = builder_->NeedCompact();
+  }
+  current_output().finished = true;
+  stats_.bytes_written += current_bytes;
+  stats_.num_output_files = outputs_.size();
+
+
+
+}
+```
+
+In flush job, stats.bytes_written_blob is updated after BuildTable() which is in
+WriteLevel0Table()
+
+Find the place where original stats update for bytes_written_blob happens.
+It happens after while loop of compaction iterator.
+I commented it before and didn't put in the for loop I wrote to destroy blob_file_builders
+in compaction_job..
+[Status: Done]
+
+
+[Todo]
+Fix bytes_written_blob missing bug.
+There might be concurrency issue with blob_file_additions_ vector.
+No, we don't have that for now because only one blob file addition
+is created and appended to the end of blob_file_additions_
+during c_iter->Next() call.
+```
+  if(enable_blob_file_builder ) {
+    for(size_t i =0; i < blob_file_builders.size(); i++){
+      uint64_t timestamp = env_->NowMicros();
+      blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
+      new BlobFileBuilder(
+        versions_, fs_.get(),
+        sub_compact->compaction->immutable_options(),
+        mutable_cf_options, &file_options_, db_id_, db_session_id_,
+        job_id_, cfd->GetID(), cfd->GetName(), Env::IOPriority::IO_LOW,
+        write_hint_, io_tracer_, blob_callback_,
+        BlobFileCreationReason::kCompaction, &blob_file_paths,
+        sub_compact->Current().GetBlobFileAdditionsPtr(),
+          i, timestamp));
+
+        blob_file_builders_raw[i] = blob_file_builders[i].get();
+    }
+  }
+
+```
+
+Call this function at the end to update bytes_written_blob in stats_
+```
+  void UpdateBlobStats() {
+    assert(!is_penultimate_level_);
+    stats_.num_output_files_blob = blob_file_additions_.size();
+    for (const auto& blob : blob_file_additions_) {
+      stats_.bytes_written_blob += blob.GetTotalBlobBytes();
+    }
+  }
+```
+
+[Status: Done]
+
+
+
+Why don't compaction process do a read to see if keys can be dropped during compactin process?
+It needs to check the whole lsm-tree to decided if a key can be dropped.
+
+[Todo ]
+Check how orignal stackabledb works in terms of garbge collection.
+
+```
+  // Relocates valid blobs residing in the oldest blob files if garbage
+  // collection is enabled. Relocated blobs are written to new blob files or
+  // inlined in the LSM tree depending on the current settings (i.e.
+  // enable_blob_files and min_blob_size). Should only be called for blob
+  // references (kTypeBlobIndex).
+  //
+  // Note: the stacked BlobDB implementation's compaction filter based GC
+  // algorithm is also called from here.
+  void GarbageCollectBlobIfNeeded();
+```
+
+
+blob_compaction_filter.cc
+```
+CompactionFilter::BlobDecision BlobIndexCompactionFilterGC::PrepareBlobOutput(
+    const Slice& key, const Slice& existing_value,
+    std::string* new_value) const {
+  assert(new_value);
+
+  const BlobDBImpl* const blob_db_impl = context().blob_db_impl;
+  (void)blob_db_impl;
+
+  assert(blob_db_impl);
+  assert(blob_db_impl->bdb_options_.enable_garbage_collection);
+
+  BlobIndex blob_index;
+  const Status s = blob_index.DecodeFrom(existing_value);
+  if (!s.ok()) {
+    gc_stats_.SetError();
+    return BlobDecision::kCorruption;
+  }
+
+  if (blob_index.IsInlined()) {
+    gc_stats_.AddBlob(blob_index.value().size());
+
+    return BlobDecision::kKeep;
+  }
+
+  gc_stats_.AddBlob(blob_index.size());
+
+  if (blob_index.HasTTL()) {
+    return BlobDecision::kKeep;
+  }
+
+  if (blob_index.file_number() >= context_gc_.cutoff_file_number) {
+    return BlobDecision::kKeep;
+  }
+
+  // Note: each compaction generates its own blob files, which, depending on the
+  // workload, might result in many small blob files. The total number of files
+  // is bounded though (determined by the number of compactions and the blob
+  // file size option).
+  if (!OpenNewBlobFileIfNeeded()) {
+    gc_stats_.SetError();
+    return BlobDecision::kIOError;
+  }
+
+  PinnableSlice blob;
+  CompressionType compression_type = kNoCompression;
+  std::string compression_output;
+  if (!ReadBlobFromOldFile(key, blob_index, &blob, false, &compression_type)) {
+    gc_stats_.SetError();
+    return BlobDecision::kIOError;
+  }
+
+  // If the compression_type is changed, re-compress it with the new compression
+  // type.
+  if (compression_type != blob_db_impl->bdb_options_.compression) {
+    if (compression_type != kNoCompression) {
+      const Status status =
+          blob_db_impl->DecompressSlice(blob, compression_type, &blob);
+      if (!status.ok()) {
+        gc_stats_.SetError();
+        return BlobDecision::kCorruption;
+      }
+    }
+    if (blob_db_impl->bdb_options_.compression != kNoCompression) {
+      blob_db_impl->GetCompressedSlice(blob, &compression_output);
+      blob = PinnableSlice(&compression_output);
+      blob.PinSelf();
+    }
+  }
+
+  uint64_t new_blob_file_number = 0;
+  uint64_t new_blob_offset = 0;
+  if (!WriteBlobToNewFile(key, blob, &new_blob_file_number, &new_blob_offset)) {
+    gc_stats_.SetError();
+    return BlobDecision::kIOError;
+  }
+
+  if (!CloseAndRegisterNewBlobFileIfNeeded()) {
+    gc_stats_.SetError();
+    return BlobDecision::kIOError;
+  }
+
+  BlobIndex::EncodeBlob(new_value, new_blob_file_number, new_blob_offset,
+                        blob.size(), compression_type);
+
+  gc_stats_.AddRelocatedBlob(blob_index.size());
+
+  return BlobDecision::kChangeValue;
+}
+```
+It's basicaly the same as blobDB garbage collection process.
+
+[Status: Ongoing]
+
+
+HashKV avoids validity checks which means avoid read during GC which is good
+for our work as well.
+Can we come up with solution to group keys and lifetime together??
+
+If we do validity check during compaction/garbage collection process there will
+be no need for model.
+
+Why do we see blob file deletion in level compaction between level_0 and level_1?
+So this mean that all files in level0 are used in this compaction process so 
+all blob files are deleted.

@@ -1397,11 +1397,13 @@ struct DBOptions {
   bool enforce_single_del_contracts = true;
 
 
-  std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";  
+  std::string model_path ;
 
-  std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt" ;
+  std::string key_range_path  ;
+  // "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt" ;
 
-  std::string data_file_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv";
+  std::string data_file_path ;
+  // = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv";
 
   uint64_t classification_num = 2; 
 

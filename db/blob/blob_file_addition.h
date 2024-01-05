@@ -33,6 +33,7 @@ class BlobFileAddition {
                                       checksum_value) {
     lifetime_label_ = lifetime_label;
     build_timestamp_ = build_timestamp;
+    assert(build_timestamp_ > 0);
   }
 
 

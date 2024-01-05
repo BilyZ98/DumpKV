@@ -50,8 +50,10 @@ BlobFileBuilder::BlobFileBuilder(
                       column_family_name, io_priority, write_hint, io_tracer,
                       blob_callback, creation_reason, blob_file_paths,
                       blob_file_additions,
-                      lifetime_label) {
-  creation_timestamp_ = creation_timestamp;
+                      lifetime_label, creation_timestamp)
+  {
+  assert(creation_timestamp > 0);
+  // creation_timestamp_ = creation_timestamp;
 
 }
 
@@ -67,7 +69,8 @@ BlobFileBuilder::BlobFileBuilder(
     BlobFileCreationReason creation_reason,
     std::vector<std::string>* blob_file_paths,
     std::vector<BlobFileAddition>* blob_file_additions,
-    uint64_t lifetime_label )
+    uint64_t lifetime_label,
+    uint64_t creation_timestamp)
     : file_number_generator_(std::move(file_number_generator)),
       fs_(fs),
       immutable_options_(immutable_options),
@@ -90,7 +93,8 @@ BlobFileBuilder::BlobFileBuilder(
       blob_file_additions_(blob_file_additions),
       blob_count_(0),
       blob_bytes_(0),
-      lifetime_label_(lifetime_label  ){
+      lifetime_label_(lifetime_label),
+      creation_timestamp_(creation_timestamp){
   // assert(lifetime_label_ >= 0);
   assert(file_number_generator_);
   assert(fs_);
@@ -100,6 +104,7 @@ BlobFileBuilder::BlobFileBuilder(
   assert(blob_file_paths_->empty());
   assert(blob_file_additions_);
   assert(blob_file_additions_->empty());
+  assert(creation_timestamp > 0);
 }
 
 BlobFileBuilder::~BlobFileBuilder() = default;
@@ -409,6 +414,7 @@ Status BlobFileBuilder::CloseBlobFile() {
 
 
   assert(blob_file_additions_);
+  assert(creation_timestamp_ > 0);
   blob_file_additions_->emplace_back(blob_file_number, blob_count_, blob_bytes_,
                                      std::move(checksum_method),
                                      std::move(checksum_value),

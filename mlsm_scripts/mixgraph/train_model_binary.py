@@ -9,6 +9,8 @@ from sklearn.metrics import classification_report
 from sklearn.metrics import precision_score
 from sklearn.model_selection import train_test_split
 
+import pdb
+
 import numpy as np
 import pandas as pd
 import sys
@@ -52,15 +54,23 @@ def train_model(data_file_path):
     
 
     features = data.loc[:, feature_columns]
+    features.replace([np.inf, -np.inf], 0, inplace=True)
+    features_na = features.isna().any(axis=1).sum()
+    # num_na_rows = df.isna().any(axis=1).sum()
+    print('num features_na: ', features_na)
+
 
     # astype('category')
     # labels = data.iloc[:, 8]
     # labels = data.loc[:, 'lifetime'].shift(-1) > long_lifetime_threshold
     labels = data.loc[:, 'lifetime_next'] > long_lifetime_threshold
+    # print count of each label
+    print('label count: ', labels.value_counts())
     std_dev = np.std(labels)
     print('std_dev: ', std_dev)
     labels = pd.to_numeric(labels)
     x_train, x_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=0)
+    pdb.set_trace()
 
     # Create dataset for LightGBM
     lgb_train = lgb.Dataset(x_train, y_train)

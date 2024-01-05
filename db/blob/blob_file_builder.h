@@ -64,7 +64,8 @@ class BlobFileBuilder {
                   BlobFileCreationReason creation_reason,
                   std::vector<std::string>* blob_file_paths,
                   std::vector<BlobFileAddition>* blob_file_additions,
-                  uint64_t lifetime_label=0);
+                  uint64_t lifetime_label=0,
+                  uint64_t creation_timestamp=0);
 
   BlobFileBuilder(const BlobFileBuilder&) = delete;
   BlobFileBuilder& operator=(const BlobFileBuilder&) = delete;
@@ -115,7 +116,7 @@ class BlobFileBuilder {
   uint64_t blob_count_;
   uint64_t blob_bytes_;
   uint64_t lifetime_label_;  
-  uint64_t creation_timestamp_;
+  const uint64_t creation_timestamp_;
   uint64_t lifetime_bucket_num_;
 };
 
