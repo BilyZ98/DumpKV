@@ -3517,6 +3517,7 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
     // traversed the oldest blob files for each 
     // lifetime classification and pick the blob files
     // that is supposed to outlive its lifetime
+    files_marked_for_forced_blob_gc_.clear();
     for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
       if(lifetime_blob_files_[lifetime_idx].empty()) {
         continue;
