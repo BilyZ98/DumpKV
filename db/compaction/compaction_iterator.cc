@@ -1382,10 +1382,13 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
       should_gc = true;
 
     }
-    if( !should_gc && lifetime_label == new_lifetime_label) {
-      
+    if(!should_gc) {
       return;
     }
+    // if( !should_gc && lifetime_label == new_lifetime_label) {
+    //   
+    //   return;
+    // }
 
 
 
