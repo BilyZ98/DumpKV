@@ -4551,6 +4551,85 @@ High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3     
 
 ```
 
+Update gc logic in compaction_iterator so that values whose lifetime label doesn't change
+won't trigger rewrite of blob .
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               153MB   6GB     11.5    2.3     6.2     1356    1354    1       7       1778525364.0   1894     0.0     0       2.6     0.1     5.9     replay.t1.s1    2024-01-6T12:49:32      8.0.0          1aacaadf6a       0.8
+
+
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.3    246.70            246.22        85    2.902       0      0       0.0       6.1
+  L1      8/0   23.63 MB   0.9      0.7     0.3      0.4       0.6      0.2       0.0   2.3      3.4      3.1    196.60            196.41        21    9.362     19M  1522K       0.0       0.0
+  L2     46/1   126.26 MB   0.6      4.6     0.1      3.3       3.4      0.1       0.0   3.5      5.2      5.1    911.72            910.53      1147    0.795    102M  1658K       1.2       1.2
+ Sum     55/1   153.04 MB   0.0      5.3     0.4      3.7       4.2      0.5       0.0   1.8      4.0      8.7   1355.02           1353.17      1253    1.081    122M  3181K       1.2       7.2
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0     -0.0       0.0 33580123.0      4.2      4.2      7.57              7.55        19    0.398    888K      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      5.3     0.4      3.7       4.0      0.3       0.0   0.0      4.9      4.8   1108.32           1106.94      1168    0.949    122M  3181K       1.2       1.2
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.3    246.70            246.22        85    2.902       0      0       0.0       6.1
+
+Blob file count: 358, total size: 6.1 GB, garbage size: 2.6 GB, space amp: 1.7
+
+
+```
+Key_In increases 170M(I think this is caused by too many forcedblobgc jobs) , Read drops 17G , No big difference in key_drop..Blob sz increases 2GB.
+1247 jobs which is too many. We should not see ForcedBlobGC compaction_reason.
+See 1106 ForcedBlobGC jobs. This is because rocksdb think there are too mnay garbage in the blob 
+.
+We will have all blob files classified as short if we don't run model for 
+them during compaction jobs. 
+```
+2024/01/06-13:15:27.822263 3884117 [db/compaction/compaction_job.cc:1666] [default] [JOB 1020] Generated table #1633: 94627 keys, 3406468 bytes, temperature: kUnknown
+
+2024/01/06-13:15:28.632358 3884117 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 1021] Delete /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/001633.sst type=2 #1633 -- OK
+```
+1633.sst is generated in job 1020 but is immediately deleted in job 1021 one sec later which should not happen .
+I think there is no creation timestamp for for new blob during forcedblobgc compaction which cause this frequent gc jobs.
+Will update blob file addition creation constructor.
+It's also because that I don't rewrite blobs to new blob files which causes old garbage file to be recyled over and over again.
+I can add code to force write blob to new blob file if compaction reason is forcedblbogc to avoid gc happens for same file 
+over and over again. This way we can differentiate between compaction and real gc jobs.
+
+No enable_blob_garbage_collection in ForcedBlobGC compaction job which is not right. Need to check why this happens.
+
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               152MB   6GB     11.1    2.2     6.0     660     659     4       10      1778525353.0   1892     0.0     0       2.0     0.1     5.8     replay.t1.s1    2024-01-6T22:04:13      8.0.0          1aacaadf6a       0.8
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.6    243.04            242.67        85    2.859       0      0       0.0       6.1
+  L1      7/0   20.95 MB   0.8      0.7     0.3      0.4       0.6      0.2       0.0   2.1      3.8      3.5    197.02            196.85        22    8.956     19M  1519K       0.1       0.1
+  L2     50/1   127.64 MB   0.6      4.2     0.1      0.4       0.5      0.1       0.0   1.1     19.6     19.3    219.48            219.09        90    2.439     15M  1706K       3.7       3.7
+ Sum     58/1   151.74 MB   0.0      4.9     0.4      0.8       1.3      0.6       0.0   1.8      7.6     17.3    659.54            658.60       197    3.348     34M  3225K       3.8       9.8
+ Int      0/0    0.00 KB   0.0      0.3     0.0      0.0       0.0     -0.0       0.0 294797532.0     32.7     32.7      8.59              8.56         5    1.718    333K      0       0.3       0.3
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      4.9     0.4      0.8       1.1      0.3       0.0   0.0     12.1     11.8    416.50            415.94       112    3.719     34M  3225K       3.8       3.8
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.6    243.04            242.67        85    2.859       0      0       0.0       6.1
+
+Blob file count: 172, total size: 5.9 GB, garbage size: 2.4 GB, space amp: 1.7
+
+```
+Key_in is the same as no_model which is 30M. w_amp is low. space_amp is high.
+We have 6GB at the end.
+```
+no_model   r_gb: 20.8     w_gb: 27.0
+with_model r_gb:3.8       w_gb:9.8
+
+```
+
 There are more b_rgb than that in standard rocksdb ? why is that?
 b_wgb is much lower than that in standard rocksdb . why is that ? 
 c_mbps is very low. Is this because we need get features for each key?
@@ -5182,3 +5261,140 @@ be no need for model.
 Why do we see blob file deletion in level compaction between level_0 and level_1?
 So this mean that all files in level0 are used in this compaction process so 
 all blob files are deleted.
+
+compaction_job.cc
+In this function we see log compaction_reason
+It's called in CompactionJob::Run()
+```
+Status CompactionJob::Run() {
+  AutoThreadOperationStageUpdater stage_updater(
+      ThreadStatus::STAGE_COMPACTION_RUN);
+  TEST_SYNC_POINT("CompactionJob::Run():Start");
+  log_buffer_->FlushBufferToLog();
+  LogCompaction();
+
+
+```
+```
+void CompactionJob::LogCompaction() {
+  Compaction* compaction = compact_->compaction;
+  ColumnFamilyData* cfd = compaction->column_family_data();
+
+  // Let's check if anything will get logged. Don't prepare all the info if
+  // we're not logging
+  if (db_options_.info_log_level <= InfoLogLevel::INFO_LEVEL) {
+    Compaction::InputLevelSummaryBuffer inputs_summary;
+    ROCKS_LOG_INFO(
+        db_options_.info_log, "[%s] [JOB %d] Compacting %s, score %.2f",
+        cfd->GetName().c_str(), job_id_,
+        compaction->InputLevelSummary(&inputs_summary), compaction->score());
+    char scratch[2345];
+    compaction->Summary(scratch, sizeof(scratch));
+    ROCKS_LOG_INFO(db_options_.info_log, "[%s]: Compaction start summary: %s\n",
+                   cfd->GetName().c_str(), scratch);
+    // build event logger report
+    auto stream = event_logger_->Log();
+    stream << "job" << job_id_ << "event"
+           << "compaction_started"
+           << "compaction_reason"
+           << GetCompactionReasonString(compaction->compaction_reason());
+    for (size_t i = 0; i < compaction->num_input_levels(); ++i) {
+      stream << ("files_L" + std::to_string(compaction->level(i)));
+      stream.StartArray();
+      for (auto f : *compaction->inputs(i)) {
+        stream << f->fd.GetNumber();
+      }
+      stream.EndArray();
+
+```
+
+[Todo]
+Implement wisckey garbage collection process.
+Should we include both wisckey gc and rocksdb gc together? 
+compaction_picker_level.cc
+```
+void LevelCompactionBuilder::SetupInitialFiles() {
+  // Find the compactions by size on all levels.
+  bool skipped_l0_to_base = false;
+  for (int i = 0; i < compaction_picker_->NumberLevels() - 1; i++) {
+    start_level_score_ = vstorage_->CompactionScore(i);
+
+```
+I can put new blob gc function in MaybeScheduleFlushOrCompaction();
+
+Can no delete ExtractLargeValueIfNeededImpl() in compaction iterator 
+to disable gc in normal compaction.
+
+
+blob is updated if its blob num > age_cutoff_number
+```
+    if (blob_index.file_number() >=
+        blob_garbage_collection_cutoff_file_number_) {
+      return;
+    }
+```
+Where is it defined?
+
+```
+uint64_t CompactionIterator::ComputeBlobGarbageCollectionCutoffFileNumber(
+    const CompactionProxy* compaction) {
+  if (!compaction) {
+    return 0;
+  }
+
+  if (!compaction->enable_blob_garbage_collection()) {
+    return 0;
+  }
+
+  const Version* const version = compaction->input_version();
+  assert(version);
+
+  const VersionStorageInfo* const storage_info = version->storage_info();
+  assert(storage_info);
+
+  const auto& blob_files = storage_info->GetBlobFiles();
+
+  const size_t cutoff_index = static_cast<size_t>(
+      compaction->blob_garbage_collection_age_cutoff() * blob_files.size());
+
+  if (cutoff_index >= blob_files.size()) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+
+  const auto& meta = blob_files[cutoff_index];
+  assert(meta);
+
+  return meta->GetBlobFileNumber();
+}
+```
+This is no good for our gc method. Need to change this.
+What is 
+
+Where is enable_blob_garbage_collection() is defined?
+```
+enable_blob_garbage_collection_(
+          _blob_garbage_collection_policy == BlobGarbageCollectionPolicy::kForce
+              ? true
+              : (_blob_garbage_collection_policy ==
+                         BlobGarbageCollectionPolicy::kDisable
+                     ? false
+                     : mutable_cf_options()->enable_blob_garbage_collection)),
+
+```
+Don't think we can see gc for blobs in normal rocksdb run because age_cutoff=1.0.
+So I think enable_blob_garbage_collection_ is enable for every compaction.
+
+- No current gc in compaction_iterator.
+- Write a periodic GC function called in BackgroundCompaction()
+- Pick files in GC function 
+    Pick Blob files, 
+    Iterate blob files
+    Check validity of key and value.
+    Write back valid keys.
+    Delete old blob files.
+[Status: Ongoing]
+
+
+
+
+

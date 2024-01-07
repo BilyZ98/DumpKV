@@ -3552,9 +3552,9 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
             FileMetaData* const sst_meta = files_[level][pos];
             assert(sst_meta);
 
-            if (sst_meta->being_compacted) {
-              continue;
-            }
+            // if (sst_meta->being_compacted) {
+            //   continue;
+            // }
 
             files_marked_for_forced_blob_gc_.emplace_back(level, sst_meta);
           }

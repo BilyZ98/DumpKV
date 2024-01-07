@@ -225,6 +225,12 @@ CompactionIterator::CompactionIterator(
   // overwritten as soon as `MergeUntil()` is called
   merge_until_status_.PermitUncheckedError();
   TEST_SYNC_POINT_CALLBACK("CompactionIterator:AfterInit", compaction_.get());
+  ROCKS_LOG_INFO(info_log_,
+                        "blob_age_cutoff_file_number (%" PRIu64 ") "
+                        "enable_blob_garbage_collection (%"  PRId32 ") ",
+                        blob_garbage_collection_cutoff_file_number_,
+                 compaction ? (compaction->enable_blob_garbage_collection() ? 1 : 0): 0);
+
 }
 
 CompactionIterator::~CompactionIterator() {
@@ -1311,10 +1317,11 @@ uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_labe
   uint64_t orig_time_sec = LifetimeLabelToSecMap.at(orig_lifetime_label);
   // assert(orig_time_sec >= time_elapse_micros / 1000000);
   uint64_t remaining_time = 0;
-  if(orig_time_sec < time_elapse_micros / 1000000) {
+  uint64_t sec_micros = 1000000;
+  if(orig_time_sec < time_elapse_micros / sec_micros) {
     remaining_time = 0;
   } else{
-    remaining_time = orig_time_sec - time_elapse_micros / 1000000;
+    remaining_time = orig_time_sec - time_elapse_micros / sec_micros;
   }
   auto lower_boud_iter = std::lower_bound(LifetimeSecs.begin(), LifetimeSecs.end(), remaining_time);
 
@@ -1357,12 +1364,6 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
         return;
       }
     }
-
-    if (blob_index.file_number() >=
-        blob_garbage_collection_cutoff_file_number_) {
-      return;
-    }
-
     // blob file creation timestamp
     //
     // blob file lifetime label
@@ -1371,10 +1372,28 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
 
     auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
     uint64_t lifetime_label = blob_file_meta->GetLifetimeLabel();
+
     uint64_t creation_timestamp = blob_file_meta->GetCreationTimestamp();
 
     uint64_t time_elapse =  env_->NowMicros()  - creation_timestamp;
     uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
+    bool should_gc = false;
+    if(compaction_ && compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC) {
+      should_gc = true;
+
+    }
+    if( !should_gc && lifetime_label == new_lifetime_label) {
+      
+      return;
+    }
+
+
+
+    // if (!should_gc && blob_index.file_number() >=
+    //     blob_garbage_collection_cutoff_file_number_) {
+    //   return;
+    // }
+
 
     FilePrefetchBuffer* prefetch_buffer =
         prefetch_buffers_ ? prefetch_buffers_->GetOrCreatePrefetchBuffer(
