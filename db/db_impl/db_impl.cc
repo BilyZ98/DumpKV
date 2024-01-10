@@ -201,9 +201,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
       last_batch_group_size_(0),
       unscheduled_flushes_(0),
       unscheduled_compactions_(0),
+      unscheduled_garbage_collections_(0),
       bg_bottom_compaction_scheduled_(0),
       bg_compaction_scheduled_(0),
+      bg_gc_scheduled_(0),
       num_running_compactions_(0),
+      num_running_gcs_(0),
       bg_flush_scheduled_(0),
       num_running_flushes_(0),
       bg_purge_scheduled_(0),
@@ -606,6 +609,11 @@ Status DBImpl::CloseHelper() {
 
   while (!compaction_queue_.empty()) {
     auto cfd = PopFirstFromCompactionQueue();
+    cfd->UnrefAndTryDelete();
+  }
+
+  while(!gc_queue_.empty()) {
+    auto cfd = PopFirstFromGarbageCollectionQueue();
     cfd->UnrefAndTryDelete();
   }
 

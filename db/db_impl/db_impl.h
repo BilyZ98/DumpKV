@@ -23,6 +23,7 @@
 #include "db/column_family.h"
 #include "db/compaction/compaction_iterator.h"
 #include "db/compaction/compaction_job.h"
+#include "db/compaction/garbage_collection_job.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "db/external_sst_file_ingestion_job.h"
@@ -2075,10 +2076,13 @@ class DBImpl : public DB {
 
   void SchedulePendingFlush(const FlushRequest& req);
 
+  void SchedulePendingGarbageCollection(ColumnFamilyData* cfd);
   void SchedulePendingCompaction(ColumnFamilyData* cfd);
   void SchedulePendingPurge(std::string fname, std::string dir_to_sync,
                             FileType type, uint64_t number, int job_id);
   static void BGWorkCompaction(void* arg);
+
+  static void BGWorkGarbageCollection(void* arg); 
   // Runs a pre-chosen universal compaction involving bottom level in a
   // separate, bottom-pri thread pool.
   static void BGWorkBottomCompaction(void* arg);
@@ -2086,10 +2090,17 @@ class DBImpl : public DB {
   static void BGWorkPurge(void* arg);
   static void UnscheduleCompactionCallback(void* arg);
   static void UnscheduleFlushCallback(void* arg);
+  void BackgroundCallGarbageCollection(PrepickedCompaction* prepicked_compaction,
+                                Env::Priority thread_pri);
+
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority thread_pri);
   void BackgroundCallFlush(Env::Priority thread_pri);
   void BackgroundCallPurge();
+  Status BackgroundGarbageCollection(bool* madeProgress, JobContext* job_context,
+                              LogBuffer* log_buffer,
+                              PrepickedCompaction* prepicked_compaction,
+                              Env::Priority thread_pri);
   Status BackgroundCompaction(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
                               PrepickedCompaction* prepicked_compaction,
@@ -2128,10 +2139,17 @@ class DBImpl : public DB {
   // hold the data set.
   Status ReFitLevel(ColumnFamilyData* cfd, int level, int target_level = -1);
 
+  void AddToGarbageCollectionQueue(ColumnFamilyData* cfd);
+
   // helper functions for adding and removing from flush & compaction queues
   void AddToCompactionQueue(ColumnFamilyData* cfd);
   ColumnFamilyData* PopFirstFromCompactionQueue();
+  ColumnFamilyData* PopFirstFromGarbageCollectionQueue();
   FlushRequest PopFirstFromFlushQueue();
+
+  ColumnFamilyData* PickGarbageCollectionFromQueue(
+      std::unique_ptr<TaskLimiterToken>* token, LogBuffer* log_buffer);
+
 
   // Pick the first unthrottled compaction with task token from queue.
   ColumnFamilyData* PickCompactionFromQueue(
@@ -2529,6 +2547,8 @@ class DBImpl : public DB {
   // invariant(column family present in compaction_queue_ <==>
   // ColumnFamilyData::pending_compaction_ == true)
   std::deque<ColumnFamilyData*> compaction_queue_;
+  
+  std::deque<ColumnFamilyData*> gc_queue_;
 
   // A map to store file numbers and filenames of the files to be purged
   std::unordered_map<uint64_t, PurgeFileInfo> purge_files_;
@@ -2546,6 +2566,8 @@ class DBImpl : public DB {
 
   int unscheduled_compactions_;
 
+  int unscheduled_garbage_collections_;
+
   // count how many background compactions are running or have been scheduled in
   // the BOTTOM pool
   int bg_bottom_compaction_scheduled_;
@@ -2553,8 +2575,12 @@ class DBImpl : public DB {
   // count how many background compactions are running or have been scheduled
   int bg_compaction_scheduled_;
 
+  int bg_gc_scheduled_;
+
   // stores the number of compactions are currently running
   int num_running_compactions_;
+
+  int num_running_gcs_;
 
   // number of background memtable flush jobs, submitted to the HIGH pool
   int bg_flush_scheduled_;

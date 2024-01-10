@@ -4630,6 +4630,43 @@ with_model r_gb:3.8       w_gb:9.8
 
 ```
 
+update gc sst files selection logics. No decrease in blob_sz
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               153MB   6GB     11.3    2.2     6.1     664     662     4       10      1778525982.0   1893     0.0     0       2.0     0.1     5.8     replay.t1.s1    2024-01-7T12:22:14      8.0.0          1aacaadf6a       0.8
+```
+
+```
+
+2024/01/07-12:51:30.635997 1859860 [db/compaction/compaction_job.cc:1666] [default] [JOB 204] Generated table #832: 41354 keys, 1493183 bytes, temperature: kUnknown
+2024/01/07-12:51:36.508700 1859860 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000832.sst immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+```
+
+
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               152MB   6GB     11.1    2.2     6.0     657     656     4       10      1778525357.0   1892     0.0     0       2.0     0.1     5.8     replay.t1.s1    2024-01-7T17:05:13      8.0.0          1aacaadf6a       0.8
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.9    241.09            240.75        85    2.836       0      0       0.0       6.1
+  L1      7/0   21.46 MB   0.9      0.7     0.3      0.4       0.6      0.2       0.0   2.1      3.8      3.5    196.28            196.11        22    8.922     19M  1525K       0.1       0.1
+  L2     50/1   127.38 MB   0.6      4.1     0.1      0.4       0.4      0.1       0.0   1.1     19.5     19.2    217.25            216.86        91    2.387     15M  1693K       3.6       3.6
+ Sum     58/1   151.98 MB   0.0      4.9     0.4      0.8       1.3      0.6       0.0   1.8      7.6     17.3    654.61            653.72       198    3.306     34M  3218K       3.7       9.8
+ Int      0/0    0.00 KB   0.0      0.2     0.0      0.0       0.0     -0.0       0.0 250092158.0     32.4     32.4      7.36              7.33         4    1.840    282K      0       0.2       0.2
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      4.9     0.4      0.8       1.1      0.3       0.0   0.0     12.0     11.8    413.52            412.96       113    3.659     34M  3218K       3.7       3.7
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.9    241.09            240.75        85    2.836       0      0       0.0       6.1
+
+Blob file count: 175, total size: 6.0 GB, garbage size: 2.5 GB, space amp: 1.7
+
+
+```
+
 There are more b_rgb than that in standard rocksdb ? why is that?
 b_wgb is much lower than that in standard rocksdb . why is that ? 
 c_mbps is very low. Is this because we need get features for each key?
@@ -5384,12 +5421,349 @@ enable_blob_garbage_collection_(
 Don't think we can see gc for blobs in normal rocksdb run because age_cutoff=1.0.
 So I think enable_blob_garbage_collection_ is enable for every compaction.
 
+
+Where is MaybeScheduleFlushOrCompaction() called and when?
+```
+MaybeScheduleFlushOrCompaction()
+```
+
+db_impl_compaction_flush.cc
+Need to check where is unscheduled_compactions_ changed.
+```
+
+BackgroundCompaction()
+    unscheduled_compactions_++
+
+    auto cfd = PickCompactionFromQueue(&task_token, log_buffer); // 3252
+    c.reset(cfd->PickCompaction(*mutable_cf_options, mutable_db_options_,
+                                  log_buffer)); //3282
+ 
+```
+
+```
+
+void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {  or !enough_room or
+cfd->NeedsCompaction() or compaction_failed
+
+    void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
+      assert(!cfd->queued_for_compaction());
+      cfd->Ref();
+      compaction_queue_.push_back(cfd);
+      cfd->set_queued_for_compaction(true);
+    }
+```
+So cfd->NeedsCompaction() first, and then PickCompactionFromQueue() and then cfd->PickCompaction()
+So I can add my logics to cfd->NeedsCompaction()
+
+cfd->NeedsCompaction() check files_marked_for_forced_blob_gc, so there is 
+a function call before NeedsCompaction() to put files to this vector.
+It's called in version_set.cc ComputeFilesMarkedForForcedBlobGC(), when is 
+it called? It's called in 
+```
+void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
+                               Version* v) {
+    VersionStorageInfo::ComputeCompactionScore()   
+        ComputeFilesMarkedForForcedBlobGC(),
+```
+I can put blob files need to be gced into NeedsCompaction() function.
+And then write a new function to set up gc job and run instead of 
+creating compaction job ..
+
+Traditional compaction jobs need to call InstallSuperVersionAndScheduleWork()
+But my GC jobs need not to do that .
+How can I create GC job struct from PickCompaction() function?
+
+```
+
+void DBImpl::MaybeScheduleFlushOrCompaction() {
+    void DBImpl::BGWorkCompaction(void* arg) {
+        void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
+                                              Env::Priority bg_thread_pri) {
+
+            Status DBImpl::BackgroundCompaction(bool* made_progress,
+                                                JobContext* job_context,
+                                                LogBuffer* log_buffer,
+                                                PrepickedCompaction* prepicked_compaction,
+                                                Env::Priority thread_pri) {
+                PickCompaction()
+                Compaction* LevelCompactionPicker::PickCompaction(
+                    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+                    const MutableDBOptions& mutable_db_options, VersionStorageInfo* vstorage,
+                    LogBuffer* log_buffer) {
+                  LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
+                                                 mutable_cf_options, ioptions_,
+                                                 mutable_db_options);
+                  return builder.PickCompaction();
+                }   
+
+```
+I will put gc function inside MaybeScheduleFlushOrCompaction()
+I don't think so. It's too complicated. BGWorkCompaction() will call 
+compaction->InstallSuperVersionAndScheduleWork() which is not what I want.
+I don't do compaction..
+But I need to update version after gc job.
+I think I can create a new function to do GC in MaybeScheduleFlushOrCompaction()
+current version update is done by calling versionedit and installing new version.
+```
+
+    CompactionJob compaction_job(
+    compaction_job.Prepare();
+    mutex_.Unlock();
+    compaction_job.Run().PermitUncheckedError();
+    mutex_.Lock();
+    status = compaction_job.Install(*c->mutable_cf_options());
+    io_s = compaction_job.io_status();
+    if (status.ok()) {
+      InstallSuperVersionAndScheduleWork(c->column_family_data(),
+                                         &job_context->superversion_contexts[0],
+                                         *c->mutable_cf_options());
+    }
+ 
+```
+
+I can add if else in ColumnFamilyData::PickCompaction() to
+pick gc compaction from LevelCompactionPicker
+Do I really need to mix compaction and garbage collection job?
+We need to delete blob  files after doing gc.
+How can we achieve that ?
+I think we can add a GCJob which is not Compaction job.
+We can do similar version update which simply deletes blob files.
+Need to maintain correctness.
+```
+void DBImpl::InstallSuperVersionAndScheduleWork(
+    ColumnFamilyData* cfd, SuperVersionContext* sv_context,
+    const MutableCFOptions& mutable_cf_options) {
+      // Whenever we install new SuperVersion, we might need to issue new flushes or
+      // compactions.
+      SchedulePendingCompaction(cfd);
+      MaybeScheduleFlushOrCompaction();
+
+
+```
+so SchedulePendingCompaction(cfd) is called after InstallSuperVersionAndScheduleWork()
+basically flush triggers level compaction.
+
+Add DBImpl::BGWorkGarbageCollection() interface ;
+Call BGWorkGarbageCollection in MaybeScheduleFlushOrCompaction().
+NeedsGarbageCollection() will be called in BackgroundGarbageCollection()
+and BackgroundCompaction();
+
+how badgerdb do gc for value files
+https://github.com/dgraph-io/badger/blob/1c417aa3799cb5010cfc4d520647c769b4b46ba6/value.go#L172
+```
+fe := func(e Entry) error {
+		count++
+		if count%100000 == 0 {
+			vlog.opt.Debugf("Processing entry %d", count)
+		}
+
+		vs, err := vlog.db.get(e.Key)
+		if err != nil {
+			return err
+		}
+		if discardEntry(e, vs, vlog.db) {
+			return nil
+		}
+
+		// Value is still present in value log.
+		if len(vs.Value) == 0 {
+			return errors.Errorf("Empty value: %+v", vs)
+		}
+		var vp valuePointer
+		vp.Decode(vs.Value)
+
+		// If the entry found from the LSM Tree points to a newer vlog file, don't do anything.
+		if vp.Fid > f.fid {
+			return nil
+		}
+		// If the entry found from the LSM Tree points to an offset greater than the one
+		// read from vlog, don't do anything.
+		if vp.Offset > e.offset {
+			return nil
+		}
+		// If the entry read from LSM Tree and vlog file point to the same vlog file and offset,
+		// insert them back into the DB.
+		// NOTE: It might be possible that the entry read from the LSM Tree points to
+		// an older vlog file. See the comments in the else part.
+		if vp.Fid == f.fid && vp.Offset == e.offset {
+			moved++
+			// This new entry only contains the key, and a pointer to the value.
+			ne := new(Entry)
+			// Remove only the bitValuePointer and transaction markers. We
+			// should keep the other bits.
+			ne.meta = e.meta &^ (bitValuePointer | bitTxn | bitFinTxn)
+			ne.UserMeta = e.UserMeta
+			ne.ExpiresAt = e.ExpiresAt
+			ne.Key = append([]byte{}, e.Key...)
+			ne.Value = append([]byte{}, e.Value...)
+			es := ne.estimateSizeAndSetThreshold(vlog.db.valueThreshold())
+			// Consider size of value as well while considering the total size
+			// of the batch. There have been reports of high memory usage in
+			// rewrite because we don't consider the value size. See #1292.
+			es += int64(len(e.Value))
+
+			// Ensure length and size of wb is within transaction limits.
+			if int64(len(wb)+1) >= vlog.opt.maxBatchCount ||
+				size+es >=vlog.opt.maxBatchSize {
+				if err := vlog.db.batchSet(wb); err != nil {
+					return err
+				}
+				size = 0
+				wb = wb[:0]
+			}
+			wb = append(wb, ne)
+			size += es
+		} else { //nolint:staticcheck
+
+```
+
+May need to write some basic test to test gc job running.
+first of all, let's trigger gc jobs .
+
+Need to update bytes_read_blob in compaction_stats
+Don't know the difference between UpdateCompactionStats() and UpdateCompactionJobStats()
+```
+
+void CompactionJob::UpdateCompactionStats() {
+      UpdateCompactionInputStatsHelper(
+          &compaction_stats_.stats.num_input_files_in_non_output_levels,
+          &compaction_stats_.stats.bytes_read_non_output_levels, input_level);
+      assert(compaction_job_stats_);
+      compaction_stats_.stats.bytes_read_blob =
+          compaction_job_stats_->total_blob_bytes_read;
+
+
+
+void CompactionJob::UpdateCompactionJobStats(
+    const InternalStats::CompactionStats& stats) const {
+  compaction_job_stats_->elapsed_micros = stats.micros;
+
+  // input information
+  compaction_job_stats_->total_input_bytes =
+      stats.bytes_read_non_output_levels + stats.bytes_read_output_level;
+  compaction_job_stats_->num_input_records = stats.num_input_records;
+  compaction_job_stats_->num_input_files =
+      stats.num_input_files_in_non_output_levels +
+      stats.num_input_files_in_output_level;
+  compaction_job_stats_->num_input_files_at_output_level =
+      stats.num_input_files_in_output_level;
+
+
+```
+
+
+```
+The `CompactionJob::RecordCompactionIOStats()` function in RocksDB is used to record the I/O statistics related to a compaction job. Here's a breakdown of the code:
+
+void CompactionJob::RecordCompactionIOStats() {
+  RecordTick(stats_, COMPACT_READ_BYTES, IOSTATS(bytes_read));
+  RecordTick(stats_, COMPACT_WRITE_BYTES, IOSTATS(bytes_written));
+}
+
+- `RecordTick`: This is a function used to update a statistics counter in RocksDB. It takes three arguments: a pointer to a `Statistics` object, a `Tickers` enum value representing the specific counter to update, and the count to add to the counter.
+
+- `stats_`: This is a pointer to a `Statistics` object where various runtime statistics are recorded.
+
+- `COMPACT_READ_BYTES` and `COMPACT_WRITE_BYTES`: These are enum values from the `Tickers` enum. They represent counters for the number of bytes read and written during compaction, respectively.
+
+- `IOSTATS(bytes_read)` and `IOSTATS(bytes_written)`: These are macros that fetch the number of bytes read from and written to storage during the compaction job. The `IOSTATS` macro is used to access thread-local I/O statistics.
+
+So, in summary, this function updates the compaction read and write byte counters in the `Statistics` object with the number of bytes read and written during the compaction job¹². This can be useful for monitoring the I/O performance of RocksDB compactions. Please note that the actual usage may vary based on the context and the specific requirements of your application. For more detailed usage, you may want to look at the RocksDB source code¹.
+
+Source: Conversation with Bing, 1/8/2024
+(1) Compaction Stats and DB Status · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Compaction-Stats-and-DB-Status.
+(2) Compaction · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Compaction.
+(3) Reduce Write Amplification by Aligning Compaction Output File ... - RocksDB. https://rocksdb.org/blog/2022/10/31/align-compaction-output-file.html.
+(4) Manual Compaction · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Manual-Compaction.
+(5) undefined. https://smalldatum.blogspot.com/2018/08/name-that-compaction-algorithm.html.
+```
+
+
+Read this file to learn about how blob compaction is tested.
+```
+        db/blob/db_blob_compaction_test.cc
+```
+
+sst files are marked being compacted during construction of compaction.
+So during ComputeCompactionScore() those marked files will not be 
+considered .
+```
+        _compaction_reason == CompactionReason::kExternalSstIngestion ||
+                  _compaction_reason == CompactionReason::kRefitLevel
+              ? Compaction::kInvalidLevel
+              : EvaluatePenultimateLevel(vstorage, immutable_options_,
+                                         start_level_, output_level_)) {
+  MarkFilesBeingCompacted(true);
+  i
+```
+
+There is only one 'nothing to do ' log in LOG file which is not normal.
+And there is exit error during db destructino. Need to figure out 
+why and fix it.
+
+I need to write a method to collect training data during run time.
+Fuck, there are stll two big work items to do.
+I will finish current gc process asap and then start data collection 
+module
+
+AddToGarbageCollectionQueue ref cfd. 
+Where does unref happen? 
+unref happens in BackgroundGarbageCollection
+But refs_ is 2 at the end of execution.
+So there might be once call to ref but there is no call to unref.
+Need to find out where ref is called.
+```
+void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
+  assert(!cfd->queued_for_garbage_collection());
+  cfd->Ref();
+  gc_queue_.push_back(cfd);
+  cfd->set_queued_for_garbage_collection(true);
+}
+
+    if (cfd->UnrefAndTryDelete()) {
+      // This was the last reference of the column family, so no need to
+      // compact.
+      return Status::OK();
+    }
+
+
+
+gdb) p cfd->refs_
+$1 = std::atomic<int> = { 2 }
+```
+
+Fix two bugs
+1. update if(gc_queue_) from if(compaction_queue_) in gc job. 
+2. add gc_queue clean up in closehlper()
+```
+  while(!gc_queue_.empty()) {
+    auto cfd = PopFirstFromGarbageCollectionQueue();
+    cfd->UnrefAndTryDelete();
+  }
+
+
+```
+
+Fixed the ref bug after fix above
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               153MB   6GB     7.2     1.7     3.9     503     502     0       6       1778525656.0   1895     0.0     0       1.8     0.1     5.7     replay.t1.s1    2024-01-9T22:17:11      8.0.0          ef6523a70e       0.9
+```
+
+[Todo]
+Add PickGarbageCollection to LevelCompactionPicker
+
+[Status: Ongoing]
+
 - No current gc in compaction_iterator.
 - Write a periodic GC function called in BackgroundCompaction()
 - Pick files in GC function 
     Pick Blob files, 
     Iterate blob files
     Check validity of key and value.
+        Compare value of key in internal iterator.
+        I can compare value in value file or I can just compare 
+        sequence number. If there n
     Write back valid keys.
     Delete old blob files.
 [Status: Ongoing]

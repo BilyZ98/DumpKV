@@ -248,6 +248,9 @@ class VersionStorageInfo {
   void ComputeFilesMarkedForForcedBlobGCWithLifetime(
     double blob_garbage_collection_age_cutoff
   );
+
+  void ComputeBlobsMarkedForForcedGC(
+      double blob_garbage_collection_age_cutoff);
   // This computes files_marked_for_forced_blob_gc_ and is called by
   // ComputeCompactionScore()
   //
@@ -563,6 +566,12 @@ class VersionStorageInfo {
     return files_marked_for_forced_blob_gc_;
   }
 
+  const BlobFiles& BlobFilesMarkedForForcedBlobGC() const {
+    assert(finalized_);
+    return blob_files_marked_for_gc_ ;
+
+  }
+
   int base_level() const { return base_level_; }
   double level_multiplier() const { return level_multiplier_; }
 
@@ -766,6 +775,7 @@ class VersionStorageInfo {
       bottommost_files_marked_for_compaction_;
 
   autovector<std::pair<int, FileMetaData*>> files_marked_for_forced_blob_gc_;
+  BlobFiles blob_files_marked_for_gc_;
 
   // Threshold for needing to mark another bottommost file. Maintain it so we
   // can quickly check when releasing a snapshot whether more bottommost files

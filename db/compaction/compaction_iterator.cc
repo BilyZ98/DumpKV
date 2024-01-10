@@ -1345,9 +1345,14 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     assert(false);
     return;
   }
+  if(!compaction_->enable_blob_garbage_collection()) {
+    assert(false);
+    return;
+  }
 
   // GC for integrated BlobDB
   if (compaction_->enable_blob_garbage_collection()) {
+    return;
     TEST_SYNC_POINT_CALLBACK(
         "CompactionIterator::GarbageCollectBlobIfNeeded::TamperWithBlobIndex",
         &value_);
@@ -1382,6 +1387,8 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
       should_gc = true;
 
     }
+    
+
     if( !should_gc && lifetime_label == new_lifetime_label) {
       
       return;

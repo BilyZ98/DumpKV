@@ -17,6 +17,7 @@
 
 #include "db/compaction/compaction.h"
 #include "db/version_set.h"
+#include "db/compaction/garbage_collection.h"
 #include "options/cf_options.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
@@ -31,6 +32,7 @@ namespace ROCKSDB_NAMESPACE {
 class LogBuffer;
 class Compaction;
 class VersionStorageInfo;
+class GarbageCollection;
 struct CompactionInputFiles;
 
 // An abstract class to pick compactions from an existing LSM-tree.
@@ -60,6 +62,14 @@ class CompactionPicker {
                                      const MutableDBOptions& mutable_db_options,
                                      VersionStorageInfo* vstorage,
                                      LogBuffer* log_buffer) = 0;
+  virtual GarbageCollection* PickGarbageCollection(
+      const std::string& cf_name, 
+      const MutableCFOptions& mutable_cf_options,
+      const MutableDBOptions& mutable_db_options,
+      VersionStorageInfo* vstorage,
+      LogBuffer* log_buffer) {
+    return nullptr;
+  }
 
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
@@ -85,6 +95,8 @@ class CompactionPicker {
   virtual int MaxOutputLevel() const { return NumberLevels() - 1; }
 
   virtual bool NeedsCompaction(const VersionStorageInfo* vstorage) const = 0;
+
+  virtual bool NeedsGarbageCollection(const VersionStorageInfo* vstorage) const { return false; }
 
 // Sanitize the input set of compaction input files.
 // When the input parameters do not describe a valid compaction, the
@@ -278,6 +290,11 @@ class NullCompactionPicker : public CompactionPicker {
 
   // Always returns false.
   virtual bool NeedsCompaction(
+      const VersionStorageInfo* /*vstorage*/) const override {
+    return false;
+  }
+
+  virtual bool NeedsGarbageCollection(
       const VersionStorageInfo* /*vstorage*/) const override {
     return false;
   }

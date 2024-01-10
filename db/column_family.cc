@@ -1114,6 +1114,26 @@ bool ColumnFamilyData::NeedsCompaction() const {
          compaction_picker_->NeedsCompaction(current_->storage_info());
 }
 
+bool ColumnFamilyData::NeedsGarbageCollection() const {
+  return !mutable_cf_options_.disable_auto_compactions &&
+         compaction_picker_->NeedsGarbageCollection(current_->storage_info());
+}
+
+GarbageCollection* ColumnFamilyData::PickGarbageCollection(const MutableCFOptions& mutable_options,
+                             const MutableDBOptions& mutable_db_options,
+                             LogBuffer* log_buffer) {
+
+  auto* result = compaction_picker_->PickGarbageCollection(
+      GetName(), mutable_options, mutable_db_options, current_->storage_info(),
+      log_buffer);
+  if (result != nullptr) {
+    assert(false);
+    result->SetInputVersion(current_);
+  }
+  return result;
+}
+
+
 Compaction* ColumnFamilyData::PickCompaction(
     const MutableCFOptions& mutable_options,
     const MutableDBOptions& mutable_db_options, LogBuffer* log_buffer) {

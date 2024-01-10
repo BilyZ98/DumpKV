@@ -3392,8 +3392,12 @@ void VersionStorageInfo::ComputeCompactionScore(
   }
 
   if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
-    ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+
+    ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
+    // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
   }
+
+
 
   // if (mutable_cf_options.enable_blob_garbage_collection &&
   //     mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0 &&
@@ -3512,8 +3516,53 @@ void VersionStorageInfo::ComputeFilesMarkedForPeriodicCompaction(
   }
 }
 
+void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
+      double blob_garbage_collection_age_cutoff) {
+  blob_files_marked_for_gc_.clear();
+  for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
+    if(lifetime_blob_files_[lifetime_idx].empty()) {
+      continue;
+    }
+
+    const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
+    // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
+    if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
+      fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
+      assert(false);
+    }
+    uint64_t lifetime_ttl = lifetime_label_iter->second;
+    size_t to_be_gced_idx = 0;
+    uint64_t micros_to_sec = 1000000;
+    for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
+      if(iter->GetBeingGCed()) {
+        // this blob file is already being GCed
+        continue;
+      } 
+      uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
+      uint64_t now_sec = env_->NowMicros() / micros_to_sec;
+      assert(now_sec >= blob_file_creation_time_sec);
+
+      uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
+      if(elapsed_sec >= lifetime_ttl) {
+        iter->SetBeingGCed();
+        blob_files_marked_for_gc_.emplace_back(iter);
+
+
+        // this blob file is supposed to be GCed
+        // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
+      } else {
+        // this blob file is not supposed to be GCed
+        break;
+      }
+
+    }
+  }
+}
+
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
   double blob_garbage_collection_age_cutoff) {
+
+    files_marked_for_forced_blob_gc_.clear();
     // traversed the oldest blob files for each 
     // lifetime classification and pick the blob files
     // that is supposed to outlive its lifetime
