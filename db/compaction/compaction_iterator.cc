@@ -266,7 +266,7 @@ void CompactionIterator::SetCompactionTracer(std::shared_ptr<CompactionTracer> t
   compaction_tracer_ = tracer;
 }
 
-void CompactionIterator::SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
+void CompactionIterator::SetFeatures(const  std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
   features_ = features;
 
 }
@@ -1204,7 +1204,7 @@ bool CompactionIterator::GetFeatures( std::vector<double>* feature_vec ) {
     return false;
   }
   if(features_->at(user_key_str).find(seq) == features_->at(user_key_str).end()) {
-    assert(false);
+    // assert(false);
     return false;
   }
   *feature_vec = std::move(features_->at(user_key_str).at(seq));
@@ -1245,10 +1245,33 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
 
     bool get_feat = GetFeatures(&feature_vec);
     
+    int maxIndex = 0;
     if(!get_feat) {
-      fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
+      // fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
       // return false;
-      assert(false);
+      // assert(false);
+    } else {
+      int64_t out_len = 0;
+      uint64_t classification_num = lifetime_blob_file_builders_.size();
+      assert(classification_num >= 1);
+      // if(compaction_) {
+
+      //   classification_num = compaction_->real_compaction()->immutable_options()->num_classification;
+      // } else {
+      //   assert(false);
+      // }
+
+      assert(fast_config_handle_);
+      std::vector<double> out_result(classification_num, 0.0);
+      int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
+          fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
+      if(predict_res != 0) {
+        fprintf(stderr, " predict error \n");
+        assert(false);
+      }
+
+      // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+      maxIndex = out_result[0] > 0.5 ? 1: 0;
     }
     // features['insert_time'] = pd.to_numeric(features['insert_time'])
     // features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
@@ -1257,30 +1280,6 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     // feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
     // feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
     // feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
-
-
-
-    int64_t out_len = 0;
-    uint64_t classification_num = lifetime_blob_file_builders_.size();
-    assert(classification_num >= 1);
-    // if(compaction_) {
-
-    //   classification_num = compaction_->real_compaction()->immutable_options()->num_classification;
-    // } else {
-    //   assert(false);
-    // }
-
-    assert(fast_config_handle_);
-    std::vector<double> out_result(classification_num, 0.0);
-    int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
-        fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
-    if(predict_res != 0) {
-      fprintf(stderr, " predict error \n");
-      assert(false);
-    }
-
-    // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
-    int maxIndex = out_result[0] > 0.5 ? 1: 0;
 
     
      s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);

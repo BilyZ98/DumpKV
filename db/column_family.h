@@ -40,6 +40,7 @@ class MemTable;
 class MemTableListVersion;
 class CompactionPicker;
 class Compaction;
+class GarbageCollectionPicker;
 class GarbageCollection;
 class InternalKey;
 class InternalStats;
@@ -423,6 +424,7 @@ class ColumnFamilyData {
                            const std::string& trim_ts);
 
   CompactionPicker* compaction_picker() { return compaction_picker_.get(); }
+  GarbageCollectionPicker* garbage_collection_picker() { return garbage_collection_picker_.get(); }
   // thread-safe
   const Comparator* user_comparator() const {
     return internal_comparator_.user_comparator();
@@ -623,6 +625,8 @@ class ColumnFamilyData {
   // An object that keeps all the compaction stats
   // and picks the next compaction
   std::unique_ptr<CompactionPicker> compaction_picker_;
+
+  std::unique_ptr<GarbageCollectionPicker> garbage_collection_picker_;
 
   ColumnFamilySet* column_family_set_;
 

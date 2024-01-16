@@ -1,5 +1,5 @@
 #include "db/compaction/garbage_collection.h"
-
+#include "db/compaction/garbage_collection_picker.h"
 #include <cinttypes>
 #include <vector>
 
@@ -23,10 +23,27 @@ GarbageCollection::GarbageCollection(VersionStorageInfo* input_version,
   mutable_cf_options_(mutable_cf_options),
   input_version_(nullptr),
   cfd_(nullptr) {
+  for(auto& blob_file: input_blob_files_) {
+    blob_file->SetBeingGCed();
+  }
+
+}
+void GarbageCollection::ReleaseGarbageCollection() {
+    for(auto& blob_file: input_blob_files_) {
+      // blob_file->SetNotBeingGCed();
+    }
+    cfd_->garbage_collection_picker()->ReleaseGarbageCollection(this);
+
+  }
+
+void GarbageCollection::Summary(char* output, int len) {
 
 }
 
-void GarbageCollection::Summary(char* output, int len) {
+void GarbageCollection::AddInputDeletions(VersionEdit* edit) {
+  for(const auto& blob_file: input_blob_files_) {
+    edit->DeleteBlobFile(blob_file->GetBlobFileNumber());
+  }
 
 }
 void GarbageCollection::SetInputVersion(Version* input_version) {

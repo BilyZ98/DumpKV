@@ -429,9 +429,19 @@ class VersionEdit {
     deleted_files_.emplace(level, file);
   }
 
+  void DeleteBlobFile(uint64_t file) {
+    deleted_blob_files_.emplace(file);
+
+  }
+
   // Retrieve the table files deleted as well as their associated levels.
   using DeletedFiles = std::set<std::pair<int, uint64_t>>;
+  using DeletedBlobFiles = std::unordered_set<uint64_t>;
   const DeletedFiles& GetDeletedFiles() const { return deleted_files_; }
+
+  const DeletedBlobFiles& GetDeletedBlobFiles() const {
+    return deleted_blob_files_;
+  }
 
   // Add the specified table file at the specified level.
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
@@ -678,6 +688,8 @@ class VersionEdit {
   CompactCursors compact_cursors_;
 
   DeletedFiles deleted_files_;
+  DeletedBlobFiles deleted_blob_files_;
+
   NewFiles new_files_;
 
   BlobFileAdditions blob_file_additions_;

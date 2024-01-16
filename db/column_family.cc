@@ -21,6 +21,7 @@
 #include "db/compaction/compaction_picker.h"
 #include "db/compaction/compaction_picker_fifo.h"
 #include "db/compaction/compaction_picker_level.h"
+#include "db/compaction/garbage_collection_picker.h"
 #include "db/compaction/compaction_picker_universal.h"
 #include "db/db_impl/db_impl.h"
 #include "db/internal_stats.h"
@@ -615,6 +616,8 @@ ColumnFamilyData::ColumnFamilyData(
           new LevelCompactionPicker(ioptions_, &internal_comparator_));
     }
 
+    garbage_collection_picker_.reset(new GarbageCollectionPicker(ioptions_));
+
     if (column_family_set_->NumberOfColumnFamilies() < 10) {
       ROCKS_LOG_INFO(ioptions_.logger,
                      "--------------- Options for column family [%s]:\n",
@@ -1116,18 +1119,22 @@ bool ColumnFamilyData::NeedsCompaction() const {
 
 bool ColumnFamilyData::NeedsGarbageCollection() const {
   return !mutable_cf_options_.disable_auto_compactions &&
-         compaction_picker_->NeedsGarbageCollection(current_->storage_info());
+            garbage_collection_picker_->NeedsGarbageCollection(
+                current_->storage_info());
+         // compaction_picker_->NeedsGarbageCollection(current_->storage_info());
 }
 
 GarbageCollection* ColumnFamilyData::PickGarbageCollection(const MutableCFOptions& mutable_options,
                              const MutableDBOptions& mutable_db_options,
                              LogBuffer* log_buffer) {
 
-  auto* result = compaction_picker_->PickGarbageCollection(
+  auto* result = garbage_collection_picker_->PickGarbageCollection(
       GetName(), mutable_options, mutable_db_options, current_->storage_info(),
       log_buffer);
+  // auto* result = compaction_picker_->PickGarbageCollection(
+  //     GetName(), mutable_options, mutable_db_options, current_->storage_info(),
+  //     log_buffer);
   if (result != nullptr) {
-    assert(false);
     result->SetInputVersion(current_);
   }
   return result;

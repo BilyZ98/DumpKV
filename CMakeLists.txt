@@ -710,6 +710,7 @@ set(SOURCES
         db/compaction/garbage_collection.cc
         db/compaction/compaction_iterator.cc
         db/compaction/compaction_picker.cc
+        db/compaction/garbage_collection_picker.cc
         db/compaction/compaction_job.cc
         db/compaction/garbage_collection_job.cc
         db/compaction/compaction_picker_fifo.cc

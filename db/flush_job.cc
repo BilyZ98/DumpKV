@@ -913,8 +913,9 @@ Status FlushJob::WriteLevel0Table() {
     for (MemTable* m : mems_) {
       ROCKS_LOG_INFO(
           db_options_.info_log,
-          "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 "\n",
-          cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber());
+          "[%s] [JOB %d] Flushing memtable with next log file: %" PRIu64 " mem usage: %" PRIu64 "\n",
+          cfd_->GetName().c_str(), job_context_->job_id, m->GetNextLogNumber(),
+          total_memory_usage + m->ApproximateMemoryUsage());
       memtables.push_back(m->NewIterator(ro, &arena));
       auto* range_del_iter = m->NewRangeTombstoneIterator(
           ro, kMaxSequenceNumber, true /* immutable_memtable */);

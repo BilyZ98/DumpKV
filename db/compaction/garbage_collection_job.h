@@ -13,8 +13,8 @@
 
 #include "db/blob/blob_file_completion_callback.h"
 #include "db/column_family.h"
-#include "db/compaction/compaction_iterator.h"
-#include "db/compaction/compaction_outputs.h"
+// #include "db/compaction/compaction_iterator.h"
+// #include "db/compaction/compaction_outputs.h"
 #include "db/flush_scheduler.h"
 #include "db/internal_stats.h"
 #include "db/job_context.h"
@@ -71,17 +71,20 @@ public:
                        InstrumentedMutex* db_mutex,
                        ErrorHandler* error_handler,
                       JobContext* job_context,
+                      EventLogger* event_logger,
                       const std::string& dbname, 
-                       CompactionJobStats* compaction_job_stats);
+                       CompactionJobStats* compaction_job_stats,
+                       DBImpl* db);
 
 
   virtual ~GarbageCollectionJob();
   GarbageCollectionJob(const GarbageCollectionJob&) = delete;
   GarbageCollectionJob& operator=(const GarbageCollectionJob&) = delete;
+
   // REQUIRED: mutex held
   // Prepare for the compaction by setting up boundaries for each subcompaction
   void Prepare();
-  Status Run();
+  Status Run(InternalIterator* iter);
 
   // REQUIRED: mutex held
   // Add compaction input/output to the current version
@@ -91,10 +94,12 @@ public:
   IOStatus io_status() const { return io_status_; }
 
 protected:
+  Status ProcessGarbageCollection(InternalIterator* iter);
   void UpdateCompactionStats();
   void LogGarbageCollection();
+
   virtual void RecordCompactionIOStats();
-  void CleanupCompaction();
+  void CleanupGarbageCollection();
 
   GarbageCollection* gc_;
   InternalStats::CompactionStatsFull compaction_stats_;
@@ -145,6 +150,7 @@ protected:
   std::shared_ptr<Cache> table_cache_;
 
   EventLogger* event_logger_;
+  DBImpl* db_;
 
 
 };

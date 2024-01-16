@@ -162,6 +162,9 @@ class BlobFileMetaData {
   void SetBeingGCed() {
     being_gc_ed_ = true;
   }
+  void SetNotBeingGCed() {
+    being_gc_ed_ = false;
+  }
   bool GetBeingGCed() const {
     return being_gc_ed_;
   }

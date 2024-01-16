@@ -33,6 +33,7 @@ public:
   // Returns input version of the compaction
   Version* input_version() const { return input_version_; }
 
+  void ReleaseGarbageCollection() ;
   const BlobFiles* inputs() { return &input_blob_files_; }
 
   // Returns the ColumnFamilyData associated with the compaction.
@@ -57,11 +58,13 @@ public:
 
   void SetInputVersion(Version* input_version);
 
+  void AddInputDeletions(VersionEdit* edit);
+
 private:
   // No copying allowed
   GarbageCollection(const GarbageCollection&);
   void operator=(const GarbageCollection&);
-  const BlobFiles input_blob_files_;
+  BlobFiles input_blob_files_;
   VersionStorageInfo* input_vstorage_;
   const ImmutableOptions immutable_options_;
   const MutableCFOptions mutable_cf_options_;
@@ -69,6 +72,7 @@ private:
   VersionEdit edit_;
   ColumnFamilyData* cfd_;
   Arena arena_;  // Arena used to allocate space for file_levels_
+  DBImpl* db_;
 
 
 };

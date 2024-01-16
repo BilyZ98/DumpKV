@@ -11,6 +11,7 @@
 
 #include "db/builder.h"
 #include "db/db_impl/db_impl.h"
+#include "db/compaction/garbage_collection.h"
 #include "db/error_handler.h"
 #include "db/event_helpers.h"
 #include "file/sst_file_manager_impl.h"
@@ -2614,7 +2615,7 @@ void DBImpl::MaybeScheduleFlushOrCompaction() {
                    &DBImpl::UnscheduleCompactionCallback);
   }
 
-  while(bg_gc_scheduled_ < 10 &&
+  while(bg_gc_scheduled_ < 1 &&
       unscheduled_garbage_collections_ > 0) {
     CompactionArg* ca = new CompactionArg;
     ca->db = this;
@@ -3127,23 +3128,14 @@ void DBImpl::BackgroundCallGarbageCollection(PrepickedCompaction* compaction,
       immutable_db_options_.clock->SleepForMicroseconds(1000000);
       mutex_.Lock();
     }
-    // else if (s.IsManualCompactionPaused()) {
-    //   assert(prepicked_compaction);
-    //   ManualCompactionState* m = prepicked_compaction->manual_compaction_state;
-    //   assert(m);
-    //   ROCKS_LOG_BUFFER(&log_buffer, "[%s] [JOB %d] Manual compaction paused",
-    //                    m->cfd->GetName().c_str(), job_context.job_id);
-    // }
-
-    // ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
 
     // If compaction failed, we want to delete all temporary files that we
     // might have created (they might not be all recorded in job_context in
     // case of a failure). Thus, we force full scan in FindObsoleteFiles()
-    // FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress() &&
-    //                                     !s.IsManualCompactionPaused() &&
-    //                                     !s.IsColumnFamilyDropped() &&
-    //                                     !s.IsBusy());
+    FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress() &&
+                                        !s.IsManualCompactionPaused() &&
+                                        !s.IsColumnFamilyDropped() &&
+                                        !s.IsBusy());
     TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:FoundObsoleteFiles");
 
     // delete unnecessary files if any, this is done outside the mutex
@@ -3167,16 +3159,8 @@ void DBImpl::BackgroundCallGarbageCollection(PrepickedCompaction* compaction,
     assert(num_running_gcs_ > 0);
     num_running_gcs_--;
 
-    if (thread_pri == Env::Priority::LOW) {
-      // bg_compaction_scheduled_--;
-      bg_gc_scheduled_--;
-    } 
-    // else {
-    //   assert(bg_thread_pri == Env::Priority::BOTTOM);
-    //   bg_bottom_compaction_scheduled_--;
-    // }
-
-    // See if there's more work to be done
+    bg_gc_scheduled_--;
+   // See if there's more work to be done
     MaybeScheduleFlushOrCompaction();
 
     // if (prepicked_compaction != nullptr &&
@@ -3405,7 +3389,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
 
           // update statistics
           size_t num_files = 0;
-          for (auto& each_level : *gc->inputs()) {
+          for (auto& each_level : *(gc->inputs()) ) {
             // num_files += each_level.files.size();
           }
           RecordInHistogram(stats_, NUM_FILES_IN_SINGLE_COMPACTION, num_files);
@@ -3466,16 +3450,29 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
                                 &mutex_,
                                 &error_handler_,
                                 job_context,
+                                &event_logger_,
                                 dbname_,
-                                &compaction_job_stats);
+                                &compaction_job_stats,
+                                this);
 
     gc_job.Prepare();
     mutex_.Unlock();
+
+    {
+      Arena arena;
+      auto cfd = gc->column_family_data();
+      SuperVersion* sv = cfd->GetSuperVersion();
+      ReadOptions read_options;
+      ScopedArenaIterator iter;
+      iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+
     TEST_SYNC_POINT_CALLBACK(
-        "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
-    // Should handle erorr?
-    gc_job.Run().PermitUncheckedError();
-    TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
+        "DBImpl::BackgroundGarbageCollection:NonTrivial:BeforeRun", nullptr);
+      // Should handle erorr?
+      gc_job.Run(iter.get()).PermitUncheckedError();
+      
+    TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:NonTrivial:AfterRun");
+    }
 
     mutex_.Lock();
     status = gc_job.Install(*gc->mutable_cf_options());
@@ -3487,7 +3484,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
     }
 
     *madeProgress = true;
-    TEST_SYNC_POINT_CALLBACK("DBImpl::BackgroundCompaction:AfterCompaction",
+    TEST_SYNC_POINT_CALLBACK("DBImpl:: BackgroundGarbageCollection:AfterCompaction",
                              gc->column_family_data());
 
   }
@@ -3495,6 +3492,10 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
     status = io_s;
   } else {
     io_s.PermitUncheckedError();
+  }
+
+  if(gc != nullptr) {
+    gc->ReleaseGarbageCollection();
   }
 
   if(status.ok()) {

@@ -741,9 +741,7 @@ Status MemTable::AddWithFeatures(SequenceNumber s, ValueType type, const Slice& 
   db->GetKeyFeatures(key, key_features);
   key_features_[s] = key_features;
   //
-  // key_features->write_rate_mb_per_sec = db->
-  // key_features->time_stamp = db_->
-  // key_features->time_stamp
+
   char* buf = nullptr;
   // key_features_[s] = key_features;
   std::unique_ptr<MemTableRep>& table =

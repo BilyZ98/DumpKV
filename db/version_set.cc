@@ -3391,11 +3391,11 @@ void VersionStorageInfo::ComputeCompactionScore(
         immutable_options, mutable_cf_options.periodic_compaction_seconds);
   }
 
-  if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
+  // if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
 
-    ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
-    // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
-  }
+  //   ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
+  //   // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+  // }
 
 
 
@@ -3544,7 +3544,7 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
 
       uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
       if(elapsed_sec >= lifetime_ttl) {
-        iter->SetBeingGCed();
+        // iter->SetBeingGCed();
         blob_files_marked_for_gc_.emplace_back(iter);
 
 
@@ -5020,6 +5020,8 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
   v->storage_info()->ComputeCompactionScore(
       *column_family_data->ioptions(),
       *column_family_data->GetLatestMutableCFOptions());
+
+  v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
 
   // Mark v finalized
   v->storage_info_.SetFinalized();

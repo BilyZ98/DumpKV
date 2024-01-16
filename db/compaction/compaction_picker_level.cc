@@ -19,9 +19,9 @@
 
 namespace ROCKSDB_NAMESPACE {
 
-bool LevelCompactionPicker::NeedsGarbageCollection(const VersionStorageInfo* vstorage) const {
-  return !vstorage->BlobFilesMarkedForForcedBlobGC().empty();
-}
+// bool LevelCompactionPicker::NeedsGarbageCollection(const VersionStorageInfo* vstorage) const {
+//   return !vstorage->BlobFilesMarkedForForcedBlobGC().empty();
+// }
 bool LevelCompactionPicker::NeedsCompaction(
     const VersionStorageInfo* vstorage) const {
   if (!vstorage->ExpiredTtlFiles().empty()) {
@@ -848,20 +848,24 @@ Compaction* LevelCompactionPicker::PickCompaction(
 }
 
 
-GarbageCollection* LevelCompactionPicker::PickGarbageCollection(
-      const std::string& cf_name, 
-      const MutableCFOptions& mutable_cf_options,
-      const MutableDBOptions& mutable_db_options,
-      VersionStorageInfo* vstorage,
-      LogBuffer* log_buffer)   {
+// GarbageCollection* LevelCompactionPicker::PickGarbageCollection(
+//       const std::string& cf_name, 
+//       const MutableCFOptions& mutable_cf_options,
+//       const MutableDBOptions& mutable_db_options,
+//       VersionStorageInfo* vstorage,
+//       LogBuffer* log_buffer)   {
 
-  return nullptr;
-  // LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
-  //                                mutable_cf_options, ioptions_,
-  //                                mutable_db_options);
-  // return builder.PickGarbageCollection();
+//   // get blob files from files_marked_for_gc_;
+//   // iterate over blob files and find the ones that are not in the
+//   // registered gced blob files.
+//   // create GarbageCollection object and return it.
+//   return nullptr;
+//   // LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
+//   //                                mutable_cf_options, ioptions_,
+//   //                                mutable_db_options);
+//   // return builder.PickGarbageCollection();
 
-}
+// }
 
 
 
