@@ -76,6 +76,7 @@ GarbageCollectionJob::GarbageCollectionJob(
     EventLogger* event_logger,
     const std::string& dbname, 
      CompactionJobStats* compaction_job_stats,
+    Env::Priority thread_pri,
     DBImpl* db)
     : gc_(gc),
       db_options_(db_options),
@@ -95,6 +96,7 @@ GarbageCollectionJob::GarbageCollectionJob(
       db_error_handler_(error_handler),
       job_context_(job_context),
       event_logger_(event_logger),
+      thread_pri_(thread_pri),
       db_(db)
       {
 
@@ -128,11 +130,45 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
   Status status;
   ColumnFamilyData* cfd = gc_->column_family_data();
   assert(cfd);
-  // cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
-  //                                           compaction_stats_);
-  //
-  
+ 
+  cfd->internal_stats()->AddGCStats(thread_pri_, gc_stats_);
   status = InstallGarbageCollectionResults(mutable_cf_options);
+  assert(status.ok());
+
+  auto stream = event_logger_->LogToBuffer(log_buffer_, 8192);
+  stream << "job" << job_id_ << "event"
+    << "gc_finished";
+
+
+  auto vstorage = cfd->current()->storage_info();
+  const auto& blob_files = vstorage->GetBlobFiles();
+  const auto& lifetime_blob_files = vstorage->GetLifetimeBlobFiles();
+  if (!blob_files.empty()) {
+    assert(blob_files.front());
+    stream << "blob_file_head" << blob_files.front()->GetBlobFileNumber();
+
+    assert(blob_files.back());
+    stream << "blob_file_tail" << blob_files.back()->GetBlobFileNumber();
+
+    stream << "blob_files";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetBlobFileNumber() ;
+    }
+    stream.EndArray();
+
+    for(size_t i=0; i < lifetime_blob_files.size(); ++i) {
+      std::string key = "lifetime_blob_" + std::to_string(i);
+      stream << key; 
+      stream.StartArray();
+      for(const auto& blob_file:lifetime_blob_files[i]) {
+        stream << blob_file->GetBlobFileNumber() ;
+      }
+      stream.EndArray();
+    }
+    
+  }
+
 
   CleanupGarbageCollection();
 
@@ -169,6 +205,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   uint64_t invalid_key_num = 0;
   uint64_t valid_value_size = 0;
   uint64_t invalid_value_size = 0;
+  uint64_t valid_key_size = 0;
+  uint64_t invalid_key_size = 0;
+  uint64_t total_blob_size = 0;
 
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
@@ -252,14 +291,19 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
           // Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
             s = db_->Put(write_options, cf_handle, blob_user_key,  blob_value);
             if(!s.ok()) {
+              // assert(false);
               return s;
             }
             valid_key_num++;
             valid_value_size+=record.value_size;
+            valid_key_size+=record.key_size;
           } else {
             invalid_key_num++;
             invalid_value_size+=record.value_size;
+            invalid_key_size+=record.key_size;
           }
+
+          total_blob_size+=record.record_size();
 
         }
       }
@@ -282,10 +326,19 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     // fout << std::endl;
   
 
-    BlobLogFooter footer;
-    blob_log_reader.ReadFooter(&footer);
+      BlobLogFooter footer;
+      blob_log_reader.ReadFooter(&footer);
+    
   }
+  gc_stats_.stats.num_input_records = valid_key_num + invalid_key_num;
+  gc_stats_.stats.bytes_read_blob = total_blob_size;
+  gc_stats_.stats.num_output_records = valid_key_num;
+  gc_stats_.stats.bytes_written = valid_value_size + valid_key_size;
+  gc_stats_.stats.num_dropped_records = invalid_key_num;
+
+
   
+  UpdateGarbageCollectionStats();
   auto stream = event_logger_->LogToBuffer(log_buffer_, 8192);
   stream << "job" << job_id_ << "valid_key_num" << valid_key_num 
     << "invalid_key_num" << invalid_key_num 
@@ -299,7 +352,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   return s;
 }
 
-void GarbageCollectionJob::UpdateCompactionStats() {
+void GarbageCollectionJob::UpdateGarbageCollectionStats() {
 
 }
 void GarbageCollectionJob::LogGarbageCollection() {

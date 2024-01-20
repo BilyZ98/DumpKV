@@ -2157,6 +2157,7 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
 
   auto blob_file_meta = storage_info_.GetBlobFileMetaData(blob_file_number);
   if (!blob_file_meta) {
+    assert(false);
     return Status::Corruption("Invalid blob file number");
   }
 
@@ -2188,6 +2189,7 @@ void Version::MultiGetBlob(
       const KeyContext& key_context = blob.second;
 
       if (!blob_file_meta) {
+        assert(false);
         *key_context.s = Status::Corruption("Invalid blob file number");
         continue;
       }
@@ -5176,6 +5178,7 @@ Status VersionSet::ProcessManifestWrites(
       auto* builder = builder_guards[i]->version_builder();
       Status s = builder->SaveTo(versions[i]->storage_info());
       if (!s.ok()) {
+          assert(false);
         // free up the allocated memory
         for (auto v : versions) {
           delete v;

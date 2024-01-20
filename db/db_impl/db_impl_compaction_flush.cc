@@ -3453,6 +3453,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
                                 &event_logger_,
                                 dbname_,
                                 &compaction_job_stats,
+                                thread_pri,
                                 this);
 
     gc_job.Prepare();

@@ -33,6 +33,7 @@
 #include "port/port.h"
 #include "table/table_reader.h"
 #include "util/string_util.h"
+#include "logging/logging.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -991,6 +992,7 @@ class VersionBuilder::Rep {
     // for (const auto& blob_file_garbage : edit->GetBlobFileGarbages()) {
     //   const Status s = ApplyBlobFileGarbage(blob_file_garbage);
     //   if (!s.ok()) {
+    //     assert(false);
     //     return s;
     //   }
     // }
@@ -1002,6 +1004,7 @@ class VersionBuilder::Rep {
 
       const Status s = ApplyFileDeletion(level, file_number);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1013,6 +1016,7 @@ class VersionBuilder::Rep {
 
       const Status s = ApplyFileAddition(level, meta);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1024,6 +1028,7 @@ class VersionBuilder::Rep {
       const InternalKey smallest_uncompacted_key = cursor.second;
       const Status s = ApplyCompactCursors(level, smallest_uncompacted_key);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1302,6 +1307,8 @@ class VersionBuilder::Rep {
     MergeBlobFileMetas(kInvalidBlobFileNumber, process_base, process_mutable,
                        process_both);
 
+    ROCKS_LOG_INFO(version_set_->db_options()->info_log, 
+                   " GetMinOldestBlobFileNumber: %lu", min_oldest_blob_file_num);
     return min_oldest_blob_file_num;
   }
 
@@ -1321,6 +1328,7 @@ class VersionBuilder::Rep {
 
     if (meta->GetLinkedSsts().empty() &&
         meta->GetGarbageBlobCount() >= meta->GetTotalBlobCount()) {
+      assert(false);
       return;
     }
 
@@ -1376,7 +1384,8 @@ class VersionBuilder::Rep {
 
    size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
 
-   const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
+   // const uint64_t oldest_blob_file_with_linked_ssts = GetMinOldestBlobFileNumber();
+    const uint64_t oldest_blob_file_with_linked_ssts = 0;
 
  
     for(size_t i=0; i < lifetime_bucket_size; i++) {
@@ -1656,6 +1665,7 @@ Status VersionBuilder::Apply(const VersionEdit* edit) {
 
 Status VersionBuilder::SaveTo(VersionStorageInfo* vstorage) const {
   return rep_->SaveTo(vstorage);
+
 }
 
 Status VersionBuilder::LoadTableHandlers(

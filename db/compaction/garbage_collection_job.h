@@ -74,6 +74,7 @@ public:
                       EventLogger* event_logger,
                       const std::string& dbname, 
                        CompactionJobStats* compaction_job_stats,
+                       Env::Priority thread_pri,
                        DBImpl* db);
 
 
@@ -95,14 +96,14 @@ public:
 
 protected:
   Status ProcessGarbageCollection(InternalIterator* iter);
-  void UpdateCompactionStats();
+  void UpdateGarbageCollectionStats();
   void LogGarbageCollection();
 
   virtual void RecordCompactionIOStats();
   void CleanupGarbageCollection();
 
   GarbageCollection* gc_;
-  InternalStats::CompactionStatsFull compaction_stats_;
+  InternalStats::CompactionStatsFull gc_stats_;
   const ImmutableDBOptions& db_options_;
   const MutableDBOptions mutable_db_options_copy_;
   LogBuffer* log_buffer_;
@@ -150,6 +151,7 @@ protected:
   std::shared_ptr<Cache> table_cache_;
 
   EventLogger* event_logger_;
+  Env::Priority thread_pri_;
   DBImpl* db_;
 
 

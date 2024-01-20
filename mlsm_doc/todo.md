@@ -6535,9 +6535,135 @@ ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   
 0               127MB   2GB     6.0     1.9     5.3     296     295     0       5       1033092328.0                                            1148    0.0     0       1.3     0.1     5.9    replay.t1.s1     2024-01-16T18:00:37     8.0.0           41ac5b042d      0.8
 
 ```
+Remove  AddWithFeatures from memtable.cc and restart replay.
+No seg fault this time but stil only 7611k writes.
+Let's  remove db->put() from gc job and see if we can get 1M writes.
 
-[Status: Ongoing ]
+Only 2017k writes at the end of replay Let's see what's wrong.
+Is this because I set num_writes to 2M in call_run_blob.sh?
+num_keys=50000000
+Need to check how replay works
+I think this is because get op get status not ok and replay failed.
+So this is why out current replay failing to replay all writes.
 
+
+Found invalid blob file number during run time. So I search
+invalid blob file number in all files and found GetBlob() function
+contains this log msg. I add assert(false); to this function and 
+see what's wrong.
+
+blob:88 not exist in GetBlob()
+I found 88 blob file why is that ?
+Is this because blob file not added in GetMinOldestBlobFileNumber?
+
+```
+000088.blob
+2024/01/17-15:21:26.715345 489412 (Original Log Time 2024/01/17-15:21:26.714864) EVENT_LOG_v1 {"time_micros": 1705476086714796, "job": 159, "event": "compaction_finished", "compaction_time_micros": 17296315, "compaction_time_cpu_micros": 17286682, "output_level": 1, "num_output_files": 13, "total_output_size": 39680315, "num_input_records": 1136283, "num_output_records": 1096304, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [1, 13, 36, 0, 0, 0, 0, 0], "blob_file_head": 282, "blob_file_tail": 449, "blob_files": [282, 285, 298, 301, 304, 305, 315, 327, 337, 340, 353, 366, 369, 372, 373, 381, 392, 393, 403, 404, 407, 415, 424, 435, 440, 449], "lifetime_blob_0": [282, 298, 301, 304, 315, 327, 337, 340, 353, 366, 369, 372, 381, 392, 403, 407, 415, 424, 435, 440, 449], "lifetime_blob_1": [285, 305, 373, 393, 404]}
+```
+
+
+```
+ProcessKeyValueCompaction()
+  if (sub_compact->compaction->DoesInputReferenceBlobFiles()) {
+    BlobGarbageMeter* meter = sub_compact->Current().CreateBlobGarbageMeter();
+    blob_counter = std::make_unique<BlobCountingIterator>(input, meter);
+    input = blob_counter.get();
+  }
+  void Next() override {
+    assert(Valid());
+
+    iter_->Next();
+    UpdateAndCountBlobIfNeeded();
+  }
+
+
+```
+Does new sst file link original blob files?
+I don't think I make this step.
+```
+Status BlobGarbageMeter::ProcessOutFlow(const Slice& key, const Slice& value) {
+  // Note: in order to measure the amount of additional garbage, we only need to
+  // track the outflow for preexisting files, i.e. those that also had inflow.
+  // (Newly written files would only have outflow.)
+  auto it = flows_.find(blob_file_number);
+  if (it == flows_.end()) {
+    return Status::OK();
+  }
+
+  it->second.AddOutFlow(bytes);
+
+
+    uint64_t GetGarbageCount() const {
+      assert(IsValid());
+      assert(HasGarbage());
+      return in_flow_.GetCount() - out_flow_.GetCount();
+    }
+
+
+
+
+          for (const auto& pair : flows) {
+        const uint64_t blob_file_number = pair.first;
+        const BlobGarbageMeter::BlobInOutFlow& flow = pair.second;
+
+        assert(flow.IsValid());
+        if (flow.HasGarbage()) {
+          blob_total_garbage[blob_file_number].Add(flow.GetGarbageCount(),
+                                                   flow.GetGarbageBytes());
+    }
+      }
+    }
+  }
+
+  for (const auto& pair : blob_total_garbage) {
+    const uint64_t blob_file_number = pair.first;
+    const BlobGarbageMeter::BlobStats& stats = pair.second;
+
+    edit->AddBlobFileGarbage(blob_file_number, stats.GetCount(),
+                             stats.GetBytes());
+  }
+```
+So ProcessOutFlow means new blobs out?
+May need to link sst for each lifetime classes.
+I am trying to get log from version storage and then log min oldest blob file number
+I think this is the problem, the min oldest log number might be too high.  
+Set min_oldest_blob_file_numer to zero instead of get blob files with linked sst.
+Now log looks normal . There are log entries showing blob files being deleted.
+Fixed seg fault bug in Get after code update above.
+
+[Status: Done ]
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      5/4   19.54 MB   0.2      0.0     0.0      0.0       0.5      0.5       0.0   1.0      0.0     61.1    222.14            221.52       153    1.452       0      0       0.0      12.7
+  L1      8/8   24.60 MB   0.0      1.3     0.5      0.8       1.2      0.5       0.0   2.3      3.8      3.6    350.55            350.23        37    9.474     38M  1759K       0.0       0.0
+  L2     50/0   132.73 MB   0.7      1.1     0.4      0.7       0.8      0.1       0.0   2.1      4.3      3.2    269.72            269.51       130    2.075     33M  9155K       0.0       0.0
+ Sum     63/12  176.87 MB   0.0      2.4     0.9      1.5       2.6      1.1       0.0   1.2      3.0     18.6    842.41            841.27       320    2.633     72M    10M       0.0      12.7
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      2.4     0.9      1.5       2.1      0.6       0.0   0.0      4.0      3.4    620.27            619.74       167    3.714     72M    10M       0.0       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   0.0      0.0     61.1    222.14            221.52       153    1.452       0      0       0.0      12.7
+
+Blob file count: 60, total size: 4.1 GB, garbage size: 0.0 GB, space amp: 1.0
+
+
+** DB Stats **
+Uptime(secs): 1892.6 total, 0.2 interval
+Cumulative writes: 18M writes, 18M keys, 18M commit groups, 1.0 writes per commit group, ingest: 14.30 GB, 7.74 MB/s
+Cumulative WAL: 18M writes, 0 syncs, 18278197.00 writes per sync, written: 14.30 GB, 7.74 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 3205 writes, 3205 keys, 3161 commit groups, 1.0 writes per commit group, ingest: 2.56 MB, 12.05 MB/s
+Interval WAL: 3204 writes, 0 syncs, 3204.00 writes per sync, written: 0.00 GB, 12.05 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50      p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test   date     version job_id  githash
+0               175MB   4GB     15.4    2.0     8.3     853     852     0       13      1778525350.0                                            1893    0.0     0       3.0     0.1     7.9    replay.t1.s1     2024-01-18T11:34:36     8.0.0           41ac5b042d      1.0
+```
+With 8M more writes which is not acceptable. Let's decrease extra writes to 2M. 
 invalid ratio of keys is not so high from LOG.
 I may need toadjust lifetime label and put keys that are written once 
 into a longer classification.
@@ -6546,10 +6672,189 @@ Let's see how space amp works after I do file deletion.
 xingqi's work items
 - ssd trace analysis
 - ycsba trace analysis 
+no model: 10.6% drop
+with model: 13% drop
+I think we can have more drop keys if 
+we test if blob is valid during compaction iter.
 
 [Todo]
 Add bytes_read_blob stats in gc job.
-[Status: Ongoing]
+```
+CompactionJob::Run()
+    ProcessKeyValueCompaction()
+        compaction iter PrepareOutput
+            
+          const Status s = blob_fetcher_->FetchBlob(
+              user_key(), blob_index, prefetch_buffer, &blob_value_, &bytes_read);
+
+          if (!s.ok()) {
+            status_ = s;
+            validity_info_.Invalidate();
+
+            return;
+          }
+        }
+
+        ++iter_stats_.num_blobs_read;
+        iter_stats_.total_blob_bytes_read += bytes_read;
+
+        ++iter_stats_.num_blobs_relocated;
+        iter_stats_.total_blob_bytes_relocated += blob_index.size();
+
+        
+      sub_compact->compaction_job_stats.num_blobs_read =
+          c_iter_stats.num_blobs_read;
+      sub_compact->compaction_job_stats.total_blob_bytes_read =
+          c_iter_stats.total_blob_bytes_read;
+      sub_compact->compaction_job_stats.num_input_deletion_records =
+          c_iter_stats.num_input_deletion_records;
+      sub_compact->compaction_job_stats.num_corrupt_keys =
+          c_iter_stats.num_input_corrupt_records;
+      sub_compact->compaction_job_stats.num_single_del_fallthru =
+          c_iter_stats.num_single_del_fallthru;
+ 
+ // Finish up all book-keeping to unify the subcompaction results
+  compact_->AggregateCompactionStats(compaction_stats_, *compaction_job_stats_);
+    CompactionJobStats& compaction_job_stats) {
+      for (const auto& sc : sub_compact_states) {
+        sc.AggregateCompactionStats(compaction_stats);
+        compaction_job_stats.Add(sc.compaction_job_stats);
+      }
+        void CompactionJobStats::Add(const CompactionJobStats& stats) {
+          elapsed_micros += stats.elapsed_micros;
+          cpu_micros += stats.cpu_micros;
+
+          num_input_records += stats.num_input_records;
+          num_blobs_read += stats.num_blobs_read;
+          num_input_files += stats.num_input_files;
+          num_input_files_at_output_level += stats.num_input_files_at_output_level;
+
+ 
+  UpdateCompactionStats();
+        void CompactionJob::UpdateCompactionStats() {
+          assert(compact_);
+
+          Compaction* compaction = compact_->compaction;
+          compaction_stats_.stats.num_input_files_in_non_output_levels = 0;
+          compaction_stats_.stats.num_input_files_in_output_level = 0;
+          for (int input_level = 0;
+               input_level < static_cast<int>(compaction->num_input_levels());
+               ++input_level) {
+            if (compaction->level(input_level) != compaction->output_level()) {
+              UpdateCompactionInputStatsHelper(
+                  &compaction_stats_.stats.num_input_files_in_non_output_levels,
+                  &compaction_stats_.stats.bytes_read_non_output_levels, input_level);
+            } else {
+              UpdateCompactionInputStatsHelper(
+                  &compaction_stats_.stats.num_input_files_in_output_level,
+                  &compaction_stats_.stats.bytes_read_output_level, input_level);
+            }
+          }
+
+          assert(compaction_job_stats_);
+          compaction_stats_.stats.bytes_read_blob =
+              compaction_job_stats_->total_blob_bytes_read;
+
+          compaction_stats_.stats.num_dropped_records =
+              compaction_stats_.DroppedRecords();
+        }
+
+
+```
+Difference between CompactionStatsFull and CompactionJobStats?
+```
+  struct CompactionStatsFull {
+    // the stats for the target primary output level
+    CompactionStats stats;
+
+    // stats for penultimate level output if exist
+    bool has_penultimate_level_output = false;
+    CompactionStats penultimate_level_stats;
+
+
+```
+I think I should put bytes read to all lsm-tree compaction log. 
+```
+Uptime(secs): 1776.9 total, 1.0 interval
+Flush(GB): cumulative 6.373, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
+I
+
+
+void InternalStats::DumpCFStatsNoFileHistogram(bool is_periodic,
+    void InternalStats::DumpCFMapStats(
+        const VersionStorageInfo* vstorage,
+        std::map<int, std::map<LevelStatType, double>>* levels_stats,
+        CompactionStats* compaction_stats_sum) {
+      assert(vstorage);
+
+                    // Stats summary across levels
+              std::map<LevelStatType, double> sum_stats;
+              PrepareLevelStats(&sum_stats, total_files, total_files_being_compacted,
+                                total_file_size, 0, w_amp, *compaction_stats_sum);
+              (*levels_stats)[-1] = sum_stats;  //  -1 is for the Sum level
+            }
+
+
+    PrintLevelStats(buf, sizeof(buf), "Sum", levels_stats[-1]);
+        void PrintLevelStats(char* buf, size_t len, const std::string& name,
+                             const std::map<LevelStatType, double>& stat_value) {
+          snprintf(
+
+```
+
+```
+
+Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
+  ColumnFamilyData* cfd = compact_->compaction->column_family_data();
+  assert(cfd);
+
+  int output_level = compact_->compaction->output_level();
+  cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
+                                            compaction_stats_);
+
+
+```
+
+
+```
+
+Status FlushJob::WriteLevel0Table() {
+  RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
+  cfd_->internal_stats()->AddCompactionStats(0 /* level */, thread_pri_, stats);
+  cfd_->internal_stats()->AddCFStats(
+      InternalStats::BYTES_FLUSHED,
+      stats.bytes_written + stats.bytes_written_blob);
+  RecordFlushIOStats();
+
+
+  void AddCFStats(InternalCFStatsType type, uint64_t value) {
+```
+I think I only need to add read stats to internal stats
+
+
+```
+Blob file count: 64, total size: 4.6 GB, garbage size: 0.0 GB, space amp: 1.0
+```
+[Status: Done]
+
+[Todo]
+Make gc key insertion with correct semantics. Make sure old keys do not 
+overwrite new keys during gc
+[Status: Not started]
+
+[Todo]
+We can increase lsm-tree key drop if we check blob file existence during compaction.
+[Status: Not started]
+
+
+[Todo]
+Set GC job thread priority to low
+[Status: Not started]
 
 
 - No current gc in compaction_iterator.
