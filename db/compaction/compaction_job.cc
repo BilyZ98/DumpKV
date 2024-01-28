@@ -966,6 +966,20 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
     }
     stream.EndArray();
 
+    stream << "garbage_count";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetGarbageBlobCount() ;
+    }
+    stream.EndArray();
+
+    stream << "total_blob_count";
+    stream.StartArray();
+    for(const auto& blob_file:blob_files) {
+      stream << blob_file->GetTotalBlobCount() ;
+    }
+    stream.EndArray();
+
     for(size_t i=0; i < lifetime_blob_files.size(); ++i) {
       std::string key = "lifetime_blob_" + std::to_string(i);
       stream << key; 
@@ -1069,15 +1083,20 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   // Create compaction filter and fail the compaction if
   // IgnoreSnapshots() = false because it is not supported anymore
-  const CompactionFilter* compaction_filter =
-      cfd->ioptions()->compaction_filter;
+  // const CompactionFilter* compaction_filter =
+  //     cfd->ioptions()->compaction_filter;
+  auto uniq_compaction_filter = sub_compact->compaction->CreateGCCompactionFilter(GetGCIter());
+  const CompactionFilter* compaction_filter = uniq_compaction_filter.get();
+
+
+
   std::unique_ptr<CompactionFilter> compaction_filter_from_factory = nullptr;
   if (compaction_filter == nullptr) {
     compaction_filter_from_factory =
         sub_compact->compaction->CreateCompactionFilter();
     compaction_filter = compaction_filter_from_factory.get();
   }
-  assert(compaction_filter == nullptr);
+  // assert(compaction_filter == nullptr);
   if (compaction_filter != nullptr && !compaction_filter->IgnoreSnapshots()) {
     sub_compact->status = Status::NotSupported(
         "CompactionFilter::IgnoreSnapshots() = false is not supported "
@@ -1306,6 +1325,8 @@ auto c_iter = std::make_unique<CompactionIterator>(
       sub_compact->compaction, compaction_filter, shutting_down_,
       db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
       preclude_last_level_min_seqno_);
+
+  c_iter->SetGCBlobFiles(compact_->compaction->GetGCBlobFiles());
 
   // auto c_iter = std::make_unique<CompactionIterator>(
   //     input, cfd->user_comparator(), &merge, versions_->LastSequence(),
@@ -2087,6 +2108,13 @@ void CompactionJob::LogCompaction() {
       }
       stream.EndArray();
     }
+    stream << "gc_blob_files";
+    stream.StartArray();
+    for (auto f_num : *(compaction->GetGCBlobFiles()) ) {
+      stream << f_num;
+    }
+    stream.EndArray();
+
     stream << "score" << compaction->score() << "input_data_size"
            << compaction->CalculateTotalInputSize() << "oldest_snapshot_seqno"
            << (existing_snapshots_.empty()

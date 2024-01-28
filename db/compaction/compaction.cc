@@ -685,6 +685,17 @@ uint64_t Compaction::OutputFilePreallocationSize() const {
                   preallocation_size + (preallocation_size / 10));
 }
 
+std::unique_ptr<CompactionFilter> Compaction::CreateGCCompactionFilter(InternalIterator* db_internal_iter) const {
+  // CompactionFilter::Context context;
+  // context.is_full_compaction = is_full_compaction_;
+  // context.is_manual_compaction = is_manual_compaction_;
+  // context.column_family_id = cfd_->GetID();
+  // context.reason = TableFileCreationReason::kCompaction;
+
+  return std::unique_ptr<GCFilter>(
+      new GCFilter(db_internal_iter));
+
+}
 std::unique_ptr<CompactionFilter> Compaction::CreateCompactionFilter() const {
   if (!cfd_->ioptions()->compaction_filter_factory) {
     return nullptr;
@@ -755,6 +766,7 @@ bool Compaction::DoesInputReferenceBlobFiles() const {
   assert(storage_info);
 
   if (storage_info->GetBlobFiles().empty()) {
+    assert(false);
     return false;
   }
 

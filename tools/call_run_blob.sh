@@ -30,7 +30,10 @@ function call_run_blob() {
 
 
 # with_gc and without_gc
-db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model
+db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc
+if [ ! -d $db_dir ]; then
+  mkdir -p $db_dir
+fi
 num_keys=50000000
 enable_blob_file=1
 enable_blob_gc=true

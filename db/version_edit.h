@@ -214,6 +214,8 @@ struct FileMetaData {
   // refers to. 0 is an invalid value; BlobDB numbers the files starting from 1.
   uint64_t oldest_blob_file_number = kInvalidBlobFileNumber;
 
+  
+
   // The file could be the compaction output from other SST files, which could
   // in turn be outputs for compact older SST files. We track the memtable
   // flush timestamp for the oldest SST file that eventually contribute data
@@ -235,8 +237,11 @@ struct FileMetaData {
   // File checksum function name
   std::string file_checksum_func_name = kUnknownFileChecksumFuncName;
 
+
   // SST unique id
   UniqueId64x2 unique_id{};
+
+  std::unordered_set<uint64_t> linked_blob_files;
 
   FileMetaData() = default;
 
@@ -249,7 +254,8 @@ struct FileMetaData {
                uint64_t _epoch_number, const std::string& _file_checksum,
                const std::string& _file_checksum_func_name,
                UniqueId64x2 _unique_id,
-               const uint64_t _compensated_range_deletion_size)
+               const uint64_t _compensated_range_deletion_size,
+               const std::unordered_set<uint64_t>& _linked_blob_files = {})
       : fd(file, file_path_id, file_size, smallest_seq, largest_seq),
         smallest(smallest_key),
         largest(largest_key),
@@ -262,7 +268,8 @@ struct FileMetaData {
         epoch_number(_epoch_number),
         file_checksum(_file_checksum),
         file_checksum_func_name(_file_checksum_func_name),
-        unique_id(std::move(_unique_id)) {
+        unique_id(std::move(_unique_id)),
+        linked_blob_files(std::move(_linked_blob_files)){
     TEST_SYNC_POINT_CALLBACK("FileMetaData::FileMetaData", this);
   }
 
@@ -446,7 +453,8 @@ class VersionEdit {
                uint64_t epoch_number, const std::string& file_checksum,
                const std::string& file_checksum_func_name,
                const UniqueId64x2& unique_id,
-               const uint64_t compensated_range_deletion_size) {
+               const uint64_t compensated_range_deletion_size,
+               const std::unordered_set<uint64_t>& blob_index_file_numbers = {}) {
     assert(smallest_seqno <= largest_seqno);
     new_files_.emplace_back(
         level,
@@ -455,7 +463,8 @@ class VersionEdit {
                      temperature, oldest_blob_file_number, oldest_ancester_time,
                      file_creation_time, epoch_number, file_checksum,
                      file_checksum_func_name, unique_id,
-                     compensated_range_deletion_size));
+                     compensated_range_deletion_size,
+                     blob_index_file_numbers));
     if (!HasLastSequence() || largest_seqno > GetLastSequence()) {
       SetLastSequence(largest_seqno);
     }

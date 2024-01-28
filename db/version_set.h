@@ -555,6 +555,11 @@ class VersionStorageInfo {
     return bottommost_files_marked_for_compaction_;
   }
 
+  const autovector<uint64_t>& BlobFilesMarkedForGC() const {
+    assert(finalized_);
+    return gc_blob_files_;
+  }
+
   // REQUIRES: ComputeCompactionScore has been called
   // REQUIRES: DB mutex held during access
   const autovector<std::pair<int, FileMetaData*>>& FilesMarkedForForcedBlobGC()
@@ -766,6 +771,8 @@ class VersionStorageInfo {
       bottommost_files_marked_for_compaction_;
 
   autovector<std::pair<int, FileMetaData*>> files_marked_for_forced_blob_gc_;
+
+  autovector<uint64_t> gc_blob_files_;
 
   // Threshold for needing to mark another bottommost file. Maintain it so we
   // can quickly check when releasing a snapshot whether more bottommost files

@@ -271,6 +271,13 @@ void CompactionIterator::SetFeatures(const std::unordered_map<std::string, std::
 
 }
 
+void CompactionIterator::SetGCBlobFiles(const autovector<uint64_t>* gc_blob_files) {
+  for (auto file_number : *gc_blob_files) {
+    gc_blob_files_.insert(file_number);
+  }
+
+}
+
 
 Status CompactionIterator::PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label)  {
   // int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(FastConfigHandle fastConfig_handle,
@@ -363,13 +370,13 @@ void CompactionIterator::Next() {
 bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
                                               Slice* skip_until) {
   // TODO: support compaction filter for wide-column entities
-  assert(!compaction_filter_);
+  // assert(!compaction_filter_);
   if (!compaction_filter_ ||
       (ikey_.type != kTypeValue && ikey_.type != kTypeBlobIndex)) {
 
     return true;
   }
-  fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
+  // fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
   bool error = false;
   // If the user has specified a compaction filter and the sequence
   // number is greater than any external snapshot, then invoke the
@@ -392,6 +399,12 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
   {
     StopWatchNano timer(clock_, report_detailed_time_);
     if (kTypeBlobIndex == ikey_.type) {
+      BlobIndex blob_index;
+      Status s = blob_index.DecodeFrom(value_);
+      uint64_t blob_file_num = blob_index.file_number();
+      if(gc_blob_files_.find(blob_file_num) == gc_blob_files_.end()) {
+        return true;
+      }
       filter = compaction_filter_->FilterBlobByKey(
           level_, filter_key, &compaction_filter_value_,
           compaction_filter_skip_until_.rep());
@@ -411,8 +424,8 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
         // For integrated BlobDB impl, CompactionIterator reads blob value.
         // For Stacked BlobDB impl, the corresponding CompactionFilter's
         // FilterV2 method should read the blob value.
-        BlobIndex blob_index;
-        Status s = blob_index.DecodeFrom(value_);
+        // BlobIndex blob_index;
+        // Status s = blob_index.DecodeFrom(value_);
         if (!s.ok()) {
           status_ = s;
           validity_info_.Invalidate();
@@ -982,7 +995,7 @@ void CompactionIterator::NextFromInput() {
                DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
                compaction_->KeyNotExistsBeyondOutputLevel(ikey_.user_key,
                                                           &level_ptrs_)) {
-      printf("Key deletion & doesn't exist outside of this range\n");
+      // printf("Key deletion & doesn't exist outside of this range\n");
       // TODO(noetzli): This is the only place where we use compaction_
       // (besides the constructor). We should probably get rid of this
       // dependency and find a way to do similar filtering during flushes.
@@ -1009,7 +1022,7 @@ void CompactionIterator::NextFromInput() {
       ++iter_stats_.num_record_drop_obsolete;
       CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
       compaction_tracer_->WriteDropKey(record);
-      fprintf(stdout,"Obsolete due to earlier  delete\n");
+      // fprintf(stdout,"Obsolete due to earlier  delete\n");
 
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
@@ -1143,7 +1156,7 @@ void CompactionIterator::NextFromInput() {
     }
 
     if (need_skip) {
-      assert(false);
+      // assert(false);
       SkipUntil(skip_until);
     }
   }
@@ -1164,6 +1177,7 @@ void CompactionIterator::NextFromInput() {
 
 bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label) {
   if(!lifetime_blob_file_builders_[lifetime_label]) {
+    assert(false);
     return false;
   }
   // if (!blob_file_builder_) {
@@ -1179,11 +1193,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
   if (!s.ok()) {
     status_ = s;
     validity_info_.Invalidate();
+    assert(false);
 
     return false;
   }
 
   if (blob_index_.empty()) {
+    assert(false);
     return false;
   }
 
@@ -1289,11 +1305,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   if (!s.ok()) {
     status_ = s;
     validity_info_.Invalidate();
+    assert(false);
 
     return false;
   }
 
   if (blob_index_.empty()) {
+    assert(false);
     return false;
   }
 
@@ -1378,9 +1396,26 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     uint64_t time_elapse =  env_->NowMicros()  - creation_timestamp;
     uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
     bool should_gc = false;
-    if(compaction_ && compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC) {
-      should_gc = true;
+    // if(compaction_ && 
+    //   compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC ) {
 
+    //   should_gc = true;
+
+    // }
+    //
+    // if(compaction_ && 
+    //   compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC 
+    //   ) {
+    //   assert(!gc_blob_files_.empty());
+    //   if(gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
+    //     should_gc = true;
+    //   }
+
+
+    // }
+    //
+    if(compaction_ && gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
+      should_gc = true;
     }
     if(!should_gc) {
       return;

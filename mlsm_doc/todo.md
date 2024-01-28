@@ -5392,9 +5392,397 @@ So I think enable_blob_garbage_collection_ is enable for every compaction.
     Check validity of key and value.
     Write back valid keys.
     Delete old blob files.
-[Status: Ongoing]
+[Status: Ongoing in another branch]
 
 
+[Todo]
+No blob file deletion why is that?
+Add log to LOG .
+I think this is because blob files do not have all linked files
+which make sst scanning not able to gc all values in blob files.
+There are deleted blob files log after should_gc logic change.
+```
+    if(compaction_ && 
+      compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC ) {
+
+      should_gc = true;
+
+    }
+
+
+    if(compaction_ && gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
+      should_gc = true;
+    }
+
+
+```
+
+
+```
+Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
+                                      SequenceNumber seqno,
+                                      ValueType value_type) {
+  if (value_type == kTypeBlobIndex) {
+    BlobIndex blob_index;
+    const Status s = blob_index.DecodeFrom(value);
+    if (!s.ok()) {
+      return s;
+    }
+
+    if (!blob_index.IsInlined() && !blob_index.HasTTL()) {
+      if (blob_index.file_number() == kInvalidBlobFileNumber) {
+        return Status::Corruption("Invalid blob file number");
+      }
+
+      if (oldest_blob_file_number == kInvalidBlobFileNumber ||
+          oldest_blob_file_number > blob_index.file_number()) {
+        oldest_blob_file_number = blob_index.file_number();
+      }
+    }
+
+```
+
+Only one sst files for one gc compaction job which is not right.
+No blob file deletion.
+```
+2024/01/27-13:20:31.164418 3163386 EVENT_LOG_v1 {"time_micros": 1706332831164408, "job": 183, "event": "compaction_started", "compaction_reason": "ForcedBlobGC", "files_L2": [315], "gc_blob_files": [11, 15, 19, 23, 31, 35, 39, 43, 54, 58, 62, 66, 80, 84, 88], "score": 0.943997, "input_data_size": 3411686, "oldest_snapshot_seqno": -1}
+```
+
+```
+// Forced blob garbage collection
+  PickFileToCompact(vstorage_->FilesMarkedForForcedBlobGC(), false);
+  if (!start_level_inputs_.empty()) {
+    compaction_reason_ = CompactionReason::kForcedBlobGC;
+    return;
+  }
+```
+
+Not all sst files are used in one compaction.
+```
+2024/01/27-16:17:57.751443 3246585 [db/version_set.cc:3405] Files marked for forced blob gc: 94,75,74,73,72,71, | 11,
+2024/01/27-16:17:57.751481 3246585 [db/compaction/compaction_job.cc:2082] [default] [JOB 27] Compacting 1@1 files to L1, score 0.75
+2024/01/27-16:17:57.751487 3246585 [db/compaction/compaction_job.cc:2088] [default]: Compaction start summary: Base version 27 Base level 1, inputs: [94(1431KB)]
+2024/01/27-16:17:57.751499 3246585 EVENT_LOG_v1 {"time_micros": 1706343477751491, "job": 27, "event": "compaction_started", "compaction_reason": "ForcedBlobGC", "files_L1": [94], "gc_blob_files": [11], "score": 0.75, "input_data_size": 1466301, "oldest_snapshot_seqno": -1}
+2024/01/27-16:17:57.751570 3246585 [db/compaction/compaction_iterator.cc:228]
+```
+
+```
+2024/01/27-16:17:58.107275 3246585 [db/version_set.cc:3405] Files marked for forced blob gc: 95,75,74,73,72,71, | 11,
+2024/01/27-16:17:58.460761 3246585 [db/version_set.cc:3405] Files marked for forced blob gc: 96,75,74,73,72,71, | 11,
+```
+Why sst:96 points to blob:11 ? This should not happen.
+Always newest sst files are picked to start gc.
+Adjust code to pick oldest sst files to start gc.
+
+How does inflow and out flow works for each gc?
+
+Need to fix tiemstamp issue in this branch. No need to do that . It's because blob:11 is not deleted.
+
+```
+  void Next() override {
+    assert(Valid());
+
+    iter_->Next();
+    UpdateAndCountBlobIfNeeded();
+  }
+
+
+  void UpdateAndCountBlobIfNeeded() {
+    assert(!iter_->Valid() || iter_->status().ok());
+
+    if (!iter_->Valid()) {
+      status_ = iter_->status();
+      return;
+    }
+
+    TEST_SYNC_POINT(
+        "BlobCountingIterator::UpdateAndCountBlobIfNeeded:ProcessInFlow");
+
+    status_ = blob_garbage_meter_->ProcessInFlow(key(), value());
+  }
+
+
+```
+
+```
+Status CompactionOutputs::AddToOutput(
+    const CompactionIterator& c_iter,
+    const CompactionFileOpenFunc& open_file_func,
+    const CompactionFileCloseFunc& close_file_func) {
+ 
+      if (blob_garbage_meter_) {
+        s = blob_garbage_meter_->ProcessOutFlow(key, value);
+      }
+
+Status BlobGarbageMeter::ProcessOutFlow(const Slice& key, const Slice& value) {
+  uint64_t blob_file_number = kInvalidBlobFileNumber;
+  uint64_t bytes = 0;
+
+  const Status s = Parse(key, value, &blob_file_number, &bytes);
+  if (!s.ok()) {
+    return s;
+  }
+
+  if (blob_file_number == kInvalidBlobFileNumber) {
+    return Status::OK();
+  }
+
+  // Note: in order to measure the amount of additional garbage, we only need to
+  // track the outflow for preexisting files, i.e. those that also had inflow.
+  // (Newly written files would only have outflow.)
+  auto it = flows_.find(blob_file_number);
+  if (it == flows_.end()) {
+    return Status::OK();
+  }
+
+  it->second.AddOutFlow(bytes);
+
+  return Status::OK();
+}
+```
+
+
+Turns out I didn't SetGCBlobFiles() lol
+
+No blob file deletion after linkedssts are deleted which is not what I expect.
+blob:11 still has valid blobs even though no linkedssts.
+Is this because my code linking sst has bugs?
+```
+2024/01/27-19:00:55.193167 3325205 [db/blob/blob_file_builder.cc:425] [default] [JOB 2] Generated blob file #11: 2840 total blobs, 2491428 total bytes, lifetime label: 0
+```
+Is this because of that some keys are dropped? I don't think so. dropped keys are also count as garbage.
+
+```
+  for (const auto& pair : blob_total_garbage) {
+    const uint64_t blob_file_number = pair.first;
+    const BlobGarbageMeter::BlobStats& stats = pair.second;
+
+    edit->AddBlobFileGarbage(blob_file_number, stats.GetCount(),
+                             stats.GetBytes());
+  }
+
+
+```
+How does blob_garbage_meter deal with dropped keys?
+Exclude possible reasons for dropped key count.
+
+I think I found the bug.
+There is a trivial move in LOG and I checked compaction code 
+and found that I didn't put f->linked_blob_files to c->edit()->AddFiles()
+which causes the some ssts are unlinked from blob files.
+Finally fixed the bug after on day work.
+[Status: Done]
+
+
+Too many ssts to be used in compaction for gc
+```
+2024/01/27-21:47:52.555034 3412129 [db/version_set.cc:3405] Files marked for forced blob gc: 684,680,692,682,708,710,706,702,714,694,672,686,696,670,724,722,720,718,716,688,674,726,668,704,730, | 228,230,232,234,236,238,240,243,247,249,251,253,255,257,261,265,
+```
+
+```
+Uptime(secs): 1883.6 total, 1.0 interval
+Cumulative writes: 9957K writes, 9957K keys, 9957K commit groups, 1.0 writes per commit group, ingest: 7.85 GB, 4.27 MB/s
+Cumulative WAL: 9957K writes, 0 syncs, 9957298.00 writes per sync, written: 7.85 GB, 4.27 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 5704 writes, 5704 keys, 5704 commit groups, 1.0 writes per commit group, ingest: 4.60 MB, 4.59 MB/s
+Interval WAL: 5704 writes, 0 syncs, 5704.00 writes per sync, written: 0.00 GB, 4.59 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.4    245.23            244.80        85    2.885       0      0       0.0       6.1
+  L1      8/0   22.05 MB   0.9      1.6     0.3      1.0       1.2      0.2       0.0   2.4      4.6      4.4    362.78            362.25       191    1.899     36M  1535K       0.4       0.4
+  L2     96/1   126.84 MB   0.6      7.1     0.1      3.0       3.0      0.1       0.0   1.7      7.9      7.8    923.02            921.00      1577    0.585     93M  1672K       4.0       4.0
+ Sum    105/1   152.04 MB   0.0      8.7     0.4      3.9       4.5      0.6       0.0   2.4      5.9     10.0   1531.03           1528.04      1853    0.826    129M  3207K       4.4      10.5
+ Int      0/0    0.00 KB   0.0      0.1     0.0      0.0       0.0      0.0       0.0 113456008.0     10.9     10.7     10.11             10.09        12    0.843    907K    56K       0.1       0.1
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      8.7     0.4      3.9       4.2      0.3       0.0   0.0      7.0      6.9   1285.79           1283.24      1768    0.727    129M  3207K       4.4       4.4
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.4    245.23            244.80        85    2.885       0      0       0.0       6.1
+
+Blob file count: 572, total size: 4.6 GB, garbage size: 1.1 GB, space amp: 1.3
+
+
+
+blob_space_amps: 1.3
+dir_size_without_trace is 4.8, cumulative writes 7.9
+space_amp is 0.6
+report file name is /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_model_gc_1.0_0.8/report.tsv
+Completed replay (ID: ) in 2041 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50      p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test   date     version job_id  githash
+0               152MB   4GB     15.1    2.7     8.2     1539    1536    4       11      1778525347.0                                            1892    0.0     0       2.7     0.1     7.4    replay.t1.s1     2024-01-27T21:36:03     8.0.0           d975024386      0.6
+```
+[Todo]
+Update condition to that doing gc as long as gc_blob_files_ is not empty without regarding
+compaction reason.
+Not good. 
+```
+  with_model_gc_1.0_0.8 grep blob_file_deletion LOG | wc -l
+1350
+
+
+2024/01/27-22:44:01.444088 3434500 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 1807] Delete /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_model_gc_1.0_0.8/004198.blob type=10 #4198 -- OK
+```
+
+```
+Uptime(secs): 1891.5 total, 1.0 interval
+Cumulative writes: 10M writes, 10M keys, 10M commit groups, 1.0 writes per commit group, ingest: 7.88 GB, 4.27 MB/s
+Cumulative WAL: 10M writes, 0 syncs, 10000335.00 writes per sync, written: 7.88 GB, 4.27 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 5522 writes, 5522 keys, 5522 commit groups, 1.0 writes per commit group, ingest: 4.46 MB, 4.46 MB/s
+Interval WAL: 5523 writes, 0 syncs, 5523.00 writes per sync, written: 0.00 GB, 4.46 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.2    247.34            247.00        85    2.910       0      0       0.0       6.1
+  L1      9/0   24.48 MB   1.0      1.7     0.3      1.0       1.2      0.2       0.0   2.3      4.7      4.6    363.90            363.47       187    1.946     36M  1542K       0.5       0.5
+  L2    102/1   125.65 MB   0.6      7.3     0.1      3.0       3.1      0.1       0.0   1.7      8.1      8.1    924.84            923.18      1517    0.610     94M  1628K       4.2       4.2
+ Sum    112/1   153.28 MB   0.0      9.0     0.4      3.9       4.5      0.5       0.0   2.4      6.0     10.2   1536.08           1533.65      1789    0.859    130M  3171K       4.7      10.7
+ Int      0/0    0.00 KB   0.0      0.1     0.0      0.0       0.0      0.0       0.0 117112462.0     15.5     15.5      7.22              7.20        22    0.328    598K      0       0.1       0.1
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      9.0     0.4      3.9       4.2      0.3       0.0   0.0      7.2      7.1   1288.74           1286.66      1704    0.756    130M  3171K       4.7       4.7
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.2    247.34            247.00        85    2.910       0      0       0.0       6.1
+
+Blob file count: 518, total size: 4.4 GB, garbage size: 0.9 GB, space amp: 1.2
+
+
+```
+Consider invoke filter to do internaliterator:get to see if we can drop key.
+
+```
+class FilterByKeyLength : public CompactionFilter {
+ public:
+  explicit FilterByKeyLength(size_t len) : length_threshold_(len) {}
+  const char* Name() const override {
+    return "rocksdb.compaction.filter.by.key.length";
+  }
+  CompactionFilter::Decision FilterBlobByKey(
+      int /*level*/, const Slice& key, std::string* /*new_value*/,
+      std::string* /*skip_until*/) const override {
+    if (key.size() < length_threshold_) {
+      return CompactionFilter::Decision::kRemove;
+    }
+    return CompactionFilter::Decision::kKeep;
+  }
+
+ private:
+  size_t length_threshold_;
+};
+
+
+ImmutableCFOptions::ImmutableCFOptions(const ColumnFamilyOptions& cf_options)
+    : compaction_style(cf_options.compaction_style),
+      compaction_pri(cf_options.compaction_pri),
+      user_comparator(cf_options.comparator),
+      internal_comparator(InternalKeyComparator(cf_options.comparator)),
+      merge_operator(cf_options.merge_operator),
+      compaction_filter(cf_options.compaction_filter),
+      compaction_filter_factory(cf_options.compaction_filter_factory),
+
+
+```
+
+```
+
+std::unique_ptr<CompactionFilter>
+TtlCompactionFilterFactory::CreateCompactionFilter(
+    const CompactionFilter::Context& context) {
+  std::unique_ptr<const CompactionFilter> user_comp_filter_from_factory =
+      nullptr;
+  if (user_comp_filter_factory_) {
+    user_comp_filter_from_factory =
+        user_comp_filter_factory_->CreateCompactionFilter(context);
+  }
+
+  return std::unique_ptr<TtlCompactionFilter>(new TtlCompactionFilter(
+      ttl_, clock_, nullptr, std::move(user_comp_filter_from_factory)));
+}
+
+
+```
+
+```
+  if (filter == CompactionFilter::Decision::kRemove) {
+    // convert the current key to a delete; key_ is pointing into
+    // current_key_ at this point, so updating current_key_ updates key()
+    ikey_.type = kTypeDeletion;
+    current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
+    // no value associated with delete
+    value_.clear();
+    iter_stats_.num_record_drop_user++;
+  } else if (filter == CompactionFilter::Decision::kPurge) {
+
+```
+0.023 drop rate
+
+Added obsolete key checking for gc blob file keys. 
+0.028 drop rate 
+```
+
+Cumulative writes: 9997K writes, 9997K keys, 9997K commit groups, 1.0 writes per commit group, ingest: 7.88 GB, 4.26 MB/s
+Cumulative WAL: 9997K writes, 0 syncs, 9997567.00 writes per sync, written: 7.88 GB, 4.26 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 5647 writes, 5647 keys, 5647 commit groups, 1.0 writes per commit group, ingest: 4.56 MB, 4.56 MB/s
+Interval WAL: 5647 writes, 0 syncs, 5647.00 writes per sync, written: 0.00 GB, 4.56 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.7    242.60            242.21        85    2.854       0      0       0.0       6.1
+  L1      7/0   22.58 MB   0.9      1.5     0.3      0.8       1.0      0.2       0.0   2.1      4.2      4.0    366.25            365.88       145    2.526     31M  1530K       0.4       0.4
+  L2     47/1   120.65 MB   0.6      5.7     0.1      2.3       2.4      0.1       0.0   1.7      6.1      6.0    963.14            961.85       862    1.117     74M  1844K       3.2       3.2
+ Sum     55/1   146.38 MB   0.0      7.2     0.4      3.1       3.7      0.5       0.0   2.1      4.7      8.7   1571.99           1569.94      1092    1.440    106M  3374K       3.7       9.7
+ Int      0/0    0.00 KB   0.0      0.1     0.0      0.0       0.0     -0.0       0.0 91875142.0      9.7      9.6      9.15              9.14         6    1.525    369K    23K       0.1       0.1
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      7.2     0.4      3.1       3.4      0.3       0.0   0.0      5.6      5.5   1329.38           1327.73      1007    1.320    106M  3374K       3.7       3.7
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.7    242.60            242.21        85    2.854       0      0       0.0       6.1
+
+
+Blob file count: 246, total size: 4.1 GB, garbage size: 0.8 GB, space amp: 1.2
+```
+w-amp: 4.4 -> 2.1
+space-amp: 1.2 -> 1.2
+blob total size:  4.3 -> 4.1
+Read: 21.8GB -> 7.2 GB
+Write: 1.1 GB -> 3.7 GB
+Read blob: 20.8 GB -> 3.7 GB
+Write blob: 27 GB  -> 9.7 GB
+
+Cumulative write rate: 4.54 MB/s -> 4.26 MB/s
+Uptime(secs): 1777.9 total, 1.0 interval
+ -> Uptime(secs): 1891.7 total, 8.0 interval
+
+ ```
+ Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
+ ->
+Cumulative compaction: 13.42 GB write, 7.27 MB/s write, 7.22 GB read, 3.91 MB/s read, 1572.0 seconds
+ ```
+
+with_model_wisckey_style_gc:
+ ```
+ Cumulative compaction: 15.53 GB write, 8.42 MB/s write, 2.47 GB read, 1.34 MB/s read, 843.9 seconds
+
+Cumulative writes: 18M writes, 18M keys, 18M commit groups, 1.0 writes per commit group, ingest: 14.38 GB, 7.78 MB/s
+ ```
+[Status: Done]
+
+
+[Todo]
+Build key features collection module
+[Status: Ongoing ]
+I think I should start implement features collection module right now.
 
 
 

@@ -3400,7 +3400,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
             f->oldest_blob_file_number, f->oldest_ancester_time,
             f->file_creation_time, f->epoch_number, f->file_checksum,
             f->file_checksum_func_name, f->unique_id,
-            f->compensated_range_deletion_size);
+            f->compensated_range_deletion_size,
+            f->linked_blob_files);
 
         ROCKS_LOG_BUFFER(
             log_buffer,
@@ -3514,10 +3515,21 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
     mutex_.Unlock();
-    TEST_SYNC_POINT_CALLBACK(
-        "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
-    // Should handle erorr?
-    compaction_job.Run().PermitUncheckedError();
+    {
+      Arena arena;
+      auto cfd = c->column_family_data();
+      SuperVersion* sv = cfd->GetSuperVersion();
+      ReadOptions read_options;
+      ScopedArenaIterator iter;
+      iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+      compaction_job.SetGCIter(iter.get());
+
+    
+      TEST_SYNC_POINT_CALLBACK(
+          "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
+      // Should handle erorr?
+      compaction_job.Run().PermitUncheckedError();
+    }
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
 

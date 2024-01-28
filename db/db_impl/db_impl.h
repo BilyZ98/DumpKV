@@ -1308,6 +1308,13 @@ class DBImpl : public DB {
   // table_cache_ provides its own synchronization
   std::shared_ptr<Cache> table_cache_;
 
+  struct KeyMeta {
+    uint64_t
+
+
+  };
+  std::unordered_map<std::string, KeyMeta> key_metas_; 
+
   ErrorHandler error_handler_;
 
   // Unified interface for logging events

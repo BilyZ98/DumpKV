@@ -184,6 +184,19 @@ class CompactionJob {
   // subcompaction results
   Status Run();
 
+  void SetGCIter(InternalIterator* iter) { gc_iter_ = iter; }
+  InternalIterator* GetGCIter() { return gc_iter_; }
+
+  void SetGCBlobFiles(const autovector<uint64_t>& gc_blob_files) {
+    // std::move(gc_blob_files.begin(), gc_blob_files.end(),
+    //           std::back_inserter(gc_blob_files_));
+    std::copy(gc_blob_files.begin(), gc_blob_files.end(),
+              std::back_inserter(gc_blob_files_));
+  }
+
+  const autovector<uint64_t>& GetGCBlobFiles() const {
+    return gc_blob_files_;
+  }
   // REQUIRED: mutex held
   // Add compaction input/output to the current version
   Status Install(const MutableCFOptions& mutable_cf_options);
@@ -347,6 +360,10 @@ class CompactionJob {
   // key has bigger (newer) sequence number than this, it will be precluded from
   // the last level (output to penultimate level).
   SequenceNumber preclude_last_level_min_seqno_ = kMaxSequenceNumber;
+
+  autovector<uint64_t> gc_blob_files_;
+
+  InternalIterator* gc_iter_;
 
   // Get table file name in where it's outputting to, which should also be in
   // `output_directory_`.

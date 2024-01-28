@@ -294,6 +294,8 @@ CompactionIterator(
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
   void SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
 
+  void SetGCBlobFiles(const autovector<uint64_t>* gc_blob_files);
+
 
   // Getters
   const Slice& key() const { return key_; }
@@ -401,6 +403,7 @@ CompactionIterator(
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   BoosterHandle booster_handle_ =nullptr;
   FastConfigHandle fast_config_handle_ =nullptr;
@@ -476,6 +479,7 @@ CompactionIterator(
     uint8_t rep{0};
   } validity_info_;
 
+
   // Points to a copy of the current compaction iterator output (current_key_)
   // if valid.
   Slice key_;
@@ -517,6 +521,8 @@ CompactionIterator(
   PinnedIteratorsManager pinned_iters_mgr_;
 
   uint64_t blob_garbage_collection_cutoff_file_number_;
+
+  std::unordered_set<uint64_t> gc_blob_files_;
 
   std::unique_ptr<BlobFetcher> blob_fetcher_;
   std::unique_ptr<PrefetchBufferCollection> prefetch_buffers_;

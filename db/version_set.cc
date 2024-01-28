@@ -3393,6 +3393,22 @@ void VersionStorageInfo::ComputeCompactionScore(
 
   if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
     ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+    if(!files_marked_for_forced_blob_gc_.empty()) {
+      std::string sst_files;
+      for(auto pair: files_marked_for_forced_blob_gc_) {
+          sst_files.append(std::to_string(pair.second->fd.GetNumber())+",");
+        }
+      std::string blob_files;
+      for(auto blob_file_num: gc_blob_files_) {
+          blob_files.append(std::to_string(blob_file_num)+",");
+      }
+      ROCKS_LOG_INFO(immutable_options.info_log, "Files marked for forced blob gc: %s | %s\n", sst_files.c_str(), blob_files.c_str());
+      // ROCKS_LOG_INFO(immutable_options.info_log, "Creating manifest %" PRIu64 "\n",
+      //            pending_manifest_file_number_);
+
+
+      }
+
   }
 
   // if (mutable_cf_options.enable_blob_garbage_collection &&
@@ -3518,6 +3534,8 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
     // lifetime classification and pick the blob files
     // that is supposed to outlive its lifetime
     files_marked_for_forced_blob_gc_.clear();
+    gc_blob_files_.clear();
+    std::set<uint64_t> sst_files;
     for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
       if(lifetime_blob_files_[lifetime_idx].empty()) {
         continue;
@@ -3539,7 +3557,9 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
 
         uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
         if(elapsed_sec >= lifetime_ttl) {
+          gc_blob_files_.emplace_back(iter->GetBlobFileNumber());
           auto linked_ssts = iter->GetLinkedSsts();
+          assert(!linked_ssts.empty());
 
           for (uint64_t sst_file_number : linked_ssts) {
             const FileLocation location = GetFileLocation(sst_file_number);
@@ -3557,18 +3577,23 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
             //   continue;
             // }
 
-            files_marked_for_forced_blob_gc_.emplace_back(level, sst_meta);
+            if(sst_files.find(sst_file_number) == sst_files.end()) {
+              sst_files.insert(sst_file_number);
+              files_marked_for_forced_blob_gc_.emplace_back(level, sst_meta);
+            }
           }
-          break;
+          // break;
           // this blob file is supposed to be GCed
           // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
         } else {
           // this blob file is not supposed to be GCed
-          break;
+          // break;
         }
 
       }
     }
+
+    // auto stream = event_logger_->Log();
 
 }
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGC(
@@ -6338,7 +6363,8 @@ Status VersionSet::WriteCurrentStateToManifest(
                        f->oldest_blob_file_number, f->oldest_ancester_time,
                        f->file_creation_time, f->epoch_number, f->file_checksum,
                        f->file_checksum_func_name, f->unique_id,
-                       f->compensated_range_deletion_size);
+                       f->compensated_range_deletion_size,
+                       f->linked_blob_files);
         }
       }
 
