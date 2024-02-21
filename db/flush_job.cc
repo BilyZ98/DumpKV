@@ -209,17 +209,23 @@ void FlushJob::PickMemTable() {
 void FlushJob::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
   compaction_tracer_ = tracer;
 }
-void FlushJob::SetModelAndData(BoosterHandle handle, FastConfigHandle fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features) {
+void FlushJob::SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features) {
   booster_handle_ = handle;
   fast_config_handle_ = fast_config_handle;
   features_ = features;
 
 
 }
-void FlushJob::SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle){
-  booster_handle_ = handle;
-  fast_config_handle_ = fast_config_handle;
+
+void FlushJob::SetKeyMetas(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex) {
+  key_metas_ = key_metas;
+  key_metas_mutex_ = key_meta_mutex;;
 }
+
+// void FlushJob::SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle){
+//   booster_handle_ = handle;
+//   fast_config_handle_ = fast_config_handle;
+// }
 Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
                      bool* switched_to_mempurge) {
   TEST_SYNC_POINT("FlushJob::Start");
@@ -412,6 +418,7 @@ void FlushJob::Cancel() {
 }
 
 Status FlushJob::MemPurge() {
+  assert(false);
   Status s;
   db_mutex_->AssertHeld();
   db_mutex_->Unlock();
@@ -532,7 +539,7 @@ Status FlushJob::MemPurge() {
         /*shutting_down=*/nullptr, ioptions->info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(compaction_tracer_);
     // c_iter.SetModel(booster_handle_);
-    c_iter.SetModelAndConfig(booster_handle_, fast_config_handle_);
+    // c_iter.SetModelAndConfig(booster_handle_, fast_config_handle_);
 
     // Set earliest sequence number in the new memtable
     // to be equal to the earliest sequence number of the
@@ -994,6 +1001,8 @@ Status FlushJob::WriteLevel0Table() {
       tboptions.booster_fast_config_handle = fast_config_handle_;
       tboptions.cfd = cfd_;
       tboptions.features = features_;
+      tboptions.key_metas = key_metas_;
+      tboptions.key_metas_mutex = key_metas_mutex_;  
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,

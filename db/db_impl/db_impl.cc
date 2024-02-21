@@ -273,6 +273,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   periodic_task_functions_.emplace(
       PeriodicTaskType::kRecordSeqnoTime,
       [this]() { this->RecordSeqnoToTimeMapping(); });
+  training_data_.reset(new TrainingData(nullptr, 
+                                        immutable_db_options_.num_features,
+                                        immutable_db_options_.num_classification  ));
+  InitTrainingParams();
+  lightgbm_handle_ = nullptr;
+  lightgbm_fastConfig_ = nullptr;
 
   versions_.reset(new VersionSet(dbname_, &immutable_db_options_, file_options_,
                                  table_cache_.get(), write_buffer_manager_,
@@ -687,8 +693,8 @@ Status DBImpl::CloseHelper() {
     delete txn_entry.second;
   }
 
-  LGBM_BoosterFree(lightgbm_handle_);
-  LGBM_FastConfigFree(lightgbm_fastConfig_);
+  // LGBM_BoosterFree(lightgbm_handle_);
+  // LGBM_FastConfigFree(lightgbm_fastConfig_);
 
 
   // versions need to be destroyed before table_cache since it can hold

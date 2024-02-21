@@ -34,6 +34,7 @@
 #include "monitoring/instrumented_mutex.h"
 #include "options/db_options.h"
 #include "port/port.h"
+#include "rocksdb/key_meta.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/listener.h"
@@ -82,8 +83,9 @@ class FlushJob {
   ~FlushJob();
 
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
-  void SetModelAndData(BoosterHandle handle, FastConfigHandle fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
-  void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle);
+  void SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
+  void SetKeyMetas(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex);
+  void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle) {}
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
@@ -132,9 +134,11 @@ class FlushJob {
   std::unique_ptr<FlushJobInfo> GetFlushJobInfo() const;
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
-  BoosterHandle booster_handle_;
-  FastConfigHandle fast_config_handle_;
+  std::shared_ptr<BoosterHandle> booster_handle_;
+  std::shared_ptr<FastConfigHandle> fast_config_handle_;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
+  const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
+  std::mutex* key_metas_mutex_ = nullptr;;
 
   const std::string& dbname_;
   const std::string db_id_;

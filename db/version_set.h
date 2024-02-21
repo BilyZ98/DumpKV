@@ -139,6 +139,19 @@ class VersionStorageInfo {
                      const VersionStorageLifetimeInfo& vs_lifetime_info,
                      EpochNumberRequirement epoch_number_requirement =
                          EpochNumberRequirement::kMustPresent);
+
+   VersionStorageInfo(const InternalKeyComparator* internal_comparator,
+                     const Comparator* user_comparator, int num_levels,
+                     CompactionStyle compaction_style,
+                     VersionStorageInfo* src_vstorage,
+                     bool _force_consistency_checks,
+                     Env* env,
+                     const VersionStorageLifetimeInfo& vs_lifetime_info,
+                     const VersionSet* versions,
+                     EpochNumberRequirement epoch_number_requirement =
+                         EpochNumberRequirement::kMustPresent);
+
+
   // No copying allowed
   VersionStorageInfo(const VersionStorageInfo&) = delete;
   void operator=(const VersionStorageInfo&) = delete;
@@ -245,6 +258,7 @@ class VersionStorageInfo {
   // REQUIRES: DB mutex held
   void ComputeBottommostFilesMarkedForCompaction();
 
+  bool ShouldGC(uint64_t creation_seq, uint64_t lifetime_label);
   void ComputeFilesMarkedForForcedBlobGCWithLifetime(
     double blob_garbage_collection_age_cutoff
   );
@@ -827,6 +841,8 @@ class VersionStorageInfo {
   bool force_consistency_checks_;
 
   EpochNumberRequirement epoch_number_requirement_;
+
+  const VersionSet* versions_;
 
   friend class Version;
   friend class VersionSet;

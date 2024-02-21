@@ -20,6 +20,7 @@
 #include "db/table_properties_collector.h"
 #include "file/writable_file_writer.h"
 #include "options/cf_options.h"
+#include "rocksdb//key_meta.h"
 #include "rocksdb/options.h"
 #include "rocksdb/compaction_trace_writer.h"
 #include "rocksdb/table_properties.h"
@@ -149,11 +150,14 @@ struct TableBuilderOptions {
   bool skip_filters = false;
   const uint64_t cur_file_num;
   std::shared_ptr<CompactionTracer> compaction_tracer = nullptr;
-  BoosterHandle booster_handle = nullptr;
-  FastConfigHandle booster_fast_config_handle = nullptr;
+  std::shared_ptr<BoosterHandle> booster_handle = nullptr;
+  std::shared_ptr<FastConfigHandle> booster_fast_config_handle = nullptr;
   uint64_t lifetime_bucket_num = 1; 
   ColumnFamilyData* cfd = nullptr;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features;
+  const std::unordered_map<std::string, KeyMeta>* key_metas;  
+  const DBImpl* db_impl = nullptr;
+  std::mutex* key_metas_mutex = nullptr;
 
 };
 

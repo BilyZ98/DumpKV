@@ -94,7 +94,9 @@ BlobFileBuilder::BlobFileBuilder(
       blob_count_(0),
       blob_bytes_(0),
       lifetime_label_(lifetime_label),
-      creation_timestamp_(creation_timestamp){
+      creation_timestamp_(creation_timestamp),
+      min_seq_(0),
+      max_seq_(0){
   // assert(lifetime_label_ >= 0);
   assert(file_number_generator_);
   assert(fs_);
@@ -168,6 +170,14 @@ Status BlobFileBuilder::Add(const Slice& key, const Slice& value, std::string* b
                         blob_compression_type_);
 
   return Status::OK();
+
+}
+Status BlobFileBuilder::AddWithSeq(const Slice& key, const Slice& value, uint64_t seq, std::string* blob_index) {
+
+  min_seq_ = std::min(min_seq_, seq);
+  max_seq_ = std::max(max_seq_, seq); 
+  return Add(key, value, blob_index);
+
 
 }
 Status BlobFileBuilder::Add(const Slice& key, const Slice& value,
@@ -424,9 +434,11 @@ Status BlobFileBuilder::CloseBlobFile() {
   assert(immutable_options_);
   ROCKS_LOG_INFO(immutable_options_->logger,
                  "[%s] [JOB %d] Generated blob file #%" PRIu64 ": %" PRIu64
-                 " total blobs, %" PRIu64 " total bytes, lifetime label: %" PRIu64  ,
+                 " total blobs, %" PRIu64 " total bytes, lifetime label: %" PRIu64  
+                 " creation timestamp: %" PRIu64,
                  column_family_name_.c_str(), job_id_, blob_file_number,
-                 blob_count_, blob_bytes_, lifetime_label_);
+                 blob_count_, blob_bytes_, lifetime_label_,
+                 creation_timestamp_);
 
   writer_.reset();
   blob_count_ = 0;

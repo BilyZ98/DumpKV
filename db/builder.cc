@@ -29,6 +29,7 @@
 #include "monitoring/iostats_context_imp.h"
 #include "monitoring/thread_status_util.h"
 #include "options/options_helper.h"
+#include "logging/logging.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
 #include "rocksdb/iterator.h"
@@ -84,7 +85,7 @@ Status BuildTable(
   }
   if(tboptions.booster_handle == nullptr || tboptions.booster_fast_config_handle == nullptr){
     fprintf(stderr, "booster_handle is null in table builder\n");
-    assert(false);
+    // assert(false);
   }
   auto& mutable_cf_options = tboptions.moptions;
   auto& ioptions = tboptions.ioptions;
@@ -197,7 +198,8 @@ Status BuildTable(
 
     if(enable_blob_file_builder ) {
       for(size_t i =0; i < blob_file_builders.size(); i++){
-        uint64_t timestamp = env->NowMicros();
+        // uint64_t timestamp = env->NowMicros();
+        uint64_t now_seq = versions->LastSequence();
         blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
             new BlobFileBuilder(
                 versions, fs, &ioptions, &mutable_cf_options, &file_options,
@@ -205,7 +207,7 @@ Status BuildTable(
                 tboptions.column_family_id, tboptions.column_family_name,
                 io_priority, write_hint, io_tracer, blob_callback,
                 blob_creation_reason, &blob_file_paths, blob_file_additions,
-                i, timestamp));
+                i, now_seq));
           blob_file_builders_raw[i] = blob_file_builders[i].get();
       }
     }
@@ -235,10 +237,15 @@ Status BuildTable(
         tboptions.booster_fast_config_handle,
         imm_memtables,
         tboptions.cfd,
+        versions,
+        db_options.num_classification,
+        db_options.num_features,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
     c_iter.SetFeatures(tboptions.features);
+    c_iter.SetKeyMeta(tboptions.key_metas, tboptions.key_metas_mutex);
+    // c_iter.SetDBImpl(tboptions.db_impl);
     // c_iter.SetModel(tboptions.booster_handle);
     // c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
     // c_iter.SetMemTables(imm_memtables);
@@ -276,6 +283,12 @@ Status BuildTable(
             ThreadStatus::FLUSH_BYTES_WRITTEN, IOSTATS(bytes_written));
       }
     }
+
+    ROCKS_LOG_INFO(
+        tboptions.ioptions.info_log,
+        "flush key count 0: %ld, 1: %ld",
+        c_iter.GetLifetimeKeysCount()[0], c_iter.GetLifetimeKeysCount()[1]
+      );
     if (!s.ok()) {
       c_iter.status().PermitUncheckedError();
     } else if (!c_iter.status().ok()) {

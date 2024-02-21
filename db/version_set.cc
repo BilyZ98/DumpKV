@@ -2031,6 +2031,22 @@ Status Version::OverlapWithLevelIterator(const ReadOptions& read_options,
   }
   return status;
 }
+VersionStorageInfo::VersionStorageInfo(
+    const InternalKeyComparator* internal_comparator,
+    const Comparator* user_comparator, int levels,
+    CompactionStyle compaction_style, VersionStorageInfo* ref_vstorage,
+    bool _force_consistency_checks,
+    Env* env,
+    const VersionStorageLifetimeInfo& version_storage_lifetime_info,
+    const VersionSet* version_set,
+    EpochNumberRequirement epoch_number_requirement)
+  : VersionStorageInfo(internal_comparator, user_comparator, levels,
+                       compaction_style, ref_vstorage, _force_consistency_checks,
+                       env, version_storage_lifetime_info, 
+                       epoch_number_requirement ){
+  versions_ = version_set;
+
+}
 
 VersionStorageInfo::VersionStorageInfo(
     const InternalKeyComparator* internal_comparator,
@@ -2069,7 +2085,7 @@ VersionStorageInfo::VersionStorageInfo(
       estimated_compaction_needed_bytes_(0),
       finalized_(false),
       force_consistency_checks_(_force_consistency_checks),
-      epoch_number_requirement_(epoch_number_requirement) {
+      epoch_number_requirement_(epoch_number_requirement){
   if (ref_vstorage != nullptr) {
     accumulated_file_size_ = ref_vstorage->accumulated_file_size_;
     accumulated_raw_key_size_ = ref_vstorage->accumulated_raw_key_size_;
@@ -2114,6 +2130,7 @@ Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
           cfd_ == nullptr ? false : cfd_->ioptions()->force_consistency_checks,
           vset->env_,
           VersionStorageLifetimeInfo{ vset->db_options()->num_classification },
+          vset,
           epoch_number_requirement),
       vset_(vset),
       next_(this),
@@ -3528,6 +3545,14 @@ void VersionStorageInfo::ComputeFilesMarkedForPeriodicCompaction(
   }
 }
 
+
+
+bool VersionStorageInfo::ShouldGC(uint64_t creation_seq, uint64_t lifetime_ttl) {
+  // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
+  uint64_t elapsed_seq = versions_->LastSequence() - creation_seq;
+  return elapsed_seq >= lifetime_ttl;
+
+}
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
   double blob_garbage_collection_age_cutoff) {
     // traversed the oldest blob files for each 
@@ -3541,6 +3566,7 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
         continue;
       }
 
+      
       const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
       // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
       if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
@@ -3548,20 +3574,26 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
         assert(false);
       }
       uint64_t lifetime_ttl = lifetime_label_iter->second;
-      size_t to_be_gced_idx = 0;
-      uint64_t micros_to_sec = 1000000;
+      // uint64_t micros_to_sec = 1000000;
       for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
-        uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
-        uint64_t now_sec = env_->NowMicros() / micros_to_sec;
-        assert(now_sec >= blob_file_creation_time_sec);
+        // uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
+        // uint64_t now_sec = env_->NowMicros() / micros_to_sec;
+        // assert(now_sec >= blob_file_creation_time_sec);
 
-        uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
-        if(elapsed_sec >= lifetime_ttl) {
+        // uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
+        bool should_gc = ShouldGC(iter->GetCreationTimestamp(), lifetime_ttl);
+        // elapsed_sec >= lifetime_ttl
+        if(should_gc) {
           gc_blob_files_.emplace_back(iter->GetBlobFileNumber());
           auto linked_ssts = iter->GetLinkedSsts();
           assert(!linked_ssts.empty());
+          std::vector<uint64_t> linked_ssts_vec;
+          linked_ssts_vec.assign(linked_ssts.begin(), linked_ssts.end());
 
-          for (uint64_t sst_file_number : linked_ssts) {
+          std::sort(linked_ssts_vec.begin(), linked_ssts_vec.end());
+
+
+          for (uint64_t sst_file_number : linked_ssts_vec) {
             const FileLocation location = GetFileLocation(sst_file_number);
             assert(location.IsValid());
 
@@ -3573,9 +3605,9 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
             FileMetaData* const sst_meta = files_[level][pos];
             assert(sst_meta);
 
-            // if (sst_meta->being_compacted) {
-            //   continue;
-            // }
+            if (sst_meta->being_compacted) {
+              continue;
+            }
 
             if(sst_files.find(sst_file_number) == sst_files.end()) {
               sst_files.insert(sst_file_number);
@@ -3584,7 +3616,6 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
           }
           // break;
           // this blob file is supposed to be GCed
-          // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
         } else {
           // this blob file is not supposed to be GCed
           // break;
@@ -3592,6 +3623,7 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
 
       }
     }
+
 
     // auto stream = event_logger_->Log();
 

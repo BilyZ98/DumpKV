@@ -1260,7 +1260,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   if(enable_blob_file_builder ) {
     for(size_t i =0; i < blob_file_builders.size(); i++){
-      uint64_t timestamp = env_->NowMicros();
+      // uint64_t timestamp = env_->NowMicros();
+      uint64_t now_seq = versions_->LastSequence();
       blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
       new BlobFileBuilder(
         versions_, fs_.get(),
@@ -1270,7 +1271,7 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         write_hint_, io_tracer_, blob_callback_,
         BlobFileCreationReason::kCompaction, &blob_file_paths,
         sub_compact->Current().GetBlobFileAdditionsPtr(),
-          i, timestamp));
+          i, now_seq));
 
         blob_file_builders_raw[i] = blob_file_builders[i].get();
     }

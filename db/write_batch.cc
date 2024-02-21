@@ -501,7 +501,16 @@ Status WriteBatch::Iterate(Handler* handler) const {
   return WriteBatchInternal::Iterate(this, handler, WriteBatchInternal::kHeader,
                                      rep_.size());
 }
+Status KeyExistenceChecker::PutCF(uint32_t column_family_id, const Slice& key,
+             const Slice& value)  {
+  Status s;
+  s = db_->CheckKeyExistenceInKeyMeta(key);
+  if(!s.ok()) {
+    assert(false);
+  }
+  return s;
 
+}
 Status WriteBatchInternal::IterateWithStartSequence(const WriteBatch* wb,
                                    WriteBatch::Handler* handler, size_t begin,
                                    size_t end) {
@@ -2020,6 +2029,7 @@ Status WriteBatch::VerifyChecksum() const {
   return Status::OK();
 }
 
+
 namespace {
 
 class MemTableInserter : public WriteBatch::Handler {
@@ -2315,6 +2325,10 @@ class MemTableInserter : public WriteBatch::Handler {
       //   return ret_status;
       // }
 
+        // logger_(mem.moptions_.info_log) {
+      ret_status = db_->UpdateKeyMeta(key ,sequence_, value.size() );
+
+      // Status UpdateKeyMeta(const Slice &key, const uint64_t& sequence);
       ret_status = 
           mem->AddWithFeatures(sequence_, value_type, key, value, kv_prot_info,
                                db_,
@@ -2328,6 +2342,7 @@ class MemTableInserter : public WriteBatch::Handler {
     } else if (moptions->inplace_callback == nullptr ||
                value_type != kTypeValue) {
       assert(!concurrent_memtable_writes_);
+      assert(false);
       ret_status = mem->Update(sequence_, value_type, key, value, kv_prot_info);
     } else {
       assert(!concurrent_memtable_writes_);

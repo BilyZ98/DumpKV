@@ -7,13 +7,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #include <cinttypes>
+#include <mutex>
 #include <fstream>
 #include <sstream>
 #include <vector>
 #include <string>
+#include <random> // for std::random_device and std::mt19937
+#include <iterator> // for std::advance
 
 
 
+
+#include "monitoring/file_read_sample.h"
 #include "rocksdb/utilities/ldb_cmd.h"
 #include "db/db_impl/db_impl.h"
 #include "db/error_handler.h"
@@ -149,9 +154,19 @@ Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
     s = WriteBatchInternal::UpdateProtectionInfo(
         my_batch, write_options.protection_bytes_per_key);
   }
+  // uint64_t log_ref = 0,
+  //                    bool disable_memtable = false, uint64_t* seq_used = nullptr,
+  //                    size_t batch_cnt = 0,
+
   if (s.ok()) {
+    uint64_t seq_used = 0;
     s = WriteImpl(write_options, my_batch, /*callback=*/nullptr,
-                  /*log_used=*/nullptr);
+                  /*log_used=*/nullptr, /*log_ref=*/0,
+                  /*disable_memtable=*/false, /*seq_used=*/&seq_used);
+    assert(seq_used != 0);
+    KeyExistenceChecker checker(this);
+    my_batch->Iterate(&checker);
+    // key_metas_
   }
   return s;
 }
@@ -697,6 +712,142 @@ Status DBImpl::LoadKeyRangeFromFile(const std::string &file)  {
   }
   return Status::OK();
 }
+
+void booster_deleter(BoosterHandle* booster) {
+  int res = LGBM_BoosterFree(*booster);
+  if(res != 0) {
+    assert(false);
+  }
+  delete booster;
+}
+
+void booster_config_deleter(FastConfigHandle* booster_config) {
+  int res = LGBM_FastConfigFree(*booster_config);
+  if(res != 0) {
+    assert(false);
+  }
+  delete booster_config;
+}
+Status DBImpl::CheckKeyExistenceInKeyMeta(const Slice& key) {
+  if(key_metas_.find(key.ToString()) == key_metas_.end()) {
+    return Status::NotFound();
+  }
+  return Status::OK();
+
+}
+
+void DBImpl::SampleKeyMeta() {
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  // Create a uniform distribution from 0 to my_map.size() - 1
+  std::uniform_int_distribution<> distr(0, key_metas_.size() - 1);
+
+  // Generate a random index
+  int random_index = distr(gen);
+
+  // Create an iterator pointing to the start of the map
+  auto it = key_metas_.begin();
+
+  // Advance the iterator by the random index
+  std::advance(it, random_index);
+  auto& key_meta = it->second;
+  key_meta.SetSampled();
+
+
+
+}
+Status DBImpl::UpdateKeyMeta(const Slice &key, const uint64_t& sequence, uint64_t size){ 
+  // std::scoped_lock lock(key_meta_mutex_);
+  key_meta_mutex_.lock();
+  if(key_metas_.find(key.ToString()) == key_metas_.end()) {
+    // key_metas_.emplace(key.ToString(), sequence, size);
+    auto res = key_metas_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(key.ToString()),
+        std::forward_as_tuple(sequence, size)
+      );
+    if(!res.second) {
+      assert(false);
+    }
+  } else {
+    auto& key_meta = key_metas_.at(key.ToString());
+    // if(key_meta.IsSampled()) {
+      // key_meta.UnsetSampled();
+      // training_data_->AddTrainingSample(key_meta, sequence, sequence - key_meta.past_sequence_);
+    // }
+    training_data_->AddTrainingSample(key_meta, sequence, sequence - key_meta.past_sequence_);
+    key_meta.Update(sequence );
+
+    // key_metas_.at(key.ToString()).Update(sequence);  ;
+  }
+  // SampleKeyMeta();
+
+  if(training_data_->GetNumTrainingSamples() >= 500000) {
+    // for(auto &key_meta : key_metas_) {
+    //   training_data_->AddTrainingSample(key_meta.second, versions_->LastSequence(), 0);
+    // }
+    key_meta_mutex_.unlock();
+    BoosterHandle *new_model = new BoosterHandle();
+    uint64_t start_time = env_->NowMicros();
+    Status s = training_data_->TrainModel(new_model,  training_params_);
+
+    uint64_t end_time = env_->NowMicros();
+    uint64_t duration_sec = (end_time - start_time) / 1000000;
+    assert(s.ok());
+    training_data_->LogKeyRatio(immutable_db_options_);
+    s= training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_);
+    assert(s.ok());
+
+
+    training_data_->ClearTrainingData();
+
+    // BoosterHandle old_model = lightgbm_handle_;
+    // auto booster_deleter = [](BoosterHandle* ptr) {
+    //   int res = LGBM_BoosterFree(*ptr);
+    //   if(!res) {
+    //     assert(false);
+    //   }
+    // };
+    // auto fast_config_deleter = [](FastConfigHandle* ptr) {
+    //   int res = LGBM_FastConfigFree(*ptr);
+    //   if(!res) {
+    //     assert(false);
+    //   }
+    // };
+    FastConfigHandle *new_config = new FastConfigHandle();
+
+    std::string params = "num_threads=1";
+    int res = LGBM_BoosterPredictForCSRSingleRowFastInit(
+      *new_model, C_API_PREDICT_NORMAL,0, 0,
+      C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, 
+        params.c_str(), new_config);
+    if(res != 0) {
+      assert(false);
+      return Status::IOError("Failed to init fast single row");
+    }
+
+    // std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
+    std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model );
+    // std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
+    std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config );
+      // std::make_shared<FastConfigHandle>(new_config, booster_config_deleter);
+    lightgbm_handle_ = new_model_ptr;
+    lightgbm_fastConfig_ = new_config_ptr;
+
+    ROCKS_LOG_INFO(
+            immutable_db_options_.info_log,
+            "key_metas size: %lu, UpdateKeyMeta: key: %s, sequence: %lu,"
+              "training time: %lu sec",
+            key_metas_.size(),key.ToString().c_str(), sequence,
+            duration_sec);
+  } else {
+    key_meta_mutex_.unlock();
+  }
+  return Status::OK();
+
+}
 void DBImpl::GetKeyFeatures(const Slice& key, KeyFeatures *key_feat) const  {
   assert(key_feat);
   key_feat->time_stamp = env_->NowMicros();
@@ -747,6 +898,23 @@ std::vector<std::vector<std::string>> readCSV(const std::string &filename) {
     return data;
 }
 
+void DBImpl::InitTrainingParams() {
+
+    training_params_ = {
+            //don't use alias here. C api may not recongize
+            {"boosting",         "gbdt"},
+            {"objective",        "binary"},
+            {"num_iterations",   "32"},
+            {"num_leaves",       "32"},
+            {"num_threads",      "4"},
+            {"feature_fraction", "0.8"},
+            {"bagging_freq",     "5"},
+            {"bagging_fraction", "0.8"},
+            {"learning_rate",    "0.1"},
+            {"verbosity",        "0"},
+    };
+
+}
 Status DBImpl::ReadFeaturesFromFile(const std::string &file_path) {
     std::ifstream file(file_path);
     std::vector<std::vector<std::string>> data;
@@ -793,17 +961,32 @@ Status DBImpl::ReadFeaturesFromFile(const std::string &file_path) {
 Status DBImpl::LoadModel(std::string file_path) {
     // LGBM_BoosterCreateFromModelfile
 
-  int load_res = LGBM_BoosterCreateFromModelfile(file_path.c_str(), &lightgbm_num_iterations_, &lightgbm_handle_);
+  BoosterHandle tmp_handle;
+
+  auto booster_deleter = [](BoosterHandle *handle) {
+    LGBM_BoosterFree(*handle);
+    // delete handle;
+  };
+  int load_res = LGBM_BoosterCreateFromModelfile(file_path.c_str(), &lightgbm_num_iterations_, &tmp_handle);
     if(load_res !=0) {
       return Status::IOError("Failed to load model from file");
     }
-  // lightgbm_fastConfig_ = new FastConfigHandle();
+  auto booster_handle = std::shared_ptr<BoosterHandle>(&tmp_handle, booster_deleter);
+
   std::string params = "num_threads=1";
   assert(immutable_db_options_.num_features > 0);
+  FastConfigHandle tmp_fastConfig;
   int fast_single_row =  LGBM_BoosterPredictForMatSingleRowFastInit(
-      lightgbm_handle_, C_API_PREDICT_NORMAL, 0, 0,
-      C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, params.c_str(), &lightgbm_fastConfig_
+      lightgbm_handle_.get(), C_API_PREDICT_NORMAL, 0, 0,
+      C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, params.c_str(), &tmp_fastConfig
     );
+  auto fastConfig_deleter = [](FastConfigHandle *handle) {
+    LGBM_FastConfigFree(*handle);
+    // delete handle;
+  };
+  // auto lightgbm_fastConfig = std::make_shared<FastConfigHandle>(&tmp_fastConfig, fastConfig_deleter);
+  auto lightgbm_fastConfig = std::shared_ptr<FastConfigHandle>(&tmp_fastConfig, fastConfig_deleter);
+
   if(fast_single_row != 0 ) {
     return Status::IOError("Failed to init fast single row");
   }

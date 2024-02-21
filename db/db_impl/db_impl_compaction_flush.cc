@@ -269,6 +269,7 @@ Status DBImpl::FlushMemTableToOutputFile(
     // flush_job.SetBoosterHandle(this->lightgbm_handle_);
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
+    flush_job.SetKeyMetas(&key_metas_, &key_meta_mutex_);
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
     need_cancel = false;
@@ -406,6 +407,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
 Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer, Env::Priority thread_pri) {
+  assert(false);
   mutex_.AssertHeld();
 
   autovector<ColumnFamilyData*> cfds;
@@ -536,7 +538,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
 
       jobs[i]->SetCompactionTracer(compaction_tracer_);
       // jobs[i]->SetBoosterHandle(lightgbm_handle_);
-      jobs[i]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+      // jobs[i]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
       exec_status[i].second =
           jobs[i]->Run(&logs_with_prep_tracker_, &file_meta[i],
                        &(switched_to_mempurge.at(i)));
@@ -551,7 +553,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     assert(exec_status.size() > 0);
     assert(!file_meta.empty());
     jobs[0]->SetCompactionTracer(compaction_tracer_);
-    jobs[0]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+    // jobs[0]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     exec_status[0].second = jobs[0]->Run(
         &logs_with_prep_tracker_, file_meta.data() /* &file_meta[0] */,
         switched_to_mempurge.empty() ? nullptr : &(switched_to_mempurge.at(0)));

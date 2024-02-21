@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "rocksdb/status.h"
+// #include "db/db_impl/db_impl.h"
 #include "rocksdb/write_batch_base.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -548,6 +549,18 @@ class WriteBatch : public WriteBatchBase {
   uint64_t start_sequence_=0;
   uint64_t write_rate_mb_per_sec_=0;
   uint64_t period_num_writes_ = 0;
+};
+
+class DBImpl;
+class KeyExistenceChecker : public WriteBatch::Handler {
+DBImpl* db_ = nullptr;
+public:
+  KeyExistenceChecker(DBImpl* db): db_(db) {
+
+  }
+  Status PutCF(uint32_t column_family_id, const Slice& key,
+               const Slice& value) override ;
+ 
 };
 
 }  // namespace ROCKSDB_NAMESPACE
