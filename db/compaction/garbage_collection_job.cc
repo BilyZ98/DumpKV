@@ -208,6 +208,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   uint64_t valid_key_size = 0;
   uint64_t invalid_key_size = 0;
   uint64_t total_blob_size = 0;
+  const uint64_t write_batch_cnt = 1024;
+  auto write_options = WriteOptions();
+  WriteBatch wb;
 
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
@@ -245,7 +248,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
     auto cf_handle = db_-> DefaultColumnFamily();
 
-    auto write_options = WriteOptions();
+
     while (true) {
       BlobLogRecord record;
 
@@ -255,6 +258,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       }
       // Slice record_internal_key = record.key;
       Slice blob_user_key(record.key);
+      blob_user_key.remove_suffix(8);
       Slice blob_value(record.value);
 
       // user_key.remove_suffix(8);
@@ -288,12 +292,27 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
           if((cur_blob_file_num == iter_blob_file_num) && (cur_blob_offset == iter_blob_offset)) {
 
-          // Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
-            s = db_->Put(write_options, cf_handle, blob_user_key,  blob_value);
+
+            // s = db_->Put(write_options, cf_handle, blob_user_key,  blob_value);
+            // s = wb.PutGC(cf_handle, record.key, blob_value);
             if(!s.ok()) {
+              if(!s.IsShutdownInProgress()){
+                assert(false);
+              }
               // assert(false);
               return s;
             }
+            if(wb.Count() >= write_batch_cnt) {
+              // s = db_->Write(write_options, &wb);
+              if(!s.ok()) {
+                if(!s.IsShutdownInProgress()){
+                  assert(false);
+                }
+                return s;
+              }
+              wb.Clear();
+            }
+
             valid_key_num++;
             valid_value_size+=record.value_size;
             valid_key_size+=record.key_size;
@@ -309,7 +328,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       }
 
      }
-    
+   
     // if (isout){
     //   fout<<"job_id: "<<job_id_<<std::endl;
     //   isout=false;
@@ -329,6 +348,15 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       BlobLogFooter footer;
       blob_log_reader.ReadFooter(&footer);
     
+  }
+  if(wb.Count() > 0) {
+    // s = db_->Write(write_options, &wb);
+    if(!s.ok()) {
+      if(!s.IsShutdownInProgress()){
+        assert(false);
+      }
+      return s;
+    }
   }
   gc_stats_.stats.num_input_records = valid_key_num + invalid_key_num;
   gc_stats_.stats.bytes_read_blob = total_blob_size;

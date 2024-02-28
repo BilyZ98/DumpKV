@@ -20,8 +20,9 @@ import multiprocessing as mp
 
 
 
-data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/features1_all.csv"
-output_dir= "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/"
+data_path = "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/feat_output/features1_with_seq_all.csv"
+# output_dir= "/mnt/nvme1n1/mlsm/test_blob_no_model_mixgraph/with_gc_1.0_0.8/"
+output_dir = "./"
 lifetime_cdf_write_path = os.path.join(output_dir, 'lifetime_cdf_write.png')
 # names = ['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate']
 
@@ -57,6 +58,27 @@ def test_dask():
     # num_rows = len(df_dask.index)
     # print(num_rows)
     client.shutdown()
+
+def GetSeqLifetimeCDF(server_trace, output_dir):
+    df = pd.read_csv(server_trace, sep=',')
+    # print('count of write: ', len(df_write))
+    df_seq_latter = df['seq_diff_latter']
+
+
+    # avg_size = df_write['value_size'].mean().compute()
+    print('avg of lifetime: ', df_seq_latter.mean())
+    print('max of lifetime: ', df_seq_latter.max())
+    print('min of lifetime: ', df_seq_latter.min())
+    print('std of lifetime: ', df_seq_latter.std())
+    plt.figure()
+    plt.xlabel('lifetime')
+    plt.ylabel('cdf')
+    plt.title('lifetime cdf of write')
+    # cdf_x = np.sort(df_seq_latter.values)
+    # cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+    df_seq_latter.hist(cumulative=True, density=1, bins=1000)
+    plt.savefig(os.path.join(output_dir, 'seq_lifetime_cdf.png'))
+    plt.close()
 
 def GetLifetimeCDFWrite(server_trace, output_dir):
     # cluster = LocalCluster(n_workers=3, threads_per_worker=10, memory_limit='64GB')
@@ -302,6 +324,6 @@ def GetOverwriteRatio():
 # ProcessAllTraces()
 if __name__ == "__main__":
     # test_dask()
-    GetLifetimeCDFWrite(data_path, output_dir)
+    GetSeqLifetimeCDF(data_path, output_dir)
 
 

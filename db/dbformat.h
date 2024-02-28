@@ -68,6 +68,8 @@ enum ValueType : unsigned char {
   kTypeCommitXIDAndTimestamp = 0x15,  // WAL only
   kTypeWideColumnEntity = 0x16,
   kTypeColumnFamilyWideColumnEntity = 0x17,  // WAL only
+  kTypeGCValue = 0x18,
+  // kTypeGCBlobIndex = 0x18, // GC only
   kTypeMaxValid,    // Should be after the last valid type, only used for
                     // validation
   kMaxValue = 0x7F  // Not used for storing records.

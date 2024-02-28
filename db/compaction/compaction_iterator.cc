@@ -1174,7 +1174,8 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
   blob_index_.clear();
   // uint64_t bucket_id = booster_handle_->
    
-  s = lifetime_blob_file_builders_[lifetime_label]->Add(user_key(), value_, &blob_index_);
+  // s = lifetime_blob_file_builders_[lifetime_label]->Add(user_key(), value_, &blob_index_);
+  s = lifetime_blob_file_builders_[lifetime_label]->Add(key(), value_, &blob_index_);
 
   if (!s.ok()) {
     status_ = s;
@@ -1282,7 +1283,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     // feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
 
     
-     s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
+     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
 
   }
   if (!s.ok()) {
@@ -1349,9 +1350,9 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     return;
   }
 
+  return;
   // GC for integrated BlobDB
   if (compaction_->enable_blob_garbage_collection()) {
-    return;
     TEST_SYNC_POINT_CALLBACK(
         "CompactionIterator::GarbageCollectBlobIfNeeded::TamperWithBlobIndex",
         &value_);

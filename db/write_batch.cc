@@ -88,6 +88,7 @@ enum ContentFlags : uint32_t {
   HAS_BLOB_INDEX = 1 << 10,
   HAS_BEGIN_UNPREPARE = 1 << 11,
   HAS_PUT_ENTITY = 1 << 12,
+  HAS_PUT_GC = 1 << 13,
 };
 
 struct BatchContentClassifier : public WriteBatch::Handler {
@@ -380,6 +381,7 @@ Status ReadRecordFromWriteBatch(Slice* input, char* tag,
         return Status::Corruption("bad WriteBatch Put");
       }
       FALLTHROUGH_INTENDED;
+    case kTypeGCValue:
     case kTypeValue:
       if (!GetLengthPrefixedSlice(input, key) ||
           !GetLengthPrefixedSlice(input, value)) {
@@ -856,6 +858,15 @@ Status WriteBatchInternal::Iterate(const WriteBatch* wb,
           found++;
         }
         break;
+      case kTypeGCValue:
+        assert(wb->content_flags_.load(std::memory_order_relaxed) &
+               (ContentFlags::DEFERRED | ContentFlags::HAS_PUT_GC));
+          s = handler->PutGCCF(column_family, key, value);
+          if (LIKELY(s.ok())) {
+            empty_batch = false;
+            found++;
+          }
+          break;
       case kTypeColumnFamilyBlobIndex:
       case kTypeBlobIndex:
         assert(wb->content_flags_.load(std::memory_order_relaxed) &
@@ -1093,6 +1104,34 @@ Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
   return save.commit();
 }
 
+Status WriteBatch::PutGC(ColumnFamilyHandle* column_family, const Slice& key,
+               const Slice& value) {
+  size_t ts_sz = 0;
+  uint32_t cf_id = 0;
+  Status s;
+
+  std::tie(s, cf_id, ts_sz) =
+      WriteBatchInternal::GetColumnFamilyIdAndTimestampSize(this,
+                                                            column_family);
+
+  if (!s.ok()) {
+    return s;
+  }
+
+  if (0 == ts_sz) {
+    return WriteBatchInternal::PutGC(this, cf_id, key, value);
+  }
+  assert(false);
+  needs_in_place_update_ts_ = true;
+  has_key_with_ts_ = true;
+  std::string dummy_ts(ts_sz, '\0');
+  std::array<Slice, 2> key_with_ts{{key, dummy_ts}};
+  return WriteBatchInternal::Put(this, cf_id, SliceParts(key_with_ts.data(), 2),
+                                 SliceParts(&value, 1));
+
+}
+
+
 Status WriteBatch::Put(ColumnFamilyHandle* column_family, const Slice& key,
                        const Slice& value) {
   size_t ts_sz = 0;
@@ -1153,6 +1192,34 @@ Status WriteBatchInternal::CheckSlicePartsLength(const SliceParts& key,
   }
   return Status::OK();
 }
+Status WriteBatchInternal::PutGC(WriteBatch* batch, uint32_t column_family_id,
+                      const Slice& key, const Slice& value) {
+  LocalSavePoint save(batch);
+  WriteBatchInternal::SetCount(batch, WriteBatchInternal::Count(batch) + 1);
+  if (column_family_id == 0) {
+    batch->rep_.push_back(static_cast<char>(kTypeGCValue));
+  } else {
+    assert(false);
+    batch->rep_.push_back(static_cast<char>(kTypeColumnFamilyBlobIndex));
+    PutVarint32(&batch->rep_, column_family_id);
+  }
+  PutLengthPrefixedSlice(&batch->rep_, key);
+  PutLengthPrefixedSlice(&batch->rep_, value);
+  batch->content_flags_.store(batch->content_flags_.load(std::memory_order_relaxed) |
+                              ContentFlags::HAS_PUT_GC,
+                          std::memory_order_relaxed);
+  if (batch->prot_info_ != nullptr) {
+    // See comment in first `WriteBatchInternal::Put()` overload concerning the
+    // `ValueType` argument passed to `ProtectKVO()`.
+    batch->prot_info_->entries_.emplace_back(
+        ProtectionInfo64()
+            .ProtectKVO(key, value, kTypeGCValue)
+            .ProtectC(column_family_id));
+  }
+  return save.commit();
+
+}
+
 
 Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
                                const SliceParts& key, const SliceParts& value) {
@@ -1981,6 +2048,7 @@ Status WriteBatch::VerifyChecksum() const {
       case kTypeBlobIndex:
         tag = kTypeBlobIndex;
         break;
+      case kTypeGCValue:
       case kTypeLogData:
       case kTypeBeginPrepareXID:
       case kTypeEndPrepareXID:
@@ -2434,6 +2502,173 @@ class MemTableInserter : public WriteBatch::Handler {
     return ret_status;
 
   }
+  Status PutCFImplWithGCKey(uint32_t column_family_id, const Slice& key,
+                   const Slice& value, ValueType value_type,
+                   const ProtectionInfoKVOS64* kv_prot_info) {
+
+    // optimize for non-recovery mode
+    if (UNLIKELY(write_after_commit_ && rebuilding_trx_ != nullptr)) {
+      // TODO(ajkr): propagate `ProtectionInfoKVOS64`.
+      assert(false);
+      return WriteBatchInternal::Put(rebuilding_trx_, column_family_id, key,
+                                     value);
+      // else insert the values to the memtable right away
+    }
+
+    Status ret_status;
+    if (UNLIKELY(!SeekToColumnFamily(column_family_id, &ret_status))) {
+      assert(false);
+      if (ret_status.ok() && rebuilding_trx_ != nullptr) {
+        assert(!write_after_commit_);
+        // The CF is probably flushed and hence no need for insert but we still
+        // need to keep track of the keys for upcoming rollback/commit.
+        // TODO(ajkr): propagate `ProtectionInfoKVOS64`.
+        ret_status = WriteBatchInternal::Put(rebuilding_trx_, column_family_id,
+                                             key, value);
+        if (ret_status.ok()) {
+          MaybeAdvanceSeq(IsDuplicateKeySeq(column_family_id, key));
+        }
+      } else if (ret_status.ok()) {
+        MaybeAdvanceSeq(false /* batch_boundary */);
+      }
+      return ret_status;
+    }
+    assert(ret_status.ok());
+
+    MemTable* mem = cf_mems_->GetMemTable();
+    auto* moptions = mem->GetImmutableMemTableOptions();
+    if(sequence_ == 0) {
+      fprintf(stderr, "MemtableInserter::PutCFImpl: sequence_ == 0\n");
+    }
+    assert(sequence_ != 0 || !moptions->inplace_update_support);
+    ParsedInternalKey parsed_key;
+    ret_status = ParseInternalKey(key, &parsed_key, false);
+    if(!ret_status.ok()) {
+      return ret_status;
+    }
+    SequenceNumber cur_seq = parsed_key.sequence; 
+    // uint64_t cur_seq =  
+    // inplace_update_support is inconsistent with snapshots, and therefore with
+    // any kind of transactions including the ones that use seq_per_batch
+    assert(!seq_per_batch_ || !moptions->inplace_update_support);
+    if (!moptions->inplace_update_support) {
+      ret_status =
+          mem->Add(cur_seq, value_type, parsed_key.user_key, value, kv_prot_info,
+                   concurrent_memtable_writes_, get_post_process_info(mem),
+                   hint_per_batch_ ? &GetHintMap()[mem] : nullptr);
+    } else if (moptions->inplace_callback == nullptr ||
+               value_type != kTypeValue) {
+      assert(!concurrent_memtable_writes_);
+      assert(false);
+      ret_status = mem->Update(cur_seq, value_type, key, value, kv_prot_info);
+    } else {
+      assert(!concurrent_memtable_writes_);
+      assert(value_type == kTypeValue);
+      assert(false);
+      ret_status = mem->UpdateCallback(sequence_, key, value, kv_prot_info);
+      if (ret_status.IsNotFound()) {
+        // key not found in memtable. Do sst get, update, add
+        SnapshotImpl read_from_snapshot;
+        read_from_snapshot.number_ = sequence_;
+        ReadOptions ropts;
+        // it's going to be overwritten for sure, so no point caching data block
+        // containing the old version
+        ropts.fill_cache = false;
+        ropts.snapshot = &read_from_snapshot;
+
+        std::string prev_value;
+        std::string merged_value;
+
+        auto cf_handle = cf_mems_->GetColumnFamilyHandle();
+        Status get_status = Status::NotSupported();
+        if (db_ != nullptr && recovering_log_number_ == 0) {
+          if (cf_handle == nullptr) {
+            cf_handle = db_->DefaultColumnFamily();
+          }
+          // TODO (yanqin): fix when user-defined timestamp is enabled.
+          get_status = db_->Get(ropts, cf_handle, key, &prev_value);
+        }
+        // Intentionally overwrites the `NotFound` in `ret_status`.
+        if (!get_status.ok() && !get_status.IsNotFound()) {
+          ret_status = get_status;
+        } else {
+          ret_status = Status::OK();
+        }
+        if (ret_status.ok()) {
+          UpdateStatus update_status;
+          char* prev_buffer = const_cast<char*>(prev_value.c_str());
+          uint32_t prev_size = static_cast<uint32_t>(prev_value.size());
+          if (get_status.ok()) {
+            update_status = moptions->inplace_callback(prev_buffer, &prev_size,
+                                                       value, &merged_value);
+          } else {
+            update_status = moptions->inplace_callback(
+                nullptr /* existing_value */, nullptr /* existing_value_size */,
+                value, &merged_value);
+          }
+          if (update_status == UpdateStatus::UPDATED_INPLACE) {
+            assert(get_status.ok());
+            if (kv_prot_info != nullptr) {
+              ProtectionInfoKVOS64 updated_kv_prot_info(*kv_prot_info);
+              updated_kv_prot_info.UpdateV(value,
+                                           Slice(prev_buffer, prev_size));
+              // prev_value is updated in-place with final value.
+              ret_status = mem->Add(sequence_, value_type, key,
+                                    Slice(prev_buffer, prev_size),
+                                    &updated_kv_prot_info);
+            } else {
+              ret_status = mem->Add(sequence_, value_type, key,
+                                    Slice(prev_buffer, prev_size),
+                                    nullptr /* kv_prot_info */);
+            }
+            if (ret_status.ok()) {
+              RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
+            }
+          } else if (update_status == UpdateStatus::UPDATED) {
+            if (kv_prot_info != nullptr) {
+              ProtectionInfoKVOS64 updated_kv_prot_info(*kv_prot_info);
+              updated_kv_prot_info.UpdateV(value, merged_value);
+              // merged_value contains the final value.
+              ret_status = mem->Add(sequence_, value_type, key,
+                                    Slice(merged_value), &updated_kv_prot_info);
+            } else {
+              // merged_value contains the final value.
+              ret_status =
+                  mem->Add(sequence_, value_type, key, Slice(merged_value),
+                           nullptr /* kv_prot_info */);
+            }
+            if (ret_status.ok()) {
+              RecordTick(moptions->statistics, NUMBER_KEYS_WRITTEN);
+            }
+          }
+        }
+      }
+    }
+    if (UNLIKELY(ret_status.IsTryAgain())) {
+      assert(false);
+      assert(seq_per_batch_);
+      const bool kBatchBoundary = true;
+      MaybeAdvanceSeq(kBatchBoundary);
+    } else if (ret_status.ok()) {
+      // MaybeAdvanceSeq();
+      CheckMemtableFull();
+    }
+    // optimize for non-recovery mode
+    // If `ret_status` is `TryAgain` then the next (successful) try will add
+    // the key to the rebuilding transaction object. If `ret_status` is
+    // another non-OK `Status`, then the `rebuilding_trx_` will be thrown
+    // away. So we only need to add to it when `ret_status.ok()`.
+    // if (UNLIKELY(ret_status.ok() && rebuilding_trx_ != nullptr)) {
+    //   assert(false);
+    //   assert(!write_after_commit_);
+    //   // TODO(ajkr): propagate `ProtectionInfoKVOS64`.
+    //   ret_status = WriteBatchInternal::Put(rebuilding_trx_, column_family_id,
+    //                                        key, value);
+    // }
+    return ret_status;
+  
+  }
+ 
 
   Status PutCFImpl(uint32_t column_family_id, const Slice& key,
                    const Slice& value, ValueType value_type,
@@ -2613,6 +2848,38 @@ class MemTableInserter : public WriteBatch::Handler {
 
 
   }
+  Status PutGCCF(uint32_t column_family_id, const Slice& key,
+                         const Slice& value ) override{
+    const auto* kv_prot_info = NextProtectionInfo();
+    Status ret_status;
+    if (kv_prot_info != nullptr) {
+      assert(false);
+      // Memtable needs seqno, doesn't need CF ID
+      auto mem_kv_prot_info =
+          kv_prot_info->StripC(column_family_id).ProtectS(sequence_);
+      ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
+                             &mem_kv_prot_info);
+    } else {
+      ret_status = PutCFImplWithGCKey(column_family_id, key, value, kTypeValue,
+                             nullptr /* kv_prot_info */ );
+      // ret_status = PutBlobIndexCF(uint32_t column_family_id, const Slice &key, const Slice &value)
+      // ret_status = PutCFImplWithFeatures(column_family_id, key, value, kTypeBlobIndex,
+      //                                    nullptr);
+      // ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
+      //                        nullptr /* kv_prot_info */);
+    }
+    // TODO: this assumes that if TryAgain status is returned to the caller,
+    // the operation is actually tried again. The proper way to do this is to
+    // pass a `try_again` parameter to the operation itself and decrement
+    // prot_info_idx_ based on that
+    if (UNLIKELY(ret_status.IsTryAgain())) {
+      DecrementProtectionInfoIdxForTryAgain();
+    }
+    return ret_status;
+
+
+  }
+
   Status PutCF(uint32_t column_family_id, const Slice& key,
                const Slice& value) override {
     const auto* kv_prot_info = NextProtectionInfo();

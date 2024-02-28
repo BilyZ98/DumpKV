@@ -6845,7 +6845,363 @@ Blob file count: 64, total size: 4.6 GB, garbage size: 0.0 GB, space amp: 1.0
 [Todo]
 Make gc key insertion with correct semantics. Make sure old keys do not 
 overwrite new keys during gc
+How does lifetime classification works if put keys back to rocksdb 
+after gc?.
+We can add a byte of lifetime classification in key during gc put.
+So what category of lifetime should we give for each model calling?
+We can change model task from classification to regression.
+How is data collected?
+How does lrb deal with limited amount of training samples and how does
+data labelling works for rare seen keys?
+
+```
+
+Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
+                                  WriteBatch* my_batch, WriteCallback* callback,
+                                  uint64_t* log_used, uint64_t log_ref,
+                                  bool disable_memtable, uint64_t* seq_used) {
+    memtable_write_group.status = WriteBatchInternal::InsertInto(
+          memtable_write_group, w.sequence, column_family_memtables_.get(),
+          &flush_scheduler_, &trim_history_scheduler_,
+          write_options.ignore_missing_column_families, 0 /*log_number*/, this,
+          false /*concurrent_memtable_writes*/, seq_per_batch_, batch_per_txn_);
+
+
+                w->status = w->batch->Iterate(&inserter);
+```
+
+```
+Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
+                               const Slice& key, const Slice& value) {
+  if (key.size() > size_t{std::numeric_limits<uint32_t>::max()}) {
+    return Status::InvalidArgument("key is too large");
+  }
+  if (value.size() > size_t{std::numeric_limits<uint32_t>::max()}) {
+    return Status::InvalidArgument("value is too large");
+  }
+
+  LocalSavePoint save(b);
+  WriteBatchInternal::SetCount(b, WriteBatchInternal::Count(b) + 1);
+  if (column_family_id == 0) {
+    b->rep_.push_back(static_cast<char>(kTypeValue));
+  } else {
+ 
+```
+Where is tag is set during write?
+I think we can add an another type of op in WriteBatchInternal 
+which is call PutGC()
+a: 3
+put(a,3)
+put(a,4)
+get(a) ->  3 / 4
+
+Sacarifice read performance. Read all levels to get latest value.
+
+Actually there is PutBlobValue() in rocksdb which is similar to gc put
+but is different from normal put in current integrated blob db in rocksdb 
+which accumulated value in memtable and then flush value to blob file.
+```
+Status WriteBatchInternal::InsertInto(
+    WriteThread::WriteGroup& write_group, SequenceNumber sequence,
+    ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
+    TrimHistoryScheduler* trim_history_scheduler,
+    bool ignore_missing_column_families, uint64_t recovery_log_number, DB* db,
+    bool concurrent_memtable_writes, bool seq_per_batch, bool batch_per_txn) {
+ 
+Status WriteBatch::Iterate(Handler* handler) const {
+  if (rep_.size() < WriteBatchInternal::kHeader) {
+    return Status::Corruption("malformed WriteBatch (too small)");
+  }
+
+  return WriteBatchInternal::Iterate(this, handler, WriteBatchInternal::kHeader,
+                                     rep_.size());
+}
+    Status WriteBatchInternal::Iterate(const WriteBatch* wb,
+                                       WriteBatch::Handler* handler, size_t begin,
+                                       size_t end) {
+      if (begin > wb->rep_.size() || end > wb->rep_.size() || end < begin) {
+        return Status::Corruption("Invalid start/end bounds for Iterate");
+      }
+      assert(begin <= end);
+      Slice input(wb->rep_.data() + begin, static_cast<size_t>(end - begin));
+      bool whole_batch =
+          (begin == WriteBatchInternal::kHeader) && (end == wb->rep_.size());
+
+      Slice key, value, blob, xid;
+
+     
+        switch (tag) {
+          case kTypeColumnFamilyValue:
+          case kTypeValue:
+            assert(wb->content_flags_.load(std::memory_order_relaxed) &
+                   (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
+            s = handler->PutCF(column_family, key, value);
+
+            // s = handler->PutCFWithFeatures(column_family, key, value );
+            if (LIKELY(s.ok())) {
+              empty_batch = false;
+              found++;
+
+  Status PutCF(uint32_t column_family_id, const Slice& key,
+               const Slice& value) override {
+    const auto* kv_prot_info = NextProtectionInfo();
+    Status ret_status;
+    if (kv_prot_info != nullptr) {
+      assert(false);
+      // Memtable needs seqno, doesn't need CF ID
+      auto mem_kv_prot_info =
+          kv_prot_info->StripC(column_family_id).ProtectS(sequence_);
+      ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
+                             &mem_kv_prot_info);
+    } else {
+      ret_status = PutCFImplWithFeatures(column_family_id, key, value, kTypeValue,
+                                         nullptr);
+
+```
+Handler shares PutCF() interface
+So I need to implement PutCF() of MemTableInserter
+Implement WriteBatch::PutGCCF()
+Implement WriteBatchInternal:PutGCCF()
+I think I can just call PutBlobIndexCF of memtable inserter.
+I don't need to do that myself by implementing a new type.
+But I need to extract sequence number out of key.
+
+Should change value type from kblob to ktypevalue
+
+DEFINE_bool(allow_concurrent_memtable_write, true,
+
+```
+Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
+  Status s;
+  if (write_options.protection_bytes_per_key > 0) {
+    s = WriteBatchInternal::UpdateProtectionInfo(
+        my_batch, write_options.protection_bytes_per_key);
+  }
+  if (s.ok()) {
+    s = WriteImpl(write_options, my_batch, /*callback=*/nullptr,
+                  /*log_used=*/nullptr);
+  }
+  return s;
+}
+
+```
+Change user_key() to key() in ExtractLargeValueIfNeededImpl() to get 
+internal key so that we can put sequence number during gc.
+We can call this function to write writebatch into rocksdb
+
+Another run before use PutGC
+```
+
+Uptime(secs): 1891.3 total, 8.0 interval
+Flush(GB): cumulative 13.293, interval 0.092
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 15.34 GB write, 8.31 MB/s write, 2.42 GB read, 1.31 MB/s read, 821.4 seconds
+Interval compaction: 0.09 GB write, 11.73 MB/s write, 0.00 GB read, 0.00 MB/s read, 1.3 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+Block cache LRUCache@0x5555569d0d60#759148 capacity: 16.00 GB usage: 2.43 GB table_size: 1048576 occupancy: 41920 collections: 11 last_copies: 85 last_secs: 0.404451 secs_since: 85
+Block cache entry stats(count,size,portion): DataBlock(267213,2.06 GB,12.8446%) BlobValue(405704,329.34 MB,2.01012%) Misc(2,8.09 KB,4.82425e-05%)
+
+** File Read Latency Histogram By Level [default] **
+2024/01/24-15:08:57.525420 759153 [db/compaction/compaction_job.cc:1666] [default] [JOB 398] Generated table #1218: 74006 keys, 2675662 bytes, temperature: kUnknown
+2024/01/24-15:08:57.525471 759153 EVENT_LOG_v1 {"time_micros": 1706080137525445, "cf_name": "default", "job": 398, "event": "table_file_creation", "file_number": 1218, "file_size": 2675662, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 15255519, "largest_seqno": 18104087, "table_properties": {"data_size": 2576002, "index_size": 6047, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 92549, "raw_key_size": 2072168, "raw_average_key_size": 28, "raw_value_size": 740060, "raw_average_value_size": 10, "num_data_blocks": 316, "num_entries": 74006, "num_filter_entries": 74006, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1706079397, "oldest_key_time": 0, "file_creation_time": 1706080136, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3dca4e63-ea19-41a5-bb3b-c3fd14b447cd", "db_session_id": "R9V51Z2GXOEEUD257B86", "orig_file_number": 1218, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 1007}
+2024/01/24-15:08:57.859432 759182 [db/db_impl/db_impl.cc:1123] ------- DUMPING STATS -------
+2024/01/24-15:08:57.859505 759182 [db/db_impl/db_impl.cc:1125] 
+** DB Stats **
+Uptime(secs): 1892.3 total, 1.0 interval
+Cumulative writes: 18M writes, 18M keys, 17M commit groups, 1.0 writes per commit group, ingest: 14.20 GB, 7.68 MB/s
+Cumulative WAL: 18M writes, 0 syncs, 18152106.00 writes per sync, written: 14.20 GB, 7.68 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 14K writes, 14K keys, 14K commit groups, 1.0 writes per commit group, ingest: 11.51 MB, 11.50 MB/s
+Interval WAL: 14K writes, 0 syncs, 14422.00 writes per sync, written: 0.01 GB, 11.50 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      4/4   15.27 MB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   1.0      0.0     61.8    220.37            219.67       152    1.450       0      0       0.0      12.8
+  L1      8/8   23.79 MB   0.0      1.3     0.5      0.8       1.2      0.5       0.0   2.3      3.9      3.7    340.06            339.65        37    9.191     38M  1756K       0.0       0.0
+  L2     49/0   133.15 MB   0.7      1.1     0.4      0.7       0.8      0.1       0.0   2.0      4.4      3.2    260.97            260.69       127    2.055     33M  9185K       0.0       0.0
+ Sum     61/12  172.22 MB   0.0     11.2     0.9      1.5       2.6      1.1       0.0   1.2     13.9     19.1    821.40            820.02       316    2.599     71M    10M       8.8      12.8
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0     11.2     0.9      1.5       8.3      6.8       0.0   0.0     19.0     14.1    601.03            600.35       164    3.665     82M    13M       8.8       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   0.0      0.0     61.8    220.37            219.67       152    1.450       0      0       0.0      12.8
+
+Blob file count: 52, total size: 3.7 GB, garbage size: 0.0 GB, space amp: 1.0
+
+
+Completed replay (ID: ) in 2451 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50     p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test  date     version job_id  githash
+0               172MB   4GB     15.3    2.0     8.3     821     820     9       13      1778525635.0                                           1895    0.0     0       2.9     0.1     8.2   replay.t1.s1     2024-01-24T14:39:22     8.0.0           41ac5b042d      1.0
+```
+
+Get a bug where get report blob:15 not found , blob:15 is deleted. 
+Is this because get seearch cache first and get obsolete value for key ?
+How can we clear cache after gc job?
+How does compaction handle this?
+Is this also becase blob files are deleted while get is ongoing after gettting
+keys from lsm-tree?
+To avoid this problem we can ref blob  in version as well.
+1. each FileMetaData has ref count. FileMetaData is deleted only when ref = 0;
+2. TableCache is clear before FileMetaData ref--? Otherwise get will still get 
+old sst from cache. Actually we don't need to clear cache for deleted sst.
+Because get start from each version.
+```
+void SubcompactionState::Cleanup(Cache* cache) {
+  penultimate_level_outputs_.Cleanup();
+  compaction_outputs_.Cleanup();
+
+  if (!status.ok()) {
+    for (const auto& out : GetOutputs()) {
+      // If this file was inserted into the table cache then remove
+      // them here because this compaction was not committed.
+      TableCache::Evict(cache, out.meta.fd.GetNumber());
+    }
+  }
+  // TODO: sub_compact.io_status is not checked like status. Not sure if thats
+  // intentional. So ignoring the io_status as of now.
+  io_status.PermitUncheckedError();
+}
+```
+
+ref--
+```
+Version::~Version() {
+  assert(refs_ == 0);
+
+  // Remove from linked list
+  prev_->next_ = next_;
+  next_->prev_ = prev_;
+
+  // Drop references to files
+  for (int level = 0; level < storage_info_.num_levels_; level++) {
+    for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
+      FileMetaData* f = storage_info_.files_[level][i];
+      assert(f->refs > 0);
+      f->refs--;
+      if (f->refs <= 0) {
+        assert(cfd_ != nullptr);
+        uint32_t path_id = f->fd.GetPathId();
+        assert(path_id < cfd_->ioptions()->cf_paths.size());
+        vset_->obsolete_files_.push_back(
+            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path,
+                             cfd_->GetFileMetadataCacheReservationManager()));
+      }
+    }
+  }
+}
+
+
+  void UnrefFile(FileMetaData* f) {
+    f->refs--;
+    if (f->refs <= 0) {
+      if (f->table_reader_handle) {
+        assert(table_cache_ != nullptr);
+        // NOTE: have to release in raw cache interface to avoid using a
+        // TypedHandle for FileMetaData::table_reader_handle
+        table_cache_->get_cache().get()->Release(f->table_reader_handle);
+        f->table_reader_handle = nullptr;
+      }
+
+
+
+```
+
+ref++
+```
+  Status ApplyFileAddition(int level, const FileMetaData& meta) {
+    assert(level != VersionStorageInfo::FileLocation::Invalid().GetLevel());
+
+    const uint64_t file_number = meta.fd.GetNumber();
+
+    const int current_level = GetCurrentLevelForTableFile(file_number);
+
+    if (current_level !=
+ 
+    FileMetaData* const f = new FileMetaData(meta);
+    f->refs = 1;
+
+
+void VersionStorageInfo::AddFile(int level, FileMetaData* f) {
+  auto& level_files = files_[level];
+ level_files.push_back(f);
+
+  f->refs++;
+}
+```
+So I will need t add ref to blobfilemetadata and unref then at the destructor 
+of eahc version.
+I don't know where to put refs. SharedBlobFileMetaData or blobfilemetadatas?  
+Should change shared_ptr to std ptr of blobfile?
+Don't think this ref of blob file will work because
+current  implementation of version already hold refs to blob file meta .
+But this is weird. Why blob 15 is searched?
+Maybe there is something wrong with PutGC.
+There is no valid_key_num log in LOG. so there must be something 
+wrong with PutGC.
+
+Realize that I might not need to implement my own gc process.
+I  can just update gc process to check validity of keys and check
+if blob index points to blob that is in current gc.
+```
+(gdb) p s.ToString()
+$1 = "Corruption: unknown WriteBatch tag"
+```
+
+Still get blob not existed after I fix PutGC()
+Is there is error in PutGC()?
+No such issue after I replace PutGC() with Put()
+
+Test WriteBatch PutGC()
+
+[Status: Ongoing]
+
+[Todo]
+Subtract write bytes during flush for keys written in gc.
+This gives us higher and accurate w-amp.
+Current w-amp is 1.2. 
+It should be higher.
 [Status: Not started]
+
+[Todo]
+Add comp cpu stats?
+internal_stats.cc
+```
+PrintLevelStatsHeader(buf, sizeof(buf), cfd_->GetName(), "Priority");
+  value->append(buf);
+  std::map<int, std::map<LevelStatType, double>> priorities_stats;
+  DumpCFMapStatsByPriority(&priorities_stats);
+  for (size_t priority = 0; priority < comp_stats_by_pri_.size(); ++priority) {
+    if (priorities_stats.find(static_cast<int>(priority)) !=
+        priorities_stats.end()) {
+      PrintLevelStats(
+          buf, sizeof(buf),
+          Env::PriorityToString(static_cast<Env::Priority>(priority)),
+          priorities_stats[static_cast<int>(priority)]);
+      value->append(buf);
+    }
+  }
+
+
+```
+[Status: Not started]
+
+[Todo]
+Cache level similar for key feature generation for GC.
+
+[Status: Not started]
+
+[Todo]
+set allow_concurrent_memtable_write to  false?
+But we only have one write thread so I think this is ok for now.
+[Status: Not started]
+
 
 [Todo]
 We can increase lsm-tree key drop if we check blob file existence during compaction.

@@ -165,6 +165,17 @@ class BlobFileMetaData {
   void SetNotBeingGCed() {
     being_gc_ed_ = false;
   }
+
+  void Ref() {
+    ++refs_;
+  } 
+  void Unref() {
+    assert(refs_ > 0);
+    --refs_;
+  }
+  bool IsRef() const {
+    return refs_ > 0;
+  }
   bool GetBeingGCed() const {
     return being_gc_ed_;
   }
@@ -250,6 +261,7 @@ class BlobFileMetaData {
   uint64_t create_timestamp_;
   uint64_t lifetime_label_;
   bool being_gc_ed_;
+  int refs_ = 0;
 };
 
 std::ostream& operator<<(std::ostream& os, const BlobFileMetaData& meta);

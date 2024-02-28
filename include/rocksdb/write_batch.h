@@ -113,6 +113,9 @@ class WriteBatch : public WriteBatchBase {
     return Put(nullptr, key, value);
   }
 
+  Status PutGC(ColumnFamilyHandle* column_family, const Slice& key,
+                 const Slice& value);
+
   // Store the mapping "key->{column1:value1, column2:value2, ...}" in the
   // column family specified by "column_family".
   using WriteBatchBase::PutEntity;
@@ -271,6 +274,11 @@ class WriteBatch : public WriteBatchBase {
           "implemented");
     }
 
+    virtual Status PutGCCF(uint32_t column_family_id, const Slice& key,
+                           const Slice& value ) {
+      return Status::InvalidArgument(
+          "non-default column family and PutGCCF not implemented");
+    }
     // default implementation will just call Put without column family for
     // backwards compatibility. If the column family is not default,
     // the function is noop
