@@ -156,8 +156,9 @@ struct TableBuilderOptions {
   ColumnFamilyData* cfd = nullptr;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features;
   const std::unordered_map<std::string, KeyMeta>* key_metas;  
-  const DBImpl* db_impl = nullptr;
+  DBImpl* db_impl = nullptr;
   std::mutex* key_metas_mutex = nullptr;
+  InternalIterator* db_iter = nullptr;
 
 };
 

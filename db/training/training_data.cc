@@ -1,5 +1,6 @@
 
 #include "db/training/training_data.h"
+#include <cstdint>
 #include "rocksdb/status.h"
 #include "LightGBM/c_api.h"
 #include "options/db_options.h"
@@ -26,7 +27,44 @@ TrainingData::TrainingData(Arena* arena,
   data_.reserve(batch_size_ * (num_features + 1));
 }
 
-  
+Status TrainingData::AddTrainingSample(const std::vector<uint64_t>& past_distances,
+                         const uint64_t& blob_size,
+                         const uint8_t& n_within,
+                         const std::vector<float>& edcs,
+                         const uint64_t& future_distance) {
+  int32_t counter = indptr_.back();
+  size_t j = 0;
+  // max_n_past_timestamps or max_n_past_distances ?
+  for(; j < past_distances.size() && j < max_n_past_timestamps; ++j) {
+    indices_.emplace_back(j);
+    data_.emplace_back(past_distances[j]);
+    counter++;
+  }
+  indices_.emplace_back(max_n_past_timestamps);
+  data_.push_back(blob_size);
+  ++counter;
+
+  indices_.emplace_back(max_n_past_timestamps+1);
+  data_.emplace_back(n_within);
+  ++counter;
+  for (int k = 0; k < n_edc_feature; ++k) {
+    indices_.push_back(max_n_past_timestamps  + 2 + k);
+    data_.push_back(edcs[k]);
+  }
+  counter += n_edc_feature;
+
+  const uint64_t seq_delta_threshold = 500000; 
+  if(future_distance > seq_delta_threshold) {
+    labels_.push_back(1.0);
+  } else {
+    labels_.push_back(0.0);
+  }
+  indptr_.push_back(counter);
+
+
+  return Status::OK();
+
+}
 Status TrainingData::AddTrainingSample(const KeyMeta& key_meta, uint64_t cur_seq, uint64_t future_interval) {
 
   int32_t counter = indptr_.back();
@@ -73,10 +111,11 @@ Status TrainingData::AddTrainingSample(const KeyMeta& key_meta, uint64_t cur_seq
   if(meta_extra != nullptr) {
     for (int k = 0; k < n_edc_feature; ++k) {
         indices_.push_back(max_n_past_timestamps  + 2 + k);
-        uint32_t _distance_idx = std::min(
-                uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
-                max_hash_edc_idx);
-        data_.push_back(meta_extra->_edc[k] * hash_edc[_distance_idx]);
+        // uint32_t _distance_idx = std::min(
+        //         uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
+        //         max_hash_edc_idx);
+        // data_.push_back(meta_extra->_edc[k] * hash_edc[_distance_idx]);
+      data_.push_back(meta_extra->_edc[k]);
     }
   } else {
    for (int k = 0; k < n_edc_feature; ++k) {
@@ -84,7 +123,8 @@ Status TrainingData::AddTrainingSample(const KeyMeta& key_meta, uint64_t cur_seq
       uint32_t _distance_idx = std::min(
               uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
               max_hash_edc_idx);
-      data_.push_back(hash_edc[_distance_idx]);
+      // data_.push_back(hash_edc[_distance_idx]);
+      data_.push_back(1);
     }
   }
   counter += n_edc_feature;

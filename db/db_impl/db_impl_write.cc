@@ -164,8 +164,8 @@ Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
                   /*log_used=*/nullptr, /*log_ref=*/0,
                   /*disable_memtable=*/false, /*seq_used=*/&seq_used);
     assert(seq_used != 0);
-    KeyExistenceChecker checker(this);
-    my_batch->Iterate(&checker);
+    // KeyExistenceChecker checker(this);
+    // my_batch->Iterate(&checker);
     // key_metas_
   }
   return s;
@@ -758,8 +758,78 @@ void DBImpl::SampleKeyMeta() {
 
 
 }
+Status DBImpl::AddTrainingSample(const std::vector<uint64_t>& past_distance,
+                         const uint64_t& blob_size,
+                         const uint8_t& n_within,
+                         const std::vector<float>& edcs,
+                         const uint64_t& future_distance) {
+
+  std::lock_guard<std::mutex> lock(key_meta_mutex_);
+  Status s = training_data_->AddTrainingSample(past_distance, blob_size, n_within, edcs, future_distance);
+  if(training_data_->GetNumTrainingSamples() >= 500000) {
+    // for(auto &key_meta : key_metas_) {
+    //   training_data_->AddTrainingSample(key_meta.second, versions_->LastSequence(), 0);
+    // }
+    BoosterHandle *new_model = new BoosterHandle();
+    uint64_t start_time = env_->NowMicros();
+    s = training_data_->TrainModel(new_model,  training_params_);
+
+    uint64_t end_time = env_->NowMicros();
+    uint64_t duration_sec = (end_time - start_time) / 1000000;
+    assert(s.ok());
+    training_data_->LogKeyRatio(immutable_db_options_);
+    s= training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_);
+    assert(s.ok());
+
+
+    training_data_->ClearTrainingData();
+
+    // BoosterHandle old_model = lightgbm_handle_;
+    // auto booster_deleter = [](BoosterHandle* ptr) {
+    //   int res = LGBM_BoosterFree(*ptr);
+    //   if(!res) {
+    //     assert(false);
+    //   }
+    // };
+    // auto fast_config_deleter = [](FastConfigHandle* ptr) {
+    //   int res = LGBM_FastConfigFree(*ptr);
+    //   if(!res) {
+    //     assert(false);
+    //   }
+    // };
+    FastConfigHandle *new_config = new FastConfigHandle();
+
+    std::string params = "num_threads=1";
+    int res = LGBM_BoosterPredictForCSRSingleRowFastInit(
+      *new_model, C_API_PREDICT_NORMAL,0, 0,
+      C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, 
+        params.c_str(), new_config);
+    if(res != 0) {
+      assert(false);
+      return Status::IOError("Failed to init fast single row");
+    }
+
+    std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
+    // std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model );
+    std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
+    // std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config );
+      // std::make_shared<FastConfigHandle>(new_config, booster_config_deleter);
+    lightgbm_handle_ = new_model_ptr;
+    lightgbm_fastConfig_ = new_config_ptr;
+
+    ROCKS_LOG_INFO(
+            immutable_db_options_.info_log,
+            "key_metas size: %lu, "
+              "training time: %lu sec",
+            key_metas_.size(),
+            duration_sec);
+  } 
+
+  return s;
+}
+
+
 Status DBImpl::UpdateKeyMeta(const Slice &key, const uint64_t& sequence, uint64_t size){ 
-  // std::scoped_lock lock(key_meta_mutex_);
   key_meta_mutex_.lock();
   if(key_metas_.find(key.ToString()) == key_metas_.end()) {
     // key_metas_.emplace(key.ToString(), sequence, size);
@@ -828,10 +898,10 @@ Status DBImpl::UpdateKeyMeta(const Slice &key, const uint64_t& sequence, uint64_
       return Status::IOError("Failed to init fast single row");
     }
 
-    // std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
-    std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model );
-    // std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
-    std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config );
+    std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
+    // std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model );
+    std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
+    // std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config );
       // std::make_shared<FastConfigHandle>(new_config, booster_config_deleter);
     lightgbm_handle_ = new_model_ptr;
     lightgbm_fastConfig_ = new_config_ptr;
@@ -861,12 +931,13 @@ void DBImpl::GetKeyFeatures(const Slice& key, KeyFeatures *key_feat) const  {
 
 
 }
+
 int DBImpl::GetKeyRangeId(const Slice& key) const {
   ColumnFamilyHandle *column_family =  DefaultColumnFamily();
   assert(column_family);
   const Comparator* const ucmp = column_family->GetComparator();
   // const Comparator* const default_cf_ucmp = default_cf->GetComparator();
-  int dist = std::distance( key_ranges_.begin(), std::lower_bound(key_ranges_.begin(), key_ranges_.end(), key, [ucmp](const Slice & first, const Slice & second){
+  int dist = std::distance(key_ranges_.begin(), std::lower_bound(key_ranges_.begin(), key_ranges_.end(), key, [ucmp](const Slice & first, const Slice & second){
                                                             return ucmp->Compare(first,second) < 0;
                                                           }) );
 

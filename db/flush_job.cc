@@ -217,6 +217,9 @@ void FlushJob::SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::share
 
 }
 
+void FlushJob::SetInternalIterator(InternalIterator* iter) {
+  internal_iter_ =  iter;
+}
 void FlushJob::SetKeyMetas(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex) {
   key_metas_ = key_metas;
   key_metas_mutex_ = key_meta_mutex;;
@@ -951,6 +954,18 @@ Status FlushJob::WriteLevel0Table() {
                      "[%s] [JOB %d] Level-0 flush table #%" PRIu64 ": started",
                      cfd_->GetName().c_str(), job_context_->job_id,
                      meta_.fd.GetNumber());
+      Arena db_iter_arena;
+      // auto cfd = gc->column_family_data();
+      SuperVersion* sv = cfd_->GetSuperVersion()->Ref();
+      ReadOptions read_options;
+      ScopedArenaIterator db_iter;
+      db_iter.set(db_impl_->NewInternalIteratorStartingFromLevel0(read_options, 
+                                                           cfd_,
+                                                           sv,
+                                                           &db_iter_arena,
+                                                           kMaxSequenceNumber,
+                                                           false));
+      this->SetInternalIterator(db_iter.get());
 
       TEST_SYNC_POINT_CALLBACK("FlushJob::WriteLevel0Table:output_compression",
                                &output_compression_);
@@ -1003,6 +1018,8 @@ Status FlushJob::WriteLevel0Table() {
       tboptions.features = features_;
       tboptions.key_metas = key_metas_;
       tboptions.key_metas_mutex = key_metas_mutex_;  
+      tboptions.db_iter = internal_iter_;
+      tboptions.db_impl = db_impl_;
       s = BuildTable(
           dbname_, versions_, db_options_, tboptions, file_options_,
           cfd_->table_cache(), iter.get(), std::move(range_del_iters), &meta_,

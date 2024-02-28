@@ -85,7 +85,9 @@ class FlushJob {
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
   void SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
   void SetKeyMetas(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex);
+  void SetInternalIterator(InternalIterator* iter);
   void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle) {}
+  void SetDBImpl(DBImpl* db_impl) { db_impl_ = db_impl; }
   // Require db_mutex held.
   // Once PickMemTable() is called, either Run() or Cancel() has to be called.
   void PickMemTable();
@@ -138,9 +140,11 @@ class FlushJob {
   std::shared_ptr<FastConfigHandle> fast_config_handle_;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
+  InternalIterator* internal_iter_ = nullptr;
   std::mutex* key_metas_mutex_ = nullptr;;
 
   const std::string& dbname_;
+  DBImpl* db_impl_ = nullptr;
   const std::string db_id_;
   const std::string db_session_id_;
   ColumnFamilyData* cfd_;

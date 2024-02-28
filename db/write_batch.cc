@@ -2326,7 +2326,7 @@ class MemTableInserter : public WriteBatch::Handler {
       // }
 
         // logger_(mem.moptions_.info_log) {
-      ret_status = db_->UpdateKeyMeta(key ,sequence_, value.size() );
+      // ret_status = db_->UpdateKeyMeta(key ,sequence_, value.size() );
 
       // Status UpdateKeyMeta(const Slice &key, const uint64_t& sequence);
       ret_status = 

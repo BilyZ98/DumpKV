@@ -297,8 +297,10 @@ CompactionIterator(
 
   void SetMemTables(const autovector<MemTable*>* mems);
 
+  void SetDBInternalIterator(InternalIterator* db_internal_iter);
+
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
-  void SetDBImpl(const DBImpl* db_impl);
+  void SetDBImpl(DBImpl* db_impl);
   void SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
 
   void SetGCBlobFiles(const autovector<uint64_t>* gc_blob_files);
@@ -336,7 +338,7 @@ CompactionIterator(
   // return lifetime bucket 
   Status PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label) ;
 
-  bool ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label);
+  bool ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label, const Slice& key_meta_slice);
 
   // Passes the output value to the blob file builder (if any), and replaces it
   // with the corresponding blob reference if it has been actually written to a
@@ -419,11 +421,12 @@ CompactionIterator(
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   std::shared_ptr<BoosterHandle> booster_handle_ =nullptr;
   std::shared_ptr<FastConfigHandle> fast_config_handle_ =nullptr;
-  const DBImpl* db_ = nullptr;
+  DBImpl* db_ = nullptr;
   const VersionSet* version_set_ = nullptr;
   uint64_t num_classification_ =0;
   uint64_t num_features_ = 0 ;
   std::unique_ptr<WritableFile> train_data_file_ = nullptr;;
+  InternalIterator* db_internal_iter_ = nullptr;
 
   const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
   std::mutex* key_metas_mutex_ = nullptr;

@@ -245,7 +245,8 @@ Status BuildTable(
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
     c_iter.SetFeatures(tboptions.features);
     c_iter.SetKeyMeta(tboptions.key_metas, tboptions.key_metas_mutex);
-    // c_iter.SetDBImpl(tboptions.db_impl);
+    c_iter.SetDBInternalIterator(tboptions.db_iter);
+    c_iter.SetDBImpl(tboptions.db_impl);
     // c_iter.SetModel(tboptions.booster_handle);
     // c_iter.SetModelAndConfig(tboptions.booster_handle, tboptions.booster_fast_config_handle);
     // c_iter.SetMemTables(imm_memtables);

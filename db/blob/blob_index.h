@@ -32,6 +32,13 @@ namespace ROCKSDB_NAMESPACE {
 //      | char | varint64    | varint64 | varint64 | char        |
 //      +------+-------------+----------+----------+-------------+
 //
+////    kBlob(new):
+//      +------+-------------+----------+----------+-------------+-------------+----------+-----------+----------+----------+
+//      | type | file number | offset   | size     | compression | delta_count | deltas   | edc1      | ....     | edc10    |
+//      +------+-------------+----------+----------+-------------+-------------+----------+---------- +----------+----------+
+//      | char | varint64    | varint64 | varint64 | char        | varint64    | varint64 | uint32_t  | uint32_t | uint32_t |
+//      +------+-------------+----------+----------+-------------+-------------+----------+-----------+----------+----------+
+//
 //    kBlobTTL:
 //      +------+------------+-------------+----------+----------+-------------+
 //      | type | expiration | file number | offset   | size     | compression |
@@ -90,6 +97,40 @@ class BlobIndex {
     assert(!IsInlined());
     return compression_;
   }
+  Status DecodeFromWithKeyMeta(Slice slice, uint64_t* blob_index_len) {
+
+    const char* kErrorMessage = "Error while decoding blob index";
+    const char* start_data = slice.data();
+    assert(slice.size() > 0);
+    type_ = static_cast<Type>(*slice.data());
+    if (type_ >= Type::kUnknown) {
+      return Status::Corruption(kErrorMessage,
+                                "Unknown blob index type: " +
+                                    std::to_string(static_cast<char>(type_)));
+    }
+    slice = Slice(slice.data() + 1, slice.size() - 1);
+    if (HasTTL()) {
+      if (!GetVarint64(&slice, &expiration_)) {
+        return Status::Corruption(kErrorMessage, "Corrupted expiration");
+      }
+    }
+    // uint64_t blob_index_len = 0;
+
+    if (IsInlined()) {
+      value_ = slice;
+    } else {
+      if (GetVarint64(&slice, &file_number_) && GetVarint64(&slice, &offset_) &&
+          GetVarint64(&slice, &size_) && slice.size() >= 1) {
+        compression_ = static_cast<CompressionType>(*slice.data());
+        const char* end_data = slice.data() + 1;
+        *blob_index_len = end_data - start_data;
+      } else {
+        return Status::Corruption(kErrorMessage, "Corrupted blob offset");
+      }
+    }
+    return Status::OK();
+  }
+  
 
   Status DecodeFrom(Slice slice) {
     const char* kErrorMessage = "Error while decoding blob index";
@@ -110,7 +151,7 @@ class BlobIndex {
       value_ = slice;
     } else {
       if (GetVarint64(&slice, &file_number_) && GetVarint64(&slice, &offset_) &&
-          GetVarint64(&slice, &size_) && slice.size() == 1) {
+          GetVarint64(&slice, &size_) && slice.size() >= 1) {
         compression_ = static_cast<CompressionType>(*slice.data());
       } else {
         return Status::Corruption(kErrorMessage, "Corrupted blob offset");

@@ -270,8 +270,28 @@ Status DBImpl::FlushMemTableToOutputFile(
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
     flush_job.SetKeyMetas(&key_metas_, &key_meta_mutex_);
+    flush_job.SetDBImpl(this);
+    // {
+    //   Arena arena;
+    //   // auto cfd = gc->column_family_data();
+    //   SuperVersion* sv = cfd->GetSuperVersion()->Ref();
+    //   ReadOptions read_options;
+    //   ScopedArenaIterator iter;
+    //   iter.set(this->NewInternalIteratorStartingFromLevel0(read_options, 
+    //                                                        cfd,
+    //                                                        sv,
+    //                                                        &arena,
+    //                                                        kMaxSequenceNumber,
+    //                                                        false));
+    //   // iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+    //   flush_job.SetInternalIterator(iter.get());
+
+    //   s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
+    //                     &switched_to_mempurge);
+    // }
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
+
     need_cancel = false;
   }
 

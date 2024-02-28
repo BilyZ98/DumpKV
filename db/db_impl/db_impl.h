@@ -210,6 +210,13 @@ class DBImpl : public DB {
 
   Status CheckKeyExistenceInKeyMeta(const Slice& key);
   Status UpdateKeyMeta(const Slice &key, const uint64_t& sequence, uint64_t size);
+  Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
+                           const uint64_t& blob_size,
+                           const uint8_t& n_within,
+                           const std::vector<float>& edcs,
+                           const uint64_t& future_distance);
+
+
   void SampleKeyMeta();
   // { return Status::OK();}
 
@@ -787,6 +794,14 @@ class DBImpl : public DB {
                                         Arena* arena, SequenceNumber sequence,
                                         bool allow_unprepared_value,
                                         ArenaWrappedDBIter* db_iter = nullptr);
+
+  InternalIterator* NewInternalIteratorStartingFromLevel0(const ReadOptions& read_options,
+                                        ColumnFamilyData* cfd,
+                                        SuperVersion* super_version,
+                                        Arena* arena, SequenceNumber sequence,
+                                        bool allow_unprepared_value,
+                                        ArenaWrappedDBIter* db_iter = nullptr);
+
 
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
