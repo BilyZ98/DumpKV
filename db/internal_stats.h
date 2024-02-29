@@ -508,6 +508,12 @@ class InternalStats {
     has_cf_change_since_dump_ = true;
   }
 
+  void AddGCStats(Env::Priority thread_pri,
+                  const CompactionStatsFull& gc_stats) {
+    gc_stats_.Add(gc_stats.stats);
+    comp_stats_by_pri_[thread_pri].Add(gc_stats.stats);
+
+  }
   void AddCompactionStats(int level, Env::Priority thread_pri,
                           const CompactionStats& stats) {
     comp_stats_[level].Add(stats);
@@ -632,6 +638,8 @@ class InternalStats {
       cache_entry_stats_collector_;
   // Per-ColumnFamily/level compaction stats
   std::vector<CompactionStats> comp_stats_;
+  CompactionStats gc_stats_;
+
   std::vector<CompactionStats> comp_stats_by_pri_;
   CompactionStats per_key_placement_comp_stats_;
   std::vector<HistogramImpl> file_read_latency_;

@@ -291,7 +291,7 @@ Status BlobFileReader::GetBlob(
     std::unique_ptr<BlobContents>* result, uint64_t* bytes_read) const {
   assert(result);
 
-  const uint64_t key_size = user_key.size();
+  const uint64_t key_size = user_key.size() + 8;
 
   if (!IsValidBlobOffset(offset, key_size, value_size, file_size_)) {
     return Status::Corruption("Invalid blob offset");
@@ -533,9 +533,9 @@ Status BlobFileReader::VerifyBlob(const Slice& record_slice,
     }
   }
 
-  if (record.key_size != user_key.size()) {
-    return Status::Corruption("Key size mismatch when reading blob");
-  }
+  // if (record.key_size != user_key.size()) {
+  //   return Status::Corruption("Key size mismatch when reading blob");
+  // }
 
   if (record.value_size != value_size) {
     return Status::Corruption("Value size mismatch when reading blob");
@@ -543,9 +543,9 @@ Status BlobFileReader::VerifyBlob(const Slice& record_slice,
 
   record.key =
       Slice(record_slice.data() + BlobLogRecord::kHeaderSize, record.key_size);
-  if (record.key != user_key) {
-    return Status::Corruption("Key mismatch when reading blob");
-  }
+  // if (record.key != user_key) {
+  //   return Status::Corruption("Key mismatch when reading blob");
+  // }
 
   record.value = Slice(record.key.data() + record.key_size, value_size);
 

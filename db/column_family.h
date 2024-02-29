@@ -20,6 +20,7 @@
 #include "db/table_properties_collector.h"
 #include "db/write_batch_internal.h"
 #include "db/write_controller.h"
+// #include "db/compaction/garbage_collection.h"
 #include "options/cf_options.h"
 #include "rocksdb/compaction_job_stats.h"
 #include "rocksdb/db.h"
@@ -39,6 +40,8 @@ class MemTable;
 class MemTableListVersion;
 class CompactionPicker;
 class Compaction;
+class GarbageCollectionPicker;
+class GarbageCollection;
 class InternalKey;
 class InternalStats;
 class ColumnFamilyData;
@@ -375,11 +378,16 @@ class ColumnFamilyData {
   TableCache* table_cache() const { return table_cache_.get(); }
   BlobSource* blob_source() const { return blob_source_.get(); }
 
+  bool NeedsGarbageCollection() const;
   // See documentation in compaction_picker.h
   // REQUIRES: DB mutex held
   bool NeedsCompaction() const;
   // REQUIRES: DB mutex held
   Compaction* PickCompaction(const MutableCFOptions& mutable_options,
+                             const MutableDBOptions& mutable_db_options,
+                             LogBuffer* log_buffer);
+
+  GarbageCollection* PickGarbageCollection(const MutableCFOptions& mutable_options,
                              const MutableDBOptions& mutable_db_options,
                              LogBuffer* log_buffer);
 
@@ -416,6 +424,7 @@ class ColumnFamilyData {
                            const std::string& trim_ts);
 
   CompactionPicker* compaction_picker() { return compaction_picker_.get(); }
+  GarbageCollectionPicker* garbage_collection_picker() { return garbage_collection_picker_.get(); }
   // thread-safe
   const Comparator* user_comparator() const {
     return internal_comparator_.user_comparator();
@@ -460,8 +469,10 @@ class ColumnFamilyData {
   // Protected by DB mutex
   void set_queued_for_flush(bool value) { queued_for_flush_ = value; }
   void set_queued_for_compaction(bool value) { queued_for_compaction_ = value; }
+  void set_queued_for_garbage_collection(bool value) { queued_for_garbage_collection_ = value; }
   bool queued_for_flush() { return queued_for_flush_; }
   bool queued_for_compaction() { return queued_for_compaction_; }
+  bool queued_for_garbage_collection() { return queued_for_garbage_collection_; }
 
   enum class WriteStallCause {
     kNone,
@@ -615,6 +626,8 @@ class ColumnFamilyData {
   // and picks the next compaction
   std::unique_ptr<CompactionPicker> compaction_picker_;
 
+  std::unique_ptr<GarbageCollectionPicker> garbage_collection_picker_;
+
   ColumnFamilySet* column_family_set_;
 
   std::unique_ptr<WriteControllerToken> write_controller_token_;
@@ -625,6 +638,8 @@ class ColumnFamilyData {
   // If true --> this ColumnFamily is currently present in
   // DBImpl::compaction_queue_
   bool queued_for_compaction_;
+
+  bool queued_for_garbage_collection_;
 
   uint64_t prev_compaction_needed_bytes_;
 

@@ -735,15 +735,13 @@ Status MemTable::AddWithFeatures(SequenceNumber s, ValueType type, const Slice& 
                                internal_key_size + VarintLength(val_size) +
                                val_size + moptions_.protection_bytes_per_key;
 
-  KeyFeatures* key_features = reinterpret_cast<KeyFeatures*>(arena_.Allocate(sizeof(KeyFeatures)));
+  // KeyFeatures* key_features = reinterpret_cast<KeyFeatures*>(arena_.Allocate(sizeof(KeyFeatures)));
   // key_features->sequence =  s;
   // key_features->time_stamp = db->GetEnv()->NowMicros();
-  db->GetKeyFeatures(key, key_features);
-  key_features_[s] = key_features;
+  // db->GetKeyFeatures(key, key_features);
+  // key_features_[s] = key_features;
   //
-  // key_features->write_rate_mb_per_sec = db->
-  // key_features->time_stamp = db_->
-  // key_features->time_stamp
+
   char* buf = nullptr;
   // key_features_[s] = key_features;
   std::unique_ptr<MemTableRep>& table =

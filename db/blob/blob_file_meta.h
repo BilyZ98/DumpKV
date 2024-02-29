@@ -159,6 +159,26 @@ class BlobFileMetaData {
   BlobFileMetaData(BlobFileMetaData&&) = delete;
   BlobFileMetaData& operator=(BlobFileMetaData&&) = delete;
 
+  void SetBeingGCed() {
+    being_gc_ed_ = true;
+  }
+  void SetNotBeingGCed() {
+    being_gc_ed_ = false;
+  }
+
+  void Ref() {
+    ++refs_;
+  } 
+  void Unref() {
+    assert(refs_ > 0);
+    --refs_;
+  }
+  bool IsRef() const {
+    return refs_ > 0;
+  }
+  bool GetBeingGCed() const {
+    return being_gc_ed_;
+  }
   const std::shared_ptr<SharedBlobFileMetaData>& GetSharedMeta() const {
     return shared_meta_;
   }
@@ -212,7 +232,8 @@ class BlobFileMetaData {
       : shared_meta_(std::move(shared_meta)),
         linked_ssts_(std::move(linked_ssts)),
         garbage_blob_count_(garbage_blob_count),
-        garbage_blob_bytes_(garbage_blob_bytes) {
+        garbage_blob_bytes_(garbage_blob_bytes),
+        being_gc_ed_(false){
     assert(shared_meta_);
     assert(garbage_blob_count_ <= shared_meta_->GetTotalBlobCount());
     assert(garbage_blob_bytes_ <= shared_meta_->GetTotalBlobBytes());
@@ -227,7 +248,8 @@ class BlobFileMetaData {
         garbage_blob_count_(garbage_blob_count),
         garbage_blob_bytes_(garbage_blob_bytes),
         create_timestamp_(create_timestamp),
-        lifetime_label_(lifetime_label) {
+        lifetime_label_(lifetime_label),
+        being_gc_ed_(false){
     assert(shared_meta_);
     assert(garbage_blob_count_ <= shared_meta_->GetTotalBlobCount());
     assert(garbage_blob_bytes_ <= shared_meta_->GetTotalBlobBytes());
@@ -238,6 +260,8 @@ class BlobFileMetaData {
   uint64_t garbage_blob_bytes_;
   uint64_t create_timestamp_;
   uint64_t lifetime_label_;
+  bool being_gc_ed_;
+  int refs_ = 0;
 };
 
 std::ostream& operator<<(std::ostream& os, const BlobFileMetaData& meta);

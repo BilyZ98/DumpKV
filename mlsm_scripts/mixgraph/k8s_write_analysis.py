@@ -63,6 +63,7 @@ def GetSeqLifetimeCDF(server_trace, output_dir):
     df = pd.read_csv(server_trace, sep=',')
     # print('count of write: ', len(df_write))
     df_seq_latter = df['seq_diff_latter']
+
     num_zeros = len(df_seq_latter[df_seq_latter == 0])
     print('num_zeros: ', num_zeros)
     print('count of seq_latter: ', len(df_seq_latter))
@@ -80,6 +81,7 @@ def GetSeqLifetimeCDF(server_trace, output_dir):
     print('80th percentile of lifetime df_seq_latter: ', seq_65)
 
 
+
     # avg_size = df_write['value_size'].mean().compute()
     print('avg of lifetime: ', df_seq_latter.mean())
     print('max of lifetime: ', df_seq_latter.max())
@@ -92,6 +94,7 @@ def GetSeqLifetimeCDF(server_trace, output_dir):
     # cdf_x = np.sort(df_seq_latter.values)
     # cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
     df_seq_latter.hist(cumulative=True, density=1, bins=10000)
+
     plt.savefig(os.path.join(output_dir, 'seq_lifetime_cdf.png'))
     plt.close()
 
@@ -340,7 +343,6 @@ def GetOverwriteRatio():
 if __name__ == "__main__":
     # test_dask()
     GetSeqLifetimeCDF(data_path, output_dir)
-
 
 
 

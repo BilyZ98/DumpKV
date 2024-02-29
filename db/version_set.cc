@@ -2174,6 +2174,7 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
 
   auto blob_file_meta = storage_info_.GetBlobFileMetaData(blob_file_number);
   if (!blob_file_meta) {
+    assert(false);
     return Status::Corruption("Invalid blob file number");
   }
 
@@ -2205,6 +2206,7 @@ void Version::MultiGetBlob(
       const KeyContext& key_context = blob.second;
 
       if (!blob_file_meta) {
+        assert(false);
         *key_context.s = Status::Corruption("Invalid blob file number");
         continue;
       }
@@ -3428,6 +3430,14 @@ void VersionStorageInfo::ComputeCompactionScore(
 
   }
 
+  // if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
+
+  //   ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
+  //   // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+  // }
+
+
+
   // if (mutable_cf_options.enable_blob_garbage_collection &&
   //     mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0 &&
   //     mutable_cf_options.blob_garbage_collection_force_threshold < 1.0) {
@@ -3547,14 +3557,62 @@ void VersionStorageInfo::ComputeFilesMarkedForPeriodicCompaction(
 
 
 
+
 bool VersionStorageInfo::ShouldGC(uint64_t creation_seq, uint64_t lifetime_ttl) {
   // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
   uint64_t elapsed_seq = versions_->LastSequence() - creation_seq;
   return elapsed_seq >= lifetime_ttl;
 
 }
+
+void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
+      double blob_garbage_collection_age_cutoff) {
+  blob_files_marked_for_gc_.clear();
+  for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
+    if(lifetime_blob_files_[lifetime_idx].empty()) {
+      continue;
+    }
+
+    const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
+    // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
+    if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
+      fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
+      assert(false);
+    }
+    uint64_t lifetime_ttl = lifetime_label_iter->second;
+    size_t to_be_gced_idx = 0;
+    uint64_t micros_to_sec = 1000000;
+    for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
+      if(iter->GetBeingGCed()) {
+        // this blob file is already being GCed
+        continue;
+      } 
+      uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
+      uint64_t now_sec = env_->NowMicros() / micros_to_sec;
+      assert(now_sec >= blob_file_creation_time_sec);
+
+      uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
+      if(elapsed_sec >= lifetime_ttl) {
+        // iter->SetBeingGCed();
+        blob_files_marked_for_gc_.emplace_back(iter);
+
+
+        // this blob file is supposed to be GCed
+        // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
+      } else {
+        // this blob file is not supposed to be GCed
+        break;
+      }
+
+    }
+  }
+}
+
+
 void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
   double blob_garbage_collection_age_cutoff) {
+
+    files_marked_for_forced_blob_gc_.clear();
     // traversed the oldest blob files for each 
     // lifetime classification and pick the blob files
     // that is supposed to outlive its lifetime
@@ -5030,6 +5088,8 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
       *column_family_data->ioptions(),
       *column_family_data->GetLatestMutableCFOptions());
 
+  v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
+
   // Mark v finalized
   v->storage_info_.SetFinalized();
 
@@ -5183,6 +5243,7 @@ Status VersionSet::ProcessManifestWrites(
       auto* builder = builder_guards[i]->version_builder();
       Status s = builder->SaveTo(versions[i]->storage_info());
       if (!s.ok()) {
+          assert(false);
         // free up the allocated memory
         for (auto v : versions) {
           delete v;

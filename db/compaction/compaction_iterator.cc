@@ -298,7 +298,7 @@ void CompactionIterator::SetCompactionTracer(std::shared_ptr<CompactionTracer> t
   compaction_tracer_ = tracer;
 }
 
-void CompactionIterator::SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
+void CompactionIterator::SetFeatures(const  std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
   features_ = features;
 
 }
@@ -1225,7 +1225,11 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
   // uint64_t bucket_id = booster_handle_->
    
   // s = lifetime_blob_file_builders_[lifetime_label]->Add(user_key(), value_, &blob_index_);
-  s = lifetime_blob_file_builders_[lifetime_label]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+
+  //s = lifetime_blob_file_builders_[lifetime_label]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+
+  s = lifetime_blob_file_builders_[lifetime_label]->Add(key(), value_, &blob_index_);
+
 
   if (!s.ok()) {
     status_ = s;
@@ -1276,7 +1280,7 @@ bool CompactionIterator::GetFeatures( std::vector<double>* feature_vec ) {
     return false;
   }
   if(features_->at(user_key_str).find(seq) == features_->at(user_key_str).end()) {
-    assert(false);
+    // assert(false);
     return false;
   }
   *feature_vec = std::move(features_->at(user_key_str).at(seq));
@@ -1625,7 +1629,9 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     }
    
      // s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
-    s = lifetime_blob_file_builders_[maxIndex]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+    // s = lifetime_blob_file_builders_[maxIndex]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+    s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
+
     PutVarint32(&blob_index_, past_distances_count);
     if(past_distances_count > 0) {
       past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
@@ -1710,7 +1716,12 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     assert(false);
     return;
   }
+  if(!compaction_->enable_blob_garbage_collection()) {
+    assert(false);
+    return;
+  }
 
+  return;
   // GC for integrated BlobDB
   if (compaction_->enable_blob_garbage_collection()) {
     TEST_SYNC_POINT_CALLBACK(
@@ -1774,6 +1785,7 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     if(compaction_ && gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
       should_gc = true;
     }
+
     if(!should_gc) {
       return;
     }

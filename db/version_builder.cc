@@ -33,6 +33,7 @@
 #include "port/port.h"
 #include "table/table_reader.h"
 #include "util/string_util.h"
+#include "logging/logging.h"
 
 namespace ROCKSDB_NAMESPACE {
 
@@ -259,6 +260,7 @@ class VersionBuilder::Rep {
   VersionSet* version_set_;
   int num_levels_;
   LevelState* levels_;
+  std::unordered_set<uint64_t> deleted_blob_files_;
   // Store sizes of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
@@ -704,6 +706,13 @@ class VersionBuilder::Rep {
     return nullptr;
   }
 
+  Status ApplyBlobFileDeletion(uint64_t blob_file_number) {
+    // const uint64_t blob_file_number = blob_file_deletion.GetBlobFileNumber();
+    // const uint64_t lifetime_label = blob_file_deletion.GetLifetimeLabel();
+
+    deleted_blob_files_.insert(blob_file_number);
+    return Status::OK();
+  }
   Status ApplyBlobFileAddition(const BlobFileAddition& blob_file_addition) {
     const uint64_t blob_file_number = blob_file_addition.GetBlobFileNumber();
     const uint64_t lifetime_label = blob_file_addition.GetLifetimeLabel();
@@ -713,6 +722,16 @@ class VersionBuilder::Rep {
       oss << "Blob file #" << blob_file_number << " already added";
 
       return Status::Corruption("VersionBuilder", oss.str());
+    }
+
+    if(deleted_blob_files_.find(blob_file_number) != deleted_blob_files_.end()) {
+      
+
+      deleted_blob_files_.erase(blob_file_number);
+      // std::ostringstream oss;
+      // oss << "Blob file #" << blob_file_number << " already deleted";
+
+      // return Status::Corruption("VersionBuilder", oss.str());
     }
 
     // Note: we use C++11 for now but in C++14, this could be done in a more
@@ -1024,6 +1043,12 @@ class VersionBuilder::Rep {
     // Note: we process the blob file related changes first because the
     // table file addition/deletion logic depends on the blob files
     // already being there.
+     for(const auto& deleted_blob_file: edit->GetDeletedBlobFiles()) {
+      const Status s = ApplyBlobFileDeletion(deleted_blob_file);
+      if (!s.ok()) {
+        return s;
+      }
+    }
 
     // Add new blob files
     for (const auto& blob_file_addition : edit->GetBlobFileAdditions()) {
@@ -1033,13 +1058,16 @@ class VersionBuilder::Rep {
       }
     }
 
+
+
     // Increase the amount of garbage for blob files affected by GC
-    for (const auto& blob_file_garbage : edit->GetBlobFileGarbages()) {
-      const Status s = ApplyBlobFileGarbage(blob_file_garbage);
-      if (!s.ok()) {
-        return s;
-      }
-    }
+    // for (const auto& blob_file_garbage : edit->GetBlobFileGarbages()) {
+    //   const Status s = ApplyBlobFileGarbage(blob_file_garbage);
+    //   if (!s.ok()) {
+    //     assert(false);
+    //     return s;
+    //   }
+    // }
 
     // Delete table files
     for (const auto& deleted_file : edit->GetDeletedFiles()) {
@@ -1048,6 +1076,7 @@ class VersionBuilder::Rep {
 
       const Status s = ApplyFileDeletion(level, file_number);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1059,6 +1088,7 @@ class VersionBuilder::Rep {
 
       const Status s = ApplyFileAddition(level, meta);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1070,6 +1100,7 @@ class VersionBuilder::Rep {
       const InternalKey smallest_uncompacted_key = cursor.second;
       const Status s = ApplyCompactCursors(level, smallest_uncompacted_key);
       if (!s.ok()) {
+        assert(false);
         return s;
       }
     }
@@ -1103,6 +1134,14 @@ class VersionBuilder::Rep {
 
       const uint64_t base_blob_file_number = base_meta->GetBlobFileNumber();
       const uint64_t mutable_blob_file_number = mutable_it->first;
+      if(deleted_blob_files_.find(mutable_blob_file_number) != deleted_blob_files_.end()) {
+        ++mutable_it;
+        continue;
+      } else if(deleted_blob_files_.find(base_blob_file_number) != deleted_blob_files_.end()) {
+        ++base_it;
+        continue;
+      }
+
 
       if (base_blob_file_number < mutable_blob_file_number) {
         if (!process_base(base_meta)) {
@@ -1134,9 +1173,12 @@ class VersionBuilder::Rep {
 
     while (base_it != base_it_end) {
       const auto& base_meta = *base_it;
+      uint64_t blob_file_number = base_meta->GetBlobFileNumber();
+      if(deleted_blob_files_.find(blob_file_number) == deleted_blob_files_.end()) {
+        if (!process_base(base_meta)) {
+          return;
+        }
 
-      if (!process_base(base_meta)) {
-        return;
       }
 
       ++base_it;
@@ -1147,12 +1189,14 @@ class VersionBuilder::Rep {
         assert(false);
         continue;
       }
-      const auto& mutable_meta = *mutable_it->second;
-
-      if (!process_mutable(mutable_meta)) {
-        return;
+      const auto& mutable_meta = *(mutable_it->second);
+      uint64_t blob_file_number = mutable_meta.GetBlobFileNumber();
+      // not deleted
+      if(deleted_blob_files_.find(blob_file_number) == deleted_blob_files_.end()) {
+        if (!process_mutable(mutable_meta)) {
+          return;
+        }
       }
-
       ++mutable_it;
     }
   }
@@ -1335,6 +1379,8 @@ class VersionBuilder::Rep {
     MergeBlobFileMetas(kInvalidBlobFileNumber, process_base, process_mutable,
                        process_both);
 
+    ROCKS_LOG_INFO(version_set_->db_options()->info_log, 
+                   " GetMinOldestBlobFileNumber: %lu", min_oldest_blob_file_num);
     return min_oldest_blob_file_num;
   }
 
@@ -1354,6 +1400,7 @@ class VersionBuilder::Rep {
 
     if (meta->GetLinkedSsts().empty() &&
         meta->GetGarbageBlobCount() >= meta->GetTotalBlobCount()) {
+      assert(false);
       return;
     }
 
@@ -1409,8 +1456,12 @@ class VersionBuilder::Rep {
 
    size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
 
+
    // const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
    const uint64_t oldest_blob_file_with_linked_ssts =    0;
+
+   // const uint64_t oldest_blob_file_with_linked_ssts = GetMinOldestBlobFileNumber();
+
 
  
     for(size_t i=0; i < lifetime_bucket_size; i++) {
@@ -1690,6 +1741,7 @@ Status VersionBuilder::Apply(const VersionEdit* edit) {
 
 Status VersionBuilder::SaveTo(VersionStorageInfo* vstorage) const {
   return rep_->SaveTo(vstorage);
+
 }
 
 Status VersionBuilder::LoadTableHandlers(

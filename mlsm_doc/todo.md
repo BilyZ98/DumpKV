@@ -4630,6 +4630,43 @@ with_model r_gb:3.8       w_gb:9.8
 
 ```
 
+update gc sst files selection logics. No decrease in blob_sz
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               153MB   6GB     11.3    2.2     6.1     664     662     4       10      1778525982.0   1893     0.0     0       2.0     0.1     5.8     replay.t1.s1    2024-01-7T12:22:14      8.0.0          1aacaadf6a       0.8
+```
+
+```
+
+2024/01/07-12:51:30.635997 1859860 [db/compaction/compaction_job.cc:1666] [default] [JOB 204] Generated table #832: 41354 keys, 1493183 bytes, temperature: kUnknown
+2024/01/07-12:51:36.508700 1859860 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000832.sst immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+```
+
+
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               152MB   6GB     11.1    2.2     6.0     657     656     4       10      1778525357.0   1892     0.0     0       2.0     0.1     5.8     replay.t1.s1    2024-01-7T17:05:13      8.0.0          1aacaadf6a       0.8
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0    3.15 MB   0.2      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     26.9    241.09            240.75        85    2.836       0      0       0.0       6.1
+  L1      7/0   21.46 MB   0.9      0.7     0.3      0.4       0.6      0.2       0.0   2.1      3.8      3.5    196.28            196.11        22    8.922     19M  1525K       0.1       0.1
+  L2     50/1   127.38 MB   0.6      4.1     0.1      0.4       0.4      0.1       0.0   1.1     19.5     19.2    217.25            216.86        91    2.387     15M  1693K       3.6       3.6
+ Sum     58/1   151.98 MB   0.0      4.9     0.4      0.8       1.3      0.6       0.0   1.8      7.6     17.3    654.61            653.72       198    3.306     34M  3218K       3.7       9.8
+ Int      0/0    0.00 KB   0.0      0.2     0.0      0.0       0.0     -0.0       0.0 250092158.0     32.4     32.4      7.36              7.33         4    1.840    282K      0       0.2       0.2
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      4.9     0.4      0.8       1.1      0.3       0.0   0.0     12.0     11.8    413.52            412.96       113    3.659     34M  3218K       3.7       3.7
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     26.9    241.09            240.75        85    2.836       0      0       0.0       6.1
+
+Blob file count: 175, total size: 6.0 GB, garbage size: 2.5 GB, space amp: 1.7
+
+
+```
+
 There are more b_rgb than that in standard rocksdb ? why is that?
 b_wgb is much lower than that in standard rocksdb . why is that ? 
 c_mbps is very low. Is this because we need get features for each key?
@@ -5384,12 +5421,1807 @@ enable_blob_garbage_collection_(
 Don't think we can see gc for blobs in normal rocksdb run because age_cutoff=1.0.
 So I think enable_blob_garbage_collection_ is enable for every compaction.
 
+
+Where is MaybeScheduleFlushOrCompaction() called and when?
+```
+MaybeScheduleFlushOrCompaction()
+```
+
+db_impl_compaction_flush.cc
+Need to check where is unscheduled_compactions_ changed.
+```
+
+BackgroundCompaction()
+    unscheduled_compactions_++
+
+    auto cfd = PickCompactionFromQueue(&task_token, log_buffer); // 3252
+    c.reset(cfd->PickCompaction(*mutable_cf_options, mutable_db_options_,
+                                  log_buffer)); //3282
+ 
+```
+
+```
+
+void DBImpl::SchedulePendingCompaction(ColumnFamilyData* cfd) {  or !enough_room or
+cfd->NeedsCompaction() or compaction_failed
+
+    void DBImpl::AddToCompactionQueue(ColumnFamilyData* cfd) {
+      assert(!cfd->queued_for_compaction());
+      cfd->Ref();
+      compaction_queue_.push_back(cfd);
+      cfd->set_queued_for_compaction(true);
+    }
+```
+So cfd->NeedsCompaction() first, and then PickCompactionFromQueue() and then cfd->PickCompaction()
+So I can add my logics to cfd->NeedsCompaction()
+
+cfd->NeedsCompaction() check files_marked_for_forced_blob_gc, so there is 
+a function call before NeedsCompaction() to put files to this vector.
+It's called in version_set.cc ComputeFilesMarkedForForcedBlobGC(), when is 
+it called? It's called in 
+```
+void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
+                               Version* v) {
+    VersionStorageInfo::ComputeCompactionScore()   
+        ComputeFilesMarkedForForcedBlobGC(),
+```
+I can put blob files need to be gced into NeedsCompaction() function.
+And then write a new function to set up gc job and run instead of 
+creating compaction job ..
+
+Traditional compaction jobs need to call InstallSuperVersionAndScheduleWork()
+But my GC jobs need not to do that .
+How can I create GC job struct from PickCompaction() function?
+
+```
+
+void DBImpl::MaybeScheduleFlushOrCompaction() {
+    void DBImpl::BGWorkCompaction(void* arg) {
+        void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
+                                              Env::Priority bg_thread_pri) {
+
+            Status DBImpl::BackgroundCompaction(bool* made_progress,
+                                                JobContext* job_context,
+                                                LogBuffer* log_buffer,
+                                                PrepickedCompaction* prepicked_compaction,
+                                                Env::Priority thread_pri) {
+                PickCompaction()
+                Compaction* LevelCompactionPicker::PickCompaction(
+                    const std::string& cf_name, const MutableCFOptions& mutable_cf_options,
+                    const MutableDBOptions& mutable_db_options, VersionStorageInfo* vstorage,
+                    LogBuffer* log_buffer) {
+                  LevelCompactionBuilder builder(cf_name, vstorage, this, log_buffer,
+                                                 mutable_cf_options, ioptions_,
+                                                 mutable_db_options);
+                  return builder.PickCompaction();
+                }   
+
+```
+I will put gc function inside MaybeScheduleFlushOrCompaction()
+I don't think so. It's too complicated. BGWorkCompaction() will call 
+compaction->InstallSuperVersionAndScheduleWork() which is not what I want.
+I don't do compaction..
+But I need to update version after gc job.
+I think I can create a new function to do GC in MaybeScheduleFlushOrCompaction()
+current version update is done by calling versionedit and installing new version.
+```
+
+    CompactionJob compaction_job(
+    compaction_job.Prepare();
+    mutex_.Unlock();
+    compaction_job.Run().PermitUncheckedError();
+    mutex_.Lock();
+    status = compaction_job.Install(*c->mutable_cf_options());
+    io_s = compaction_job.io_status();
+    if (status.ok()) {
+      InstallSuperVersionAndScheduleWork(c->column_family_data(),
+                                         &job_context->superversion_contexts[0],
+                                         *c->mutable_cf_options());
+    }
+ 
+```
+
+I can add if else in ColumnFamilyData::PickCompaction() to
+pick gc compaction from LevelCompactionPicker
+Do I really need to mix compaction and garbage collection job?
+We need to delete blob  files after doing gc.
+How can we achieve that ?
+I think we can add a GCJob which is not Compaction job.
+We can do similar version update which simply deletes blob files.
+Need to maintain correctness.
+```
+void DBImpl::InstallSuperVersionAndScheduleWork(
+    ColumnFamilyData* cfd, SuperVersionContext* sv_context,
+    const MutableCFOptions& mutable_cf_options) {
+      // Whenever we install new SuperVersion, we might need to issue new flushes or
+      // compactions.
+      SchedulePendingCompaction(cfd);
+      MaybeScheduleFlushOrCompaction();
+
+
+```
+so SchedulePendingCompaction(cfd) is called after InstallSuperVersionAndScheduleWork()
+basically flush triggers level compaction.
+
+Add DBImpl::BGWorkGarbageCollection() interface ;
+Call BGWorkGarbageCollection in MaybeScheduleFlushOrCompaction().
+NeedsGarbageCollection() will be called in BackgroundGarbageCollection()
+and BackgroundCompaction();
+
+how badgerdb do gc for value files
+https://github.com/dgraph-io/badger/blob/1c417aa3799cb5010cfc4d520647c769b4b46ba6/value.go#L172
+```
+fe := func(e Entry) error {
+		count+
+		if count%100000 == 0 {
+			vlog.opt.Debugf("Processing entry %d", count)
+		}
+
+		vs, err := vlog.db.get(e.Key)
+		if err != nil {
+			return err
+		}
+		if discardEntry(e, vs, vlog.db) {
+			return nil
+		}
+
+		// Value is still present in value log.
+		if len(vs.Value) == 0 {
+			return errors.Errorf("Empty value: %+v", vs)
+		}
+		var vp valuePointer
+		vp.Decode(vs.Value)
+
+		// If the entry found from the LSM Tree points to a newer vlog file, don't do anything.
+		if vp.Fid > f.fid {
+			return nil
+		}
+		// If the entry found from the LSM Tree points to an offset greater than the one
+		// read from vlog, don't do anything.
+		if vp.Offset > e.offset {
+			return nil
+		}
+		// If the entry read from LSM Tree and vlog file point to the same vlog file and offset,
+		// insert them back into the DB.
+		// NOTE: It might be possible that the entry read from the LSM Tree points to
+		// an older vlog file. See the comments in the else part.
+		if vp.Fid == f.fid && vp.Offset == e.offset {
+			moved++
+			// This new entry only contains the key, and a pointer to the value.
+			ne := new(Entry)
+			// Remove only the bitValuePointer and transaction markers. We
+			// should keep the other bits.
+			ne.meta = e.meta &^ (bitValuePointer | bitTxn | bitFinTxn)
+			ne.UserMeta = e.UserMeta
+			ne.ExpiresAt = e.ExpiresAt
+			ne.Key = append([]byte{}, e.Key...)
+			ne.Value = append([]byte{}, e.Value...)
+			es := ne.estimateSizeAndSetThreshold(vlog.db.valueThreshold())
+			// Consider size of value as well while considering the total size
+			// of the batch. There have been reports of high memory usage in
+			// rewrite because we don't consider the value size. See #1292.
+			es += int64(len(e.Value))
+
+			// Ensure length and size of wb is within transaction limits.
+			if int64(len(wb)+1) >= vlog.opt.maxBatchCount ||
+				size+es >=vlog.opt.maxBatchSize {
+				if err := vlog.db.batchSet(wb); err != nil {
+					return err
+				}
+				size = 0
+				wb = wb[:0]
+			}
+			wb = append(wb, ne)
+			size += es
+		} else { //nolint:staticcheck
+
+```
+
+Need to know how value file isread during internal iterator seeking.
+I think it will first check value type and then open blob file and read 
+value from blob file if needed.
+
+```
+  if (s.ok()) {
+    // Collect iterators for files in L0 - Ln
+    if (read_options.read_tier != kMemtableTier) {
+      super_version->current->AddIterators(read_options, file_options_,
+                                           &merge_iter_builder,
+                                           allow_unprepared_value);
+    }
+          for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
+            AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
+                                 allow_unprepared_value);
+                table_iter = cfd_->table_cache()->Newiterator(level=0,)
+                    FindTable()
+                    InternalIterator* result = nullptr;
+                  result = table_reader->NewIterator(
+                  options, prefix_extractor.get(), arena, skip_filters, caller,
+                  file_options.compaction_readahead_size, allow_unprepared_value);
+
+                    return new (mem) BlockBasedTableIterator(
+                        this, read_options, rep_->internal_comparator, std::move(index_iter),
+                        !skip_filters && !read_options.total_order_seek &&
+                            prefix_extractor != nullptr,
+                        need_upper_bound_check, prefix_extractor, caller,
+                        compaction_readahead_size, allow_unprepared_value);
+                            void BlockBasedTableIterator::SeekImpl(const Slice* target,
+                                       bool async_prefetch) {
+                                if (target) {
+                                  block_iter_.Seek(*target);
+                                } else {
+                                  block_iter_.SeekToFirst();
+                                }
+                                FindKeyForward();
+                              }
+
+
+ 
+
+
+                              void SeekToRestartPoint(uint32_t index) {
+                                raw_key_.Clear();
+                                restart_index_ = index;
+                                // current_ will be fixed by ParseNextKey();
+
+                                // ParseNextKey() starts at the end of value_, so set value_ accordingly
+                                uint32_t offset = GetRestartPoint(index);
+                                value_ = Slice(data_ + offset, 0);
+                              }
+
+
+         
+ 
+```
+I don't think BlockBasedTableIterator gets value from blob file because 
+there is no blob reader in BlockBasedTableIterator() constructor.
+Since compaction_iterator use internal iterator to get key and 
+use blob fetcher to get blob I think this is similar to what 
+we will see in normal internal iterator.
+
+
+value() method of merging iterator returns current_->value() 
+so I think internal iterator won't read blob value.
+I should check normal db iterator to get this .
+
+
+```
+  virtual Iterator* NewIterator(const ReadOptions& options,
+                                ColumnFamilyHandle* column_family) override;
+
+
+        //db_iter.cc
+        Iterator* NewDBIterator(Env* env, const ReadOptions& read_options,
+                   const ImmutableOptions& ioptions,
+                                const MutableCFOptions& mutable_cf_options,
+                                const Comparator* user_key_comparator,
+                                InternalIterator* internal_iter, const Version* version,
+                                const SequenceNumber& sequence,
+                                uint64_t max_sequential_skip_in_iterations,
+                                ReadCallback* read_callback, DBImpl* db_impl,
+                                ColumnFamilyData* cfd, bool expose_blob_index) {
+          DBIter* db_iter =
+              new DBIter(env, read_options, ioptions, mutable_cf_options,
+                         user_key_comparator, internal_iter, version, sequence, false,
+                         max_sequential_skip_in_iterations, read_callback, db_impl, cfd,
+                         expose_blob_index);
+          return db_iter;
+            }
+                bool DBIter::FindNextUserEntryInternal(bool skipping_saved_key,
+                                       const Slice* prefix) {
+                      case kTypeValue:
+                      case kTypeBlobIndex:
+                      case kTypeWideColumnEntity:
+                        if (timestamp_lb_) {
+                          saved_key_.SetInternalKey(ikey_);
+                        } else {
+                          saved_key_.SetUserKey(
+                              ikey_.user_key, !pin_thru_lifetime_ ||
+                                                  !iter_.iter()->IsKeyPinned() /* copy */);
+                        }
+
+                        if (ikey_.type == kTypeBlobIndex) {
+                          if (!SetBlobValueIfNeeded(ikey_.user_key, iter_.value())) {
+                            return false;
+                          }
+             
+
+                            bool DBIter::SetBlobValueIfNeeded(const Slice& user_key,
+                                                              const Slice& blob_index) {
+                              assert(!is_blob_);
+                              assert(blob_value_.empty());
+
+                              const Status s = version_->GetBlob(read_options, user_key, blob_index,
+     
+```
+Found the place where blob value is read.
+So now should I used db_iter or internal iter?
+I can just copy bool DBIter::SetBlobValueIfNeeded(const Slice& user_key,
+to my gc job and then do blob read 
+db_iter.cc
+```
+bool DBIter::SetBlobValueIfNeeded(const Slice& user_key,
+                    const Slice& blob_index) {
+  assert(!is_blob_);
+
+  
+  const Status s = version_->GetBlob(read_options, user_key, blob_index,
+                                     prefetch_buffer, &blob_value_, bytes_read);
+
+ 
+```
+Actually I don't need to cal version_->GetBlob()
+I just need to get value of internal iterator and put keys with sequence number back 
+into rocksdb.
+
+Does offset in BlobLogSequentialReader the same as that in what
+we get in compaction iterator?
+```
+Status BlobLogSequentialReader::ReadRecord(BlobLogRecord* record,
+                                           ReadLevel level,
+                                           uint64_t* blob_offset) {
+  assert(record);
+ 
+```
+
+```
+
+bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
+    s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
+
+        Status BlobFileBuilder::WriteBlobToFile(const Slice& key, const Slice& blob,
+                                                uint64_t* blob_file_number,
+                                                uint64_t* blob_offset) {
+         
+            Status BlobLogWriter::AddRecord(const Slice& key, const Slice& val,
+              Status s = EmitPhysicalRecord(buf, key, val, key_offset, blob_offset);
+                  *blob_offset = *key_offset + key.size();
+
+      BlobIndex::EncodeBlob(blob_index, blob_file_number, blob_offset, blob.size(),
+                            blob_compression_type_);
+
+
+```
+
+Need to call DecodeBlob() to get blob file number and blob offset.
+```
+class BlobIndex {
+  Status DecodeFrom(Slice slice) {
+```
+So I think it's the same between what we get from blob reader
+and what we get from internal iterator.
+So now we can do comparation between file number and file offset
+to determine if blob value in blob file is valid and should be put 
+back into rocksdb .
+
+May need to write some basic test to test gc job running.
+first of all, let's trigger gc jobs .
+
+
+Need to update bytes_read_blob in compaction_stats
+Don't know the difference between UpdateCompactionStats() and UpdateCompactionJobStats()
+```
+
+void CompactionJob::UpdateCompactionStats() {
+      UpdateCompactionInputStatsHelper(
+          &compaction_stats_.stats.num_input_files_in_non_output_levels,
+          &compaction_stats_.stats.bytes_read_non_output_levels, input_level);
+      assert(compaction_job_stats_);
+      compaction_stats_.stats.bytes_read_blob =
+          compaction_job_stats_->total_blob_bytes_read;
+
+
+
+void CompactionJob::UpdateCompactionJobStats(
+    const InternalStats::CompactionStats& stats) const {
+  compaction_job_stats_->elapsed_micros = stats.micros;
+
+  // input information
+  compaction_job_stats_->total_input_bytes =
+      stats.bytes_read_non_output_levels + stats.bytes_read_output_level;
+  compaction_job_stats_->num_input_records = stats.num_input_records;
+  compaction_job_stats_->num_input_files =
+      stats.num_input_files_in_non_output_levels +
+      stats.num_input_files_in_output_level;
+  compaction_job_stats_->num_input_files_at_output_level =
+      stats.num_input_files_in_output_level;
+
+
+```
+
+
+```
+The `CompactionJob::RecordCompactionIOStats()` function in RocksDB is used to record the I/O statistics related to a compaction job. Here's a breakdown of the code:
+
+void CompactionJob::RecordCompactionIOStats() {
+  RecordTick(stats_, COMPACT_READ_BYTES, IOSTATS(bytes_read));
+  RecordTick(stats_, COMPACT_WRITE_BYTES, IOSTATS(bytes_written));
+}
+
+- `RecordTick`: This is a function used to update a statistics counter in RocksDB. It takes three arguments: a pointer to a `Statistics` object, a `Tickers` enum value representing the specific counter to update, and the count to add to the counter.
+
+- `stats_`: This is a pointer to a `Statistics` object where various runtime statistics are recorded.
+
+- `COMPACT_READ_BYTES` and `COMPACT_WRITE_BYTES`: These are enum values from the `Tickers` enum. They represent counters for the number of bytes read and written during compaction, respectively.
+
+- `IOSTATS(bytes_read)` and `IOSTATS(bytes_written)`: These are macros that fetch the number of bytes read from and written to storage during the compaction job. The `IOSTATS` macro is used to access thread-local I/O statistics.
+
+So, in summary, this function updates the compaction read and write byte counters in the `Statistics` object with the number of bytes read and written during the compaction job¹². This can be useful for monitoring the I/O performance of RocksDB compactions. Please note that the actual usage may vary based on the context and the specific requirements of your application. For more detailed usage, you may want to look at the RocksDB source code¹.
+
+Source: Conversation with Bing, 1/8/2024
+(1) Compaction Stats and DB Status · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Compaction-Stats-and-DB-Status.
+(2) Compaction · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Compaction.
+(3) Reduce Write Amplification by Aligning Compaction Output File ... - RocksDB. https://rocksdb.org/blog/2022/10/31/align-compaction-output-file.html.
+(4) Manual Compaction · facebook/rocksdb Wiki · GitHub. https://github.com/facebook/rocksdb/wiki/Manual-Compaction.
+(5) undefined. https://smalldatum.blogspot.com/2018/08/name-that-compaction-algorithm.html.
+```
+
+
+Read this file to learn about how blob compaction is tested.
+```
+        db/blob/db_blob_compaction_test.cc
+```
+
+sst files are marked being compacted during construction of compaction.
+So during ComputeCompactionScore() those marked files will not be 
+considered .
+```
+        _compaction_reason == CompactionReason::kExternalSstIngestion ||
+                  _compaction_reason == CompactionReason::kRefitLevel
+              ? Compaction::kInvalidLevel
+              : EvaluatePenultimateLevel(vstorage, immutable_options_,
+                                         start_level_, output_level_)) {
+  MarkFilesBeingCompacted(true);
+  i
+```
+
+There is only one 'nothing to do ' log in LOG file which is not normal.
+And there is exit error during db destructino. Need to figure out 
+why and fix it.
+
+I need to write a method to collect training data during run time.
+Fuck, there are stll two big work items to do.
+I will finish current gc process asap and then start data collection 
+module
+
+AddToGarbageCollectionQueue ref cfd. 
+Where does unref happen? 
+unref happens in BackgroundGarbageCollection
+But refs_ is 2 at the end of execution.
+So there might be once call to ref but there is no call to unref.
+Need to find out where ref is called.
+```
+void DBImpl::AddToGarbageCollectionQueue(ColumnFamilyData* cfd) {
+  assert(!cfd->queued_for_garbage_collection());
+  cfd->Ref();
+  gc_queue_.push_back(cfd);
+  cfd->set_queued_for_garbage_collection(true);
+}
+
+    if (cfd->UnrefAndTryDelete()) {
+      // This was the last reference of the column family, so no need to
+      // compact.
+      return Status::OK();
+    }
+
+
+
+gdb) p cfd->refs_
+$1 = std::atomic<int> = { 2 }
+```
+
+Fix two bugs
+1. update if(gc_queue_) from if(compaction_queue_) in gc job. 
+2. add gc_queue clean up in closehlper()
+```
+  while(!gc_queue_.empty()) {
+    auto cfd = PopFirstFromGarbageCollectionQueue();
+    cfd->UnrefAndTryDelete();
+  }
+
+
+```
+
+Fixed the ref bug after fix above
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50    p99      p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    versionjob_id   githash
+0               153MB   6GB     7.2     1.7     3.9     503     502     0       6       1778525656.0   1895     0.0     0       1.8     0.1     5.7     replay.t1.s1    2024-01-9T22:17:11      8.0.0          ef6523a70e       0.9
+```
+
+[Todo]
+Add PickGarbageCollection to LevelCompactionPicker
+Marked blob file being gced in construction of GarbageCollection
+compactions_in_progress_ check.
+how is compactions_in_progress_ used to prevent duplicated compaction?.
+```
+bool CompactionPicker::RangeOverlapWithCompaction(
+    const Slice& smallest_user_key, const Slice& largest_user_key,
+    int level) const {
+  const Comparator* ucmp = icmp_->user_comparator();
+  for (Compaction* c : compactions_in_progress_) {
+    if (c->output_level() == level &&
+
+Compaction* LevelCompactionBuilder::GetCompaction() {
+  auto c = new Compaction(
+      vstorage_, ioptions_, mutable_cf_options_, mutable_db_options_,
+      std::move(compaction_inputs_), output_level_,
+      MaxFileSizeForLevel(mutable_cf_options_, output_level_,
+                          ioptions_.compaction_style, vstorage_->base_level(),
+                          ioptions_.level_compaction_dynamic_level_bytes),
+      mutable_cf_options_.max_compaction_bytes,
+      GetPathId(ioptions_, mutable_cf_options_, output_level_),
+      GetCompressionType(vstorage_, mutable_cf_options_, output_level_,
+                         vstorage_->base_level()),
+      GetCompressionOptions(mutable_cf_options_, vstorage_, output_level_),
+      Temperature::kUnknown,
+      /* max_subcompactions */ 0, std::move(grandparents_), is_manual_,
+      /* trim_ts */ "", start_level_score_, false /* deletion_compaction */,
+      /* l0_files_might_overlap */ start_level_ == 0 && !is_l0_trivial_move_,
+      compaction_reason_);
+
+  // If it's level 0 compaction, make sure we don't execute any other level 0
+  // compactions in parallel
+  compaction_picker_->RegisterCompaction(c);
+  }
+
+
+
+    void CompactionPicker::RegisterCompaction(Compaction* c) {
+      if (c == nullptr) {
+        return;
+      }
+      assert(ioptions_.compaction_style != kCompactionStyleLevel ||
+             c->output_level() == 0 ||
+             !FilesRangeOverlapWithCompaction(*c->inputs(), c->output_level(),
+                                              c->GetPenultimateLevel()));
+      // CompactionReason::kExternalSstIngestion's start level is just a placeholder
+      // number without actual meaning as file ingestion technically does not have
+      // an input level like other compactions
+      if ((c->start_level() == 0 &&
+           c->compaction_reason() != CompactionReason::kExternalSstIngestion) ||
+          ioptions_.compaction_style == kCompactionStyleUniversal) {
+        level0_compactions_in_progress_.insert(c);
+      }
+      compactions_in_progress_.insert(c);
+      TEST_SYNC_POINT_CALLBACK("CompactionPicker::RegisterCompaction:Registered",
+                               c);
+    }
+
+
+// Delete this compaction from the list of running compactions.
+void CompactionPicker::ReleaseCompactionFiles(Compaction* c, Status status) {
+  UnregisterCompaction(c);
+  if (!status.ok()) {
+    c->ResetNextCompactionIndex();
+  }
+}
+    void CompactionPicker::UnregisterCompaction(Compaction* c) {
+      if (c == nullptr) {
+        return;
+      }
+      if (c->start_level() == 0 ||
+          ioptions_.compaction_style == kCompactionStyleUniversal) {
+        level0_compactions_in_progress_.erase(c);
+      }
+      compactions_in_progress_.erase(c);
+    }
+
+
+
+void LevelCompactionBuilder::SetupInitialFiles() {
+
+bool LevelCompactionBuilder::SetupOtherInputsIfNeeded() {
+    bool CompactionPicker::FilesRangeOverlapWithCompaction(
+      return RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
+                                        level);
+
+
+
+bool LevelCompactionBuilder::PickFileToCompact() {
+
+        compaction_picker_->FilesRangeOverlapWithCompaction(
+            {start_level_inputs_}, output_level_,
+            Compaction::EvaluatePenultimateLevel(
+                vstorage_, ioptions_, start_level_, output_level_))) {
+
+              return RangeOverlapWithCompaction(smallest.user_key(), largest.user_key(),
+                                                level);
+
+                  for (Compaction* c : compactions_in_progress_) {
+                    if (c->output_level() == level &&
+                        ucmp->CompareWithoutTimestamp(smallest_user_key,
+                                                      c->GetLargestUserKey()) <= 0 &&
+                        ucmp->CompareWithoutTimestamp(largest_user_key,
+                                                      c->GetSmallestUserKey()) >= 0) {
+                      // Overlap
+                      return true;
+                    }
+ 
+
+ 
+```
+
+Can call ParsedInternalKey to get key type.
+```
+bool DBIter::ParseKey(ParsedInternalKey* ikey) {
+  Status s = ParseInternalKey(iter_.key(), ikey, false /* log_err_key */);
+  if (!s.ok()) {
+    status_ = Status::Corruption("In DBIter: ", s.getState());
+    valid_ = false;
+    ROCKS_LOG_ERROR(logger_, "In DBIter: %s", status_.getState());
+    return false;
+  } else {
+    return true;
+  }
+}
+
+
+```
+
+
+So basically `Compaction* LevelCompactionBuilder::PickCompaction() {`
+does overlap check for current copmaction and return nullptr if there is 
+overlap between current to-be-picked compaction and picked compaction.
+I will do this similar overlap check as well.
+[Status: Done]
+
+```
+
+Compaction* LevelCompactionBuilder::PickCompaction() {
+  Compaction* c = GetCompaction();
+        Compaction* LevelCompactionBuilder::GetCompaction() {
+          compaction_picker_->RegisterCompaction(c);
+          vstorage_->ComputeCompactionScore(ioptions_, mutable_cf_options_);
+```
+Need to do unscheduled_garbage_collectinos_++ in scheduled_garbage_collection function
+garbage collection picker process
+```
+
+gc.reset(cfd->PickGarbageCollection(*mutable_cf_options, mutable_db_options_,
+    GarbageCollection* ColumnFamilyData::PickGarbageCollection(const MutableCFOptions& mutable_options,
+                                 const MutableDBOptions& mutable_db_options,
+                                 LogBuffer* log_buffer) {
+
+      auto* result = garbage_collection_picker_->PickGarbageCollection(
+          GetName(), mutable_options, mutable_db_options, current_->storage_info(),
+
+          vstorage->ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
+ 
+```
+
+compute compaction file process
+```
+
+compaction_picker_level.cc
+
+Compaction* LevelCompactionBuilder::PickCompaction() {
+    Compaction* LevelCompactionBuilder::GetCompaction() {
+        void VersionStorageInfo::ComputeCompactionScore(
+            const ImmutableOptions& immutable_options,
+            const MutableCFOptions& mutable_cf_options) {
+
+           ComputeFilesMarkedForCompaction();
+
+Status VersionSet::ProcessManifestWrites(
+    std::deque<ManifestWriter>& writers, InstrumentedMutex* mu,
+    FSDirectory* dir_contains_current_file, bool new_descriptor_log,
+    const ColumnFamilyOptions* new_cf_options) {
+ 
+    void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
+                                   Version* v) {
+      // compute new compaction score
+      v->storage_info()->ComputeCompactionScore(
+          *column_family_data->ioptions(),
+          *column_family_data->GetLatestMutableCFOptions());
+
+
+Status DBImpl::CompactFilesImpl(
+    const CompactionOptions& compact_options, ColumnFamilyData* cfd,
+    Version* version, const std::vector<std::string>& input_file_names,
+    std::vector<std::string>* const output_file_names, const int output_level,
+    int output_path_id, JobContext* job_context, LogBuffer* log_buffer,
+    CompactionJobInfo* compaction_job_info) {
+ 
+  CompactionJob compaction_job(
+  version->storage_info()->ComputeCompactionScore(*cfd->ioptions(),
+                                                  *c->mutable_cf_options());
+
+
+```
+So I think I need to do ComputeBlobsMarkedForForcedGC() in VersionSet::AppendVersion()
+to trigger first ComputeBlobsMarkedForForcedGC();
+gdb breaks at PickGarbageCollectionFromQueue() after I add ComputeBlobsMarkedForForcedGC in AppendVersion()
+
+Finally see gc blob file list in log in gc job run function.
+But there is last_ref issue when db closing. 
+Need to deal with that.
+cfd->refs_ is 15 which is not normal.
+```
+(gdb) p cfd->refs_
+$2 = std::atomic<int> = { 15 }
+
+```
+
+Add bg_gc_scheduled_ in WaitForBackgroundWork() to wait for gc job 
+in CloseHelper() to finish to fix ref problem.
+```
+void DBImpl::WaitForBackgroundWork() {
+  // Wait for background work to finish
+  while (bg_bottom_compaction_scheduled_ || bg_compaction_scheduled_ ||
+         bg_flush_scheduled_ || bg_gc_scheduled_) {
+    bg_cv_.Wait();
+  }
+}
+```
+bg_gc_scheduled_ to indicate gc work scheduled
+num_running_gcs_ to indicate how many gcs are running
+unscheduled_garbage_collections_ indicate how many unscheduled_garbage_collections_
+Fixed it after I did this.
+[Todo]
+Put keys back to db during gc job.
+I don't know how to check validity of keys yet.
+[Status: Done]
+
+[Todo]
+Delete blob files after keys are put back to rocksdb.
+Need to check bytes_read .
+No bytes_written is needed because this is done by rocksdb.
+Where does file deletion happen?
+```
+Status GarbageCollectionJob::InstallGarbageCollectionResults(const MutableCFOptions& mutable_cf_options) {
+```
+
+```
+Install()
+
+  db_mutex_->AssertHeld();
+
+  cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
+  status = InstallCompactionResults(mutable_cf_options);
+      VersionEdit* const edit = compaction->edit();
+      assert(edit);
+      // Add compaction inputs
+      compaction->AddInputDeletions(edit);
+
+        for (const auto& blob : sub_compact.Current().GetBlobFileAdditions()) {
+          edit->AddBlobFile(blob);
+        }
+
+
+
+      return versions_->LogAndApply(compaction->column_family_data(),
+  CleanupCompaction();
+InstallSuperVersionAndScheduleWork(c->column_family_data(),
+                                 &job_context->superversion_contexts[0],
+                                 *c->mutable_cf_options());
+ 
+
+c->ReleaseCompactionFiles(status);
+```
+
+```
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+
+    FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress() &&
+        versions_->GetObsoleteFiles(
+              &job_context->sst_delete_files, &job_context->blob_delete_files,
+              &job_context->manifest_delete_files, job_context->min_pending_output);
+
+              for (auto& f : obsolete_files_) {
+                if (f.metadata->fd.GetNumber() < min_pending_output) {
+                  files->emplace_back(std::move(f));
+                } else {
+                  pending_files.emplace_back(std::move(f));
+                }
+              }
+
+              obsolete_files_.swap(pending_files);
+        for (const auto& blob_file : job_context->blob_delete_files) {
+            MarkAsGrabbedForPurge(blob_file.GetBlobFileNumber());
+          }
+
+
+    PurgeObsoleteFiles(job_context);
+```
+I need to do file deltion that is similar to version update in comaction.
+How is obsolete_files_ are built and when are file deleted?
+I don't think I need to care about other vars right.
+What is job_context used for?
+
+obsolete_blob_files_ 
+```
+    auto deleter = [vs, ioptions](SharedBlobFileMetaData* shared_meta) {
+      if (vs) {
+        assert(ioptions);
+        assert(!ioptions->cf_paths.empty());
+        assert(shared_meta);
+
+        vs->AddObsoleteBlobFileWithLifetime(shared_meta->GetBlobFileNumber(),
+                                            ioptions->cf_paths.front().path,
+                                            shared_meta->GetLifetimeLabel());
+        // vs->AddObsoleteBlobFile(shared_meta->GetBlobFileNumber(),
+        //                         ioptions->cf_paths.front().path);
+      }
+
+      delete shared_meta;
+    };
+
+
+      void AddObsoleteBlobFileWithLifetime(uint64_t blob_file_number, std::string path,
+                                          uint64_t lifetime) {
+        assert(table_cache_);
+
+        table_cache_->Erase(GetSliceForKey(&blob_file_number));
+
+        obsolete_blob_files_.emplace_back(blob_file_number, std::move(path));
+        }
+ 
+```
+blob files are discard in version install and apply.
+So I will need to create a version edit to delete blob file that are used
+in gc.
+This should work.
+Will verify this in Log.
+
+```
+
+
+Status VersionSet::ProcessManifestWrites(
+    Status VersionSet::LogAndApplyHelper(ColumnFamilyData* cfd,
+        Status Apply(const VersionEdit* edit) {
+
+          Status ApplyBlobFileAddition(const BlobFileAddition& blob_file_addition) {
+
+            for (const auto& deleted_file : edit->GetDeletedFiles()) {
+
+
+Status s = builder->SaveTo(versions[i]->storage_info());
+    Status VersionBuilder::SaveTo(VersionStorageInfo* vstorage) const {
+        return rep_->SaveTo(vstorage);
+
+            SaveBlobFilesTo(vstorage);
+
+               const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
+              MergeBlobFileMetasWithLifetime(oldest_blob_file_with_linked_ssts, process_base,
+```
+
+```
+
+for (const auto& deleted_file : edit->GetDeletedFiles()) {
+  Status ApplyFileDeletion(int level, uint64_t file_number) {
+    del_files.emplace(file_number);
+
+    table_file_levels_[file_number] =
+        VersionStorageInfo::FileLocation::Invalid().GetLevel();
+
+ 
+```
+So SaveBlobFilesTo() will set up a minimum blob file number that has
+sst link. older blob file will not be added to new blob_files_ in new version.
+I will just add deleted file in version edit and not put blob files in 
+new VersionStorageInfo in saveto if blob files are in deleted files in 
+verionedit..
+
+```
+Status CompactionJob::InstallCompactionResults(
+  VersionEdit* const edit = compaction->edit();
+
+  compaction->AddInputDeletions(edit);
+
+  for (const auto& sub_compact : compact_->sub_compact_states) {
+    sub_compact.AddOutputsEdit(edit);
+          void AddOutputsEdit(VersionEdit* out_edit) const {
+            for (const auto& file : penultimate_level_outputs_.outputs_) {
+              out_edit->AddFile(compaction->GetPenultimateLevel(), file.meta);
+            }
+            for (const auto& file : compaction_outputs_.outputs_) {
+              out_edit->AddFile(compaction->output_level(), file.meta);
+            }
+          }
+
+
+
+    for (const auto& blob : sub_compact.Current().GetBlobFileAdditions()) {
+      edit->AddBlobFile(blob);
+    }
+
+
+```
+edit is updated in InstallCompactionResults()
+So no versionedit update in ProcessKeyValueCompaction.
+So how blob file update and sstfile addition is done in ProcessKeyValueCompaction
+and in 
+
+Need to unlink blob files if blob file are deleted during gc job.
+Don't think I need to do this.
+Because sst deletion involes blob file unlinking sst but 
+there is no need to unlink blob files in sst.
+
+Will need to discard keys in lsm-tree during compaction. Can check if blob 
+file number exists in all blob files.
+
+Got assertion failed during flush.
+Because I write new keys back into rocksdb 
+so compaction iterator call get  features function to 
+give classification for newly written keys during flush.
+How should I deal with that?
+I can just put keys at short lifetime classification for now.
+Later I can specify a special type of key with classification 
+number in it.
+
+blob file are not deleted during gc.
+Met seg fault. I don't know why. Let's figure that out.
+I think this is because there is recursion when I do
+gc for blob files that have values for same key.
+How can I fix this problem?
+Maybe I need to use some fixed sequence number?
+Let's see how badgerdb works with this problem and read the article..
+
+```
+gcc -g -o memleak memleak.c
+valgrind --leak-check=full ./memleak
+```
+I see blob file:11  deletion in LOG . Why is that ?
+```
+
+2024/01/14-16:46:54.872901 1294888 [db/compaction/compaction_job.cc:1666] [default] [JOB 16] Generated table #70: 96642 keys, 3408294 bytes, temperature: kUnknown
+
+2024/01/14-16:53:24.410992 1294895 EVENT_LOG_v1 {"time_micros": 1705222404410974, "job": 74, "event": "gc_started", "gc_files": [11, 15, 19, 23, 31, 35, 39, 43, 54, 58, 62, 66, 80, 84, 88, 91, 101]}
+
+024/01/14-16:53:39.297769 1294895 (Original Log Time 2024/01/14-16:53:39.285025) EVENT_LOG_v1 {"time_micros": 1705222419284991, "job": 74, "valid_key_num": 16371, "invalid_key_num": 297926, "valid_value_size": 13054183, "invalid_value_size": 240403770, "invalid_key_ratio": 0.947912}
+2024/01/14-16:53:39.298130 1294895 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000070.sst immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2024/01/14-16:53:39.298140 1294895 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 74] Delete /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000070.sst type=2 #70 -- OK
+2024/01/14-16:53:39.298150 1294895 EVENT_LOG_v1 {"time_micros": 1705222419298147, "job": 74, "event": "table_file_deletion", "file_number": 70}
+2024/01/14-16:53:39.298383 1294895 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000011.blob immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2024/01/14-16:53:39.298388 1294895 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 74] Delete /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000011.blob type=10 #11 -- OK
+2024/01/14-16:53:39.298394 1294895 EVENT_LOG_v1 {"time_micros": 1705222419298393, "job": 74, "event": "blob_file_deletion", "file_number": 11}
+2024/01/14-16:53:40.197131 1294917 [db/db_impl/db_impl.cc:1123] ------- DUMPING
+```
+lots of file are involved in gc but only blob:11 is deleted.  Why is that ?
+
+
+Only one gc job is allowed at a time?
+badger says that only one gc job is allowed .
+get searches each level to get a key with max version.
+How does put works or how does gc works in terms of version changing 
+for each key?
+```
+
+https://github.com/dgraph-io/badger/blob/1c417aa3799cb5010cfc4d520647c769b4b46ba6/db.go#L1239
+func (db *DB) RunValueLogGC(discardRatio float64) error {
+    // batchSet applies a list of badger.Entry. If a request level error occurs it
+    // will be returned.
+    //
+    //	Check(kv.BatchSet(entries))
+    func (db *DB) batchSet(entries []*Entry) error {
+        req, err := db.sendToWriteCh(entries)
+        if err != nil {
+            return err
+        }
+
+        return req.Wait()
+    }
+
+
+// get returns value for a given key or the key after that. If not found, return nil.
+func (s *levelHandler) get(key []byte) (y.ValueStruct, error) {
+	tables, decr := s.getTableForKey(key)
+	keyNoTs := y.ParseKey(key)
+
+	hash := y.Hash(keyNoTs)
+	var maxVs y.ValueStruct
+	for _, th := range tables {
+		if th.DoesNotHave(hash) {
+			y.NumLSMBloomHitsAdd(s.db.opt.MetricsEnabled, s.strLevel, 1)
+			continue
+		}
+
+		it := th.NewIterator(0)
+		defer it.Close()
+
+		y.NumLSMGetsAdd(s.db.opt.MetricsEnabled, s.strLevel, 1)
+		it.Seek(key)
+		if !it.Valid() {
+			continue
+		}
+		if y.SameKey(key, it.Key()) {
+			if version := y.ParseTs(it.Key()); maxVs.Version < version {
+				maxVs = it.ValueCopy()
+				maxVs.Version = version
+			}
+		}
+	}
+	return maxVs, decr()
+}
+
+
+
+	seek := y.KeyWithTs(key, txn.readTs)
+	vs, err := txn.db.get(seek)
+```
+Looks like badger uses timestamp as sequence number and seek with readts.
+I don't see how ts is added to key during put.
+Fixed the seg fault after I add deleted blob file check at the end of 
+`  void MergeBlobFileMetasWithLifetime(uint64_t first_blob_file, ProcessBase process_base,`
+function.
+```
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_op p50     p99p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test    date    version job_id  githash
+0               43MB    1GB     1.3     1.7     2.8     83      83      0       1       335189898.0       460      0.0     0       0.4     0.0     4.4     replay.t1.s1    2024-01-15T20:17:27     8.0.0           41ac5b042d 0.9
+cp: '/mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/LOG' and '/mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/LOG' are the same file
+```
+Checked LOG and found there is verion builder error mentioning blob:15 not found.
+Found ApplyBlobFileGarbage() function containing this information.
+Now I'am trying to fix this error by removing this function.
+```
+  void AddBlobFileGarbage(uint64_t blob_file_number,
+                          uint64_t garbage_blob_count,
+                          uint64_t garbage_blob_bytes) {
+    blob_file_garbages_.emplace_back(blob_file_number, garbage_blob_count,
+                                     garbage_blob_bytes);
+ 
+```
+Remove ApplyBlobFileGarbage() in version_builder::Apply()
+Still get unaligned fastbin chunk detected error after removing ApplyBlobFileGarbage()
+I think this is because of adding while iterating the iterator .
+Why is that ?
+Is this because memtable not released after gc job ??
+Did not get mem error after adding memory usage function which is not normal. 
+Check LOG. only 7000k writes not 1M I don't know why. 
+```
+2024/01/16-11:40:45.523965 1219657 EVENT_LOG_v1 {"time_micros": 1705376445523963, "job": 166, "event": "blob_file_deletion", "file_number": 42}
+2024/01/16-11:40:45.529170 1219657 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000038.blob immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2024/01/16-11:40:45.529180 1219657 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 166] Delete /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000038.blob type=10 #38 -- OK
+2024/01/16-11:40:45.529187 1219657 EVENT_LOG_v1 {"time_micros": 1705376445529185, "job": 166, "event": "blob_file_deletion", "file_number": 38}
+2024/01/16-11:40:45.534504 1219657 [file/delete_scheduler.cc:73] Deleted file /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000034.blob immediately, rate_bytes_per_sec 0, total_trash_size 0 max_trash_db_ratio 0.250000
+2024/01/16-11:40:45.534513 1219657 [DEBUG] [db/db_impl/db_impl_files.cc:367] [JOB 166] Delete /mnt/nvme1n1/mlsm/test_blob_with_model/with_model_gc_1.0_0.8/000034.blob type=10 #34 -- OK
+2024/01/16-11:40:45.534532 1219657 EVENT_LOG_v1 {"time_micros": 1705376445534519, "job": 166, "event": "blob_file_deletion", "file_number": 34}
+```
+
+```
+"lifetime_blob_0": [11, 15, 19, 23, 31, 35, 39, 43, 54, 58, 62], 
+"lifetime_blob_1": [10, 14, 18, 22, 30, 34, 38, 42, 53, 57, 61]
+
+
+2024/01/16-11:40:18.856002 1219657 EVENT_LOG_v1 {"time_micros": 1705376418855996, "job": 164, "event": "gc_started", "gc_files": [241, 10]}
+
+2024/01/16-11:40:32.202725 1219657 EVENT_LOG_v1 {"time_micros": 1705376432202720, "job": 166, "event": "gc_started", "gc_files": [250, 14]}
+```
+
+Switch to write batch write instead of calling put() for each key.
+without_model LOG
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0    6.58 MB   0.5      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     81.7     79.92             79.54        82    0.975       0      0       0.0       6.1
+  L1      9/1   26.43 MB   0.9     14.4     0.3      0.4       0.6      0.2       0.0   1.0     31.0     30.9    476.06            474.84        20   23.803     18M  1514K      13.8      13.8
+  L2     45/3   125.06 MB   0.6      7.4     0.1      0.2       0.3      0.1       0.0   1.0     30.7     30.5    248.21            247.59        39    6.364     10M  1592K       7.1       7.1
+ Sum     56/4   158.07 MB   0.0     21.8     0.4      0.6       1.1      0.5       0.0   4.4     27.8     35.8    804.19            801.97       141    5.704     29M  3107K      20.8      27.0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s)Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0     21.8     0.4      0.6       0.9      0.3       0.0   0.0     30.9     30.7    724.27            722.43        59   12.276     29M  3107K      20.8      20.8
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3       0.0   0.0      0.0     81.7     79.92             79.54        82    0.975       0      0       0.0       6.1
+
+Blob file count: 53, total size: 4.3 GB, garbage size: 0.6 GB, space amp: 1.2
+
+
+```
+with_model LOG
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0    7.20 MB   0.5      0.0     0.0      0.0       0.2      0.2       0.0   1.0      0.0     51.2    104.94            104.56        66    1.590       0      0       0.0       5.0
+  L1      6/0   24.88 MB   1.0      0.5     0.2      0.3       0.5      0.2       0.0   2.2      3.9      3.6    130.77            130.61        16    8.173     14M  1010K       0.0       0.0
+  L2     38/0   91.16 MB   0.5      0.2     0.1      0.1       0.2      0.1       0.0   1.7      4.3      3.3     59.09             58.98        34    1.738   7418K  1741K       0.0       0.0
+ Sum     46/0   123.24 MB   0.0      0.7     0.3      0.4       0.9      0.4       0.0   1.1      2.6     20.5    294.80            294.16       116    2.541     22M  2752K       0.0       5.0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      0.7     0.3      0.4       0.7      0.2       0.0   0.0      4.0      3.5    189.86            189.59        50    3.797     22M  2752K       0.0       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.2      0.2       0.0   0.0      0.0     51.2    104.94            104.56        66    1.590       0      0       0.0       5.0
+
+Blob file count: 50, total size: 2.9 GB, garbage size: 0.0 GB, space amp: 1.0
+
+
+2024/01/16-18:17:50.769441 12272 (Original Log Time 2024/01/16-18:17:50.769241) [db/db_impl/db_impl_compaction_flush.cc:298] [default] Level summary: files[3 6 38 0 0 0 0 0] max score 1.00
+Completed replay (ID: ) in 2086 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50      p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test   date     version job_id  githash
+0               127MB   2GB     6.0     1.9     5.3     296     295     0       5       1033092328.0                                            1148    0.0     0       1.3     0.1     5.9    replay.t1.s1     2024-01-16T18:00:37     8.0.0           41ac5b042d      0.8
+
+```
+Remove  AddWithFeatures from memtable.cc and restart replay.
+No seg fault this time but stil only 7611k writes.
+Let's  remove db->put() from gc job and see if we can get 1M writes.
+
+Only 2017k writes at the end of replay Let's see what's wrong.
+Is this because I set num_writes to 2M in call_run_blob.sh?
+num_keys=50000000
+Need to check how replay works
+I think this is because get op get status not ok and replay failed.
+So this is why out current replay failing to replay all writes.
+
+
+Found invalid blob file number during run time. So I search
+invalid blob file number in all files and found GetBlob() function
+contains this log msg. I add assert(false); to this function and 
+see what's wrong.
+
+blob:88 not exist in GetBlob()
+I found 88 blob file why is that ?
+Is this because blob file not added in GetMinOldestBlobFileNumber?
+
+```
+000088.blob
+2024/01/17-15:21:26.715345 489412 (Original Log Time 2024/01/17-15:21:26.714864) EVENT_LOG_v1 {"time_micros": 1705476086714796, "job": 159, "event": "compaction_finished", "compaction_time_micros": 17296315, "compaction_time_cpu_micros": 17286682, "output_level": 1, "num_output_files": 13, "total_output_size": 39680315, "num_input_records": 1136283, "num_output_records": 1096304, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [1, 13, 36, 0, 0, 0, 0, 0], "blob_file_head": 282, "blob_file_tail": 449, "blob_files": [282, 285, 298, 301, 304, 305, 315, 327, 337, 340, 353, 366, 369, 372, 373, 381, 392, 393, 403, 404, 407, 415, 424, 435, 440, 449], "lifetime_blob_0": [282, 298, 301, 304, 315, 327, 337, 340, 353, 366, 369, 372, 381, 392, 403, 407, 415, 424, 435, 440, 449], "lifetime_blob_1": [285, 305, 373, 393, 404]}
+```
+
+
+```
+ProcessKeyValueCompaction()
+  if (sub_compact->compaction->DoesInputReferenceBlobFiles()) {
+    BlobGarbageMeter* meter = sub_compact->Current().CreateBlobGarbageMeter();
+    blob_counter = std::make_unique<BlobCountingIterator>(input, meter);
+    input = blob_counter.get();
+  }
+  void Next() override {
+    assert(Valid());
+
+    iter_->Next();
+    UpdateAndCountBlobIfNeeded();
+  }
+
+
+```
+Does new sst file link original blob files?
+I don't think I make this step.
+```
+Status BlobGarbageMeter::ProcessOutFlow(const Slice& key, const Slice& value) {
+  // Note: in order to measure the amount of additional garbage, we only need to
+  // track the outflow for preexisting files, i.e. those that also had inflow.
+  // (Newly written files would only have outflow.)
+  auto it = flows_.find(blob_file_number);
+  if (it == flows_.end()) {
+    return Status::OK();
+  }
+
+  it->second.AddOutFlow(bytes);
+
+
+    uint64_t GetGarbageCount() const {
+      assert(IsValid());
+      assert(HasGarbage());
+      return in_flow_.GetCount() - out_flow_.GetCount();
+    }
+
+
+
+
+          for (const auto& pair : flows) {
+        const uint64_t blob_file_number = pair.first;
+        const BlobGarbageMeter::BlobInOutFlow& flow = pair.second;
+
+        assert(flow.IsValid());
+        if (flow.HasGarbage()) {
+          blob_total_garbage[blob_file_number].Add(flow.GetGarbageCount(),
+                                                   flow.GetGarbageBytes());
+    }
+      }
+    }
+  }
+
+  for (const auto& pair : blob_total_garbage) {
+    const uint64_t blob_file_number = pair.first;
+    const BlobGarbageMeter::BlobStats& stats = pair.second;
+
+    edit->AddBlobFileGarbage(blob_file_number, stats.GetCount(),
+                             stats.GetBytes());
+  }
+```
+So ProcessOutFlow means new blobs out?
+May need to link sst for each lifetime classes.
+I am trying to get log from version storage and then log min oldest blob file number
+I think this is the problem, the min oldest log number might be too high.  
+Set min_oldest_blob_file_numer to zero instead of get blob files with linked sst.
+Now log looks normal . There are log entries showing blob files being deleted.
+Fixed seg fault bug in Get after code update above.
+
+[Status: Done ]
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      5/4   19.54 MB   0.2      0.0     0.0      0.0       0.5      0.5       0.0   1.0      0.0     61.1    222.14            221.52       153    1.452       0      0       0.0      12.7
+  L1      8/8   24.60 MB   0.0      1.3     0.5      0.8       1.2      0.5       0.0   2.3      3.8      3.6    350.55            350.23        37    9.474     38M  1759K       0.0       0.0
+  L2     50/0   132.73 MB   0.7      1.1     0.4      0.7       0.8      0.1       0.0   2.1      4.3      3.2    269.72            269.51       130    2.075     33M  9155K       0.0       0.0
+ Sum     63/12  176.87 MB   0.0      2.4     0.9      1.5       2.6      1.1       0.0   1.2      3.0     18.6    842.41            841.27       320    2.633     72M    10M       0.0      12.7
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      2.4     0.9      1.5       2.1      0.6       0.0   0.0      4.0      3.4    620.27            619.74       167    3.714     72M    10M       0.0       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   0.0      0.0     61.1    222.14            221.52       153    1.452       0      0       0.0      12.7
+
+Blob file count: 60, total size: 4.1 GB, garbage size: 0.0 GB, space amp: 1.0
+
+
+** DB Stats **
+Uptime(secs): 1892.6 total, 0.2 interval
+Cumulative writes: 18M writes, 18M keys, 18M commit groups, 1.0 writes per commit group, ingest: 14.30 GB, 7.74 MB/s
+Cumulative WAL: 18M writes, 0 syncs, 18278197.00 writes per sync, written: 14.30 GB, 7.74 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 3205 writes, 3205 keys, 3161 commit groups, 1.0 writes per commit group, ingest: 2.56 MB, 12.05 MB/s
+Interval WAL: 3204 writes, 0 syncs, 3204.00 writes per sync, written: 0.00 GB, 12.05 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50      p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test   date     version job_id  githash
+0               175MB   4GB     15.4    2.0     8.3     853     852     0       13      1778525350.0                                            1893    0.0     0       3.0     0.1     7.9    replay.t1.s1     2024-01-18T11:34:36     8.0.0           41ac5b042d      1.0
+```
+With 8M more writes which is not acceptable. Let's decrease extra writes to 2M. 
+invalid ratio of keys is not so high from LOG.
+I may need toadjust lifetime label and put keys that are written once 
+into a longer classification.
+Let's see how space amp works after I do file deletion.
+
+xingqi's work items
+- ssd trace analysis
+- ycsba trace analysis 
+no model: 10.6% drop
+with model: 13% drop
+I think we can have more drop keys if 
+we test if blob is valid during compaction iter.
+
+[Todo]
+Add bytes_read_blob stats in gc job.
+```
+CompactionJob::Run()
+    ProcessKeyValueCompaction()
+        compaction iter PrepareOutput
+            
+          const Status s = blob_fetcher_->FetchBlob(
+              user_key(), blob_index, prefetch_buffer, &blob_value_, &bytes_read);
+
+          if (!s.ok()) {
+            status_ = s;
+            validity_info_.Invalidate();
+
+            return;
+          }
+        }
+
+        ++iter_stats_.num_blobs_read;
+        iter_stats_.total_blob_bytes_read += bytes_read;
+
+        ++iter_stats_.num_blobs_relocated;
+        iter_stats_.total_blob_bytes_relocated += blob_index.size();
+
+        
+      sub_compact->compaction_job_stats.num_blobs_read =
+          c_iter_stats.num_blobs_read;
+      sub_compact->compaction_job_stats.total_blob_bytes_read =
+          c_iter_stats.total_blob_bytes_read;
+      sub_compact->compaction_job_stats.num_input_deletion_records =
+          c_iter_stats.num_input_deletion_records;
+      sub_compact->compaction_job_stats.num_corrupt_keys =
+          c_iter_stats.num_input_corrupt_records;
+      sub_compact->compaction_job_stats.num_single_del_fallthru =
+          c_iter_stats.num_single_del_fallthru;
+ 
+ // Finish up all book-keeping to unify the subcompaction results
+  compact_->AggregateCompactionStats(compaction_stats_, *compaction_job_stats_);
+    CompactionJobStats& compaction_job_stats) {
+      for (const auto& sc : sub_compact_states) {
+        sc.AggregateCompactionStats(compaction_stats);
+        compaction_job_stats.Add(sc.compaction_job_stats);
+      }
+        void CompactionJobStats::Add(const CompactionJobStats& stats) {
+          elapsed_micros += stats.elapsed_micros;
+          cpu_micros += stats.cpu_micros;
+
+          num_input_records += stats.num_input_records;
+          num_blobs_read += stats.num_blobs_read;
+          num_input_files += stats.num_input_files;
+          num_input_files_at_output_level += stats.num_input_files_at_output_level;
+
+ 
+  UpdateCompactionStats();
+        void CompactionJob::UpdateCompactionStats() {
+          assert(compact_);
+
+          Compaction* compaction = compact_->compaction;
+          compaction_stats_.stats.num_input_files_in_non_output_levels = 0;
+          compaction_stats_.stats.num_input_files_in_output_level = 0;
+          for (int input_level = 0;
+               input_level < static_cast<int>(compaction->num_input_levels());
+               ++input_level) {
+            if (compaction->level(input_level) != compaction->output_level()) {
+              UpdateCompactionInputStatsHelper(
+                  &compaction_stats_.stats.num_input_files_in_non_output_levels,
+                  &compaction_stats_.stats.bytes_read_non_output_levels, input_level);
+            } else {
+              UpdateCompactionInputStatsHelper(
+                  &compaction_stats_.stats.num_input_files_in_output_level,
+                  &compaction_stats_.stats.bytes_read_output_level, input_level);
+            }
+          }
+
+          assert(compaction_job_stats_);
+          compaction_stats_.stats.bytes_read_blob =
+              compaction_job_stats_->total_blob_bytes_read;
+
+          compaction_stats_.stats.num_dropped_records =
+              compaction_stats_.DroppedRecords();
+        }
+
+
+```
+Difference between CompactionStatsFull and CompactionJobStats?
+```
+  struct CompactionStatsFull {
+    // the stats for the target primary output level
+    CompactionStats stats;
+
+    // stats for penultimate level output if exist
+    bool has_penultimate_level_output = false;
+    CompactionStats penultimate_level_stats;
+
+
+```
+I think I should put bytes read to all lsm-tree compaction log. 
+```
+Uptime(secs): 1776.9 total, 1.0 interval
+Flush(GB): cumulative 6.373, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
+I
+
+
+void InternalStats::DumpCFStatsNoFileHistogram(bool is_periodic,
+    void InternalStats::DumpCFMapStats(
+        const VersionStorageInfo* vstorage,
+        std::map<int, std::map<LevelStatType, double>>* levels_stats,
+        CompactionStats* compaction_stats_sum) {
+      assert(vstorage);
+
+                    // Stats summary across levels
+              std::map<LevelStatType, double> sum_stats;
+              PrepareLevelStats(&sum_stats, total_files, total_files_being_compacted,
+                                total_file_size, 0, w_amp, *compaction_stats_sum);
+              (*levels_stats)[-1] = sum_stats;  //  -1 is for the Sum level
+            }
+
+
+    PrintLevelStats(buf, sizeof(buf), "Sum", levels_stats[-1]);
+        void PrintLevelStats(char* buf, size_t len, const std::string& name,
+                             const std::map<LevelStatType, double>& stat_value) {
+          snprintf(
+
+```
+
+```
+
+Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
+  ColumnFamilyData* cfd = compact_->compaction->column_family_data();
+  assert(cfd);
+
+  int output_level = compact_->compaction->output_level();
+  cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
+                                            compaction_stats_);
+
+
+```
+
+
+```
+
+Status FlushJob::WriteLevel0Table() {
+  RecordTimeToHistogram(stats_, FLUSH_TIME, stats.micros);
+  cfd_->internal_stats()->AddCompactionStats(0 /* level */, thread_pri_, stats);
+  cfd_->internal_stats()->AddCFStats(
+      InternalStats::BYTES_FLUSHED,
+      stats.bytes_written + stats.bytes_written_blob);
+  RecordFlushIOStats();
+
+
+  void AddCFStats(InternalCFStatsType type, uint64_t value) {
+```
+I think I only need to add read stats to internal stats
+
+
+```
+Blob file count: 64, total size: 4.6 GB, garbage size: 0.0 GB, space amp: 1.0
+```
+[Status: Done]
+
+[Todo]
+Make gc key insertion with correct semantics. Make sure old keys do not 
+overwrite new keys during gc
+How does lifetime classification works if put keys back to rocksdb 
+after gc?.
+We can add a byte of lifetime classification in key during gc put.
+So what category of lifetime should we give for each model calling?
+We can change model task from classification to regression.
+How is data collected?
+How does lrb deal with limited amount of training samples and how does
+data labelling works for rare seen keys?
+
+```
+
+Status DBImpl::PipelinedWriteImpl(const WriteOptions& write_options,
+                                  WriteBatch* my_batch, WriteCallback* callback,
+                                  uint64_t* log_used, uint64_t log_ref,
+                                  bool disable_memtable, uint64_t* seq_used) {
+    memtable_write_group.status = WriteBatchInternal::InsertInto(
+          memtable_write_group, w.sequence, column_family_memtables_.get(),
+          &flush_scheduler_, &trim_history_scheduler_,
+          write_options.ignore_missing_column_families, 0 /*log_number*/, this,
+          false /*concurrent_memtable_writes*/, seq_per_batch_, batch_per_txn_);
+
+
+                w->status = w->batch->Iterate(&inserter);
+```
+
+```
+Status WriteBatchInternal::Put(WriteBatch* b, uint32_t column_family_id,
+                               const Slice& key, const Slice& value) {
+  if (key.size() > size_t{std::numeric_limits<uint32_t>::max()}) {
+    return Status::InvalidArgument("key is too large");
+  }
+  if (value.size() > size_t{std::numeric_limits<uint32_t>::max()}) {
+    return Status::InvalidArgument("value is too large");
+  }
+
+  LocalSavePoint save(b);
+  WriteBatchInternal::SetCount(b, WriteBatchInternal::Count(b) + 1);
+  if (column_family_id == 0) {
+    b->rep_.push_back(static_cast<char>(kTypeValue));
+  } else {
+ 
+```
+Where is tag is set during write?
+I think we can add an another type of op in WriteBatchInternal 
+which is call PutGC()
+a: 3
+put(a,3)
+put(a,4)
+get(a) ->  3 / 4
+
+Sacarifice read performance. Read all levels to get latest value.
+
+Actually there is PutBlobValue() in rocksdb which is similar to gc put
+but is different from normal put in current integrated blob db in rocksdb 
+which accumulated value in memtable and then flush value to blob file.
+```
+Status WriteBatchInternal::InsertInto(
+    WriteThread::WriteGroup& write_group, SequenceNumber sequence,
+    ColumnFamilyMemTables* memtables, FlushScheduler* flush_scheduler,
+    TrimHistoryScheduler* trim_history_scheduler,
+    bool ignore_missing_column_families, uint64_t recovery_log_number, DB* db,
+    bool concurrent_memtable_writes, bool seq_per_batch, bool batch_per_txn) {
+ 
+Status WriteBatch::Iterate(Handler* handler) const {
+  if (rep_.size() < WriteBatchInternal::kHeader) {
+    return Status::Corruption("malformed WriteBatch (too small)");
+  }
+
+  return WriteBatchInternal::Iterate(this, handler, WriteBatchInternal::kHeader,
+                                     rep_.size());
+}
+    Status WriteBatchInternal::Iterate(const WriteBatch* wb,
+                                       WriteBatch::Handler* handler, size_t begin,
+                                       size_t end) {
+      if (begin > wb->rep_.size() || end > wb->rep_.size() || end < begin) {
+        return Status::Corruption("Invalid start/end bounds for Iterate");
+      }
+      assert(begin <= end);
+      Slice input(wb->rep_.data() + begin, static_cast<size_t>(end - begin));
+      bool whole_batch =
+          (begin == WriteBatchInternal::kHeader) && (end == wb->rep_.size());
+
+      Slice key, value, blob, xid;
+
+     
+        switch (tag) {
+          case kTypeColumnFamilyValue:
+          case kTypeValue:
+            assert(wb->content_flags_.load(std::memory_order_relaxed) &
+                   (ContentFlags::DEFERRED | ContentFlags::HAS_PUT));
+            s = handler->PutCF(column_family, key, value);
+
+            // s = handler->PutCFWithFeatures(column_family, key, value );
+            if (LIKELY(s.ok())) {
+              empty_batch = false;
+              found++;
+
+  Status PutCF(uint32_t column_family_id, const Slice& key,
+               const Slice& value) override {
+    const auto* kv_prot_info = NextProtectionInfo();
+    Status ret_status;
+    if (kv_prot_info != nullptr) {
+      assert(false);
+      // Memtable needs seqno, doesn't need CF ID
+      auto mem_kv_prot_info =
+          kv_prot_info->StripC(column_family_id).ProtectS(sequence_);
+      ret_status = PutCFImpl(column_family_id, key, value, kTypeValue,
+                             &mem_kv_prot_info);
+    } else {
+      ret_status = PutCFImplWithFeatures(column_family_id, key, value, kTypeValue,
+                                         nullptr);
+
+```
+Handler shares PutCF() interface
+So I need to implement PutCF() of MemTableInserter
+Implement WriteBatch::PutGCCF()
+Implement WriteBatchInternal:PutGCCF()
+I think I can just call PutBlobIndexCF of memtable inserter.
+I don't need to do that myself by implementing a new type.
+But I need to extract sequence number out of key.
+
+Should change value type from kblob to ktypevalue
+
+DEFINE_bool(allow_concurrent_memtable_write, true,
+
+```
+Status DBImpl::Write(const WriteOptions& write_options, WriteBatch* my_batch) {
+  Status s;
+  if (write_options.protection_bytes_per_key > 0) {
+    s = WriteBatchInternal::UpdateProtectionInfo(
+        my_batch, write_options.protection_bytes_per_key);
+  }
+  if (s.ok()) {
+    s = WriteImpl(write_options, my_batch, /*callback=*/nullptr,
+                  /*log_used=*/nullptr);
+  }
+  return s;
+}
+
+```
+Change user_key() to key() in ExtractLargeValueIfNeededImpl() to get 
+internal key so that we can put sequence number during gc.
+We can call this function to write writebatch into rocksdb
+
+Another run before use PutGC
+```
+
+Uptime(secs): 1891.3 total, 8.0 interval
+Flush(GB): cumulative 13.293, interval 0.092
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 15.34 GB write, 8.31 MB/s write, 2.42 GB read, 1.31 MB/s read, 821.4 seconds
+Interval compaction: 0.09 GB write, 11.73 MB/s write, 0.00 GB read, 0.00 MB/s read, 1.3 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+Block cache LRUCache@0x5555569d0d60#759148 capacity: 16.00 GB usage: 2.43 GB table_size: 1048576 occupancy: 41920 collections: 11 last_copies: 85 last_secs: 0.404451 secs_since: 85
+Block cache entry stats(count,size,portion): DataBlock(267213,2.06 GB,12.8446%) BlobValue(405704,329.34 MB,2.01012%) Misc(2,8.09 KB,4.82425e-05%)
+
+** File Read Latency Histogram By Level [default] **
+2024/01/24-15:08:57.525420 759153 [db/compaction/compaction_job.cc:1666] [default] [JOB 398] Generated table #1218: 74006 keys, 2675662 bytes, temperature: kUnknown
+2024/01/24-15:08:57.525471 759153 EVENT_LOG_v1 {"time_micros": 1706080137525445, "cf_name": "default", "job": 398, "event": "table_file_creation", "file_number": 1218, "file_size": 2675662, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 15255519, "largest_seqno": 18104087, "table_properties": {"data_size": 2576002, "index_size": 6047, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 92549, "raw_key_size": 2072168, "raw_average_key_size": 28, "raw_value_size": 740060, "raw_average_value_size": 10, "num_data_blocks": 316, "num_entries": 74006, "num_filter_entries": 74006, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1706079397, "oldest_key_time": 0, "file_creation_time": 1706080136, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3dca4e63-ea19-41a5-bb3b-c3fd14b447cd", "db_session_id": "R9V51Z2GXOEEUD257B86", "orig_file_number": 1218, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 1007}
+2024/01/24-15:08:57.859432 759182 [db/db_impl/db_impl.cc:1123] ------- DUMPING STATS -------
+2024/01/24-15:08:57.859505 759182 [db/db_impl/db_impl.cc:1125] 
+** DB Stats **
+Uptime(secs): 1892.3 total, 1.0 interval
+Cumulative writes: 18M writes, 18M keys, 17M commit groups, 1.0 writes per commit group, ingest: 14.20 GB, 7.68 MB/s
+Cumulative WAL: 18M writes, 0 syncs, 18152106.00 writes per sync, written: 14.20 GB, 7.68 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 14K writes, 14K keys, 14K commit groups, 1.0 writes per commit group, ingest: 11.51 MB, 11.50 MB/s
+Interval WAL: 14K writes, 0 syncs, 14422.00 writes per sync, written: 0.01 GB, 11.50 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      4/4   15.27 MB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   1.0      0.0     61.8    220.37            219.67       152    1.450       0      0       0.0      12.8
+  L1      8/8   23.79 MB   0.0      1.3     0.5      0.8       1.2      0.5       0.0   2.3      3.9      3.7    340.06            339.65        37    9.191     38M  1756K       0.0       0.0
+  L2     49/0   133.15 MB   0.7      1.1     0.4      0.7       0.8      0.1       0.0   2.0      4.4      3.2    260.97            260.69       127    2.055     33M  9185K       0.0       0.0
+ Sum     61/12  172.22 MB   0.0     11.2     0.9      1.5       2.6      1.1       0.0   1.2     13.9     19.1    821.40            820.02       316    2.599     71M    10M       8.8      12.8
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0     11.2     0.9      1.5       8.3      6.8       0.0   0.0     19.0     14.1    601.03            600.35       164    3.665     82M    13M       8.8       0.0
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.5      0.5       0.0   0.0      0.0     61.8    220.37            219.67       152    1.450       0      0       0.0      12.8
+
+Blob file count: 52, total size: 3.7 GB, garbage size: 0.0 GB, space amp: 1.0
+
+
+Completed replay (ID: ) in 2451 seconds
+ops_sec mb_sec  lsm_sz  blob_sz c_wgb   w_amp   c_mbps  c_wsecs c_csecs b_rgb   b_wgb   usec_opp50     p99     p99.9   p99.99  pmax    uptime  stall%  Nstall  u_cpu   s_cpu   rss     test  date     version job_id  githash
+0               172MB   4GB     15.3    2.0     8.3     821     820     9       13      1778525635.0                                           1895    0.0     0       2.9     0.1     8.2   replay.t1.s1     2024-01-24T14:39:22     8.0.0           41ac5b042d      1.0
+```
+
+Get a bug where get report blob:15 not found , blob:15 is deleted. 
+Is this because get seearch cache first and get obsolete value for key ?
+How can we clear cache after gc job?
+How does compaction handle this?
+Is this also becase blob files are deleted while get is ongoing after gettting
+keys from lsm-tree?
+To avoid this problem we can ref blob  in version as well.
+1. each FileMetaData has ref count. FileMetaData is deleted only when ref = 0;
+2. TableCache is clear before FileMetaData ref--? Otherwise get will still get 
+old sst from cache. Actually we don't need to clear cache for deleted sst.
+Because get start from each version.
+```
+void SubcompactionState::Cleanup(Cache* cache) {
+  penultimate_level_outputs_.Cleanup();
+  compaction_outputs_.Cleanup();
+
+  if (!status.ok()) {
+    for (const auto& out : GetOutputs()) {
+      // If this file was inserted into the table cache then remove
+      // them here because this compaction was not committed.
+      TableCache::Evict(cache, out.meta.fd.GetNumber());
+    }
+  }
+  // TODO: sub_compact.io_status is not checked like status. Not sure if thats
+  // intentional. So ignoring the io_status as of now.
+  io_status.PermitUncheckedError();
+}
+```
+
+ref--
+```
+Version::~Version() {
+  assert(refs_ == 0);
+
+  // Remove from linked list
+  prev_->next_ = next_;
+  next_->prev_ = prev_;
+
+  // Drop references to files
+  for (int level = 0; level < storage_info_.num_levels_; level++) {
+    for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
+      FileMetaData* f = storage_info_.files_[level][i];
+      assert(f->refs > 0);
+      f->refs--;
+      if (f->refs <= 0) {
+        assert(cfd_ != nullptr);
+        uint32_t path_id = f->fd.GetPathId();
+        assert(path_id < cfd_->ioptions()->cf_paths.size());
+        vset_->obsolete_files_.push_back(
+            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path,
+                             cfd_->GetFileMetadataCacheReservationManager()));
+      }
+    }
+  }
+}
+
+
+  void UnrefFile(FileMetaData* f) {
+    f->refs--;
+    if (f->refs <= 0) {
+      if (f->table_reader_handle) {
+        assert(table_cache_ != nullptr);
+        // NOTE: have to release in raw cache interface to avoid using a
+        // TypedHandle for FileMetaData::table_reader_handle
+        table_cache_->get_cache().get()->Release(f->table_reader_handle);
+        f->table_reader_handle = nullptr;
+      }
+
+
+
+```
+
+ref++
+```
+  Status ApplyFileAddition(int level, const FileMetaData& meta) {
+    assert(level != VersionStorageInfo::FileLocation::Invalid().GetLevel());
+
+    const uint64_t file_number = meta.fd.GetNumber();
+
+    const int current_level = GetCurrentLevelForTableFile(file_number);
+
+    if (current_level !=
+ 
+    FileMetaData* const f = new FileMetaData(meta);
+    f->refs = 1;
+
+
+void VersionStorageInfo::AddFile(int level, FileMetaData* f) {
+  auto& level_files = files_[level];
+ level_files.push_back(f);
+
+  f->refs++;
+}
+```
+So I will need t add ref to blobfilemetadata and unref then at the destructor 
+of eahc version.
+I don't know where to put refs. SharedBlobFileMetaData or blobfilemetadatas?  
+Should change shared_ptr to std ptr of blobfile?
+Don't think this ref of blob file will work because
+current  implementation of version already hold refs to blob file meta .
+But this is weird. Why blob 15 is searched?
+Maybe there is something wrong with PutGC.
+There is no valid_key_num log in LOG. so there must be something 
+wrong with PutGC.
+
+Realize that I might not need to implement my own gc process.
+I  can just update gc process to check validity of keys and check
+if blob index points to blob that is in current gc.
+```
+(gdb) p s.ToString()
+$1 = "Corruption: unknown WriteBatch tag"
+```
+
+Still get blob not existed after I fix PutGC()
+Is there is error in PutGC()?
+No such issue after I replace PutGC() with Put()
+
+Test WriteBatch PutGC()
+
+[Status: Ongoing]
+
+[Todo]
+Subtract write bytes during flush for keys written in gc.
+This gives us higher and accurate w-amp.
+Current w-amp is 1.2. 
+It should be higher.
+[Status: Not started]
+
+[Todo]
+Add comp cpu stats?
+internal_stats.cc
+```
+PrintLevelStatsHeader(buf, sizeof(buf), cfd_->GetName(), "Priority");
+  value->append(buf);
+  std::map<int, std::map<LevelStatType, double>> priorities_stats;
+  DumpCFMapStatsByPriority(&priorities_stats);
+  for (size_t priority = 0; priority < comp_stats_by_pri_.size(); ++priority) {
+    if (priorities_stats.find(static_cast<int>(priority)) !=
+        priorities_stats.end()) {
+      PrintLevelStats(
+          buf, sizeof(buf),
+          Env::PriorityToString(static_cast<Env::Priority>(priority)),
+          priorities_stats[static_cast<int>(priority)]);
+      value->append(buf);
+    }
+  }
+
+
+```
+[Status: Not started]
+
+[Todo]
+Cache level similar for key feature generation for GC.
+
+[Status: Not started]
+
+[Todo]
+set allow_concurrent_memtable_write to  false?
+But we only have one write thread so I think this is ok for now.
+[Status: Not started]
+
+
+[Todo]
+We can increase lsm-tree key drop if we check blob file existence during compaction.
+[Status: Not started]
+
+
+[Todo]
+Set GC job thread priority to low
+[Status: Not started]
+
+
 - No current gc in compaction_iterator.
 - Write a periodic GC function called in BackgroundCompaction()
 - Pick files in GC function 
     Pick Blob files, 
     Iterate blob files
     Check validity of key and value.
+        Compare value of key in internal iterator.
+        I can compare value in value file or I can just compare 
+        sequence number. If there n
     Write back valid keys.
     Delete old blob files.
 [Status: Ongoing in another branch]

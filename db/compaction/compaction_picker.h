@@ -60,7 +60,6 @@ class CompactionPicker {
                                      const MutableDBOptions& mutable_db_options,
                                      VersionStorageInfo* vstorage,
                                      LogBuffer* log_buffer) = 0;
-
   // Return a compaction object for compacting the range [begin,end] in
   // the specified level.  Returns nullptr if there is nothing in that
   // level that overlaps the specified range.  Caller should delete
@@ -85,6 +84,7 @@ class CompactionPicker {
   virtual int MaxOutputLevel() const { return NumberLevels() - 1; }
 
   virtual bool NeedsCompaction(const VersionStorageInfo* vstorage) const = 0;
+
 
 // Sanitize the input set of compaction input files.
 // When the input parameters do not describe a valid compaction, the
@@ -281,6 +281,8 @@ class NullCompactionPicker : public CompactionPicker {
       const VersionStorageInfo* /*vstorage*/) const override {
     return false;
   }
+
+
 };
 
 // Attempts to find an intra L0 compaction conforming to the given parameters.
