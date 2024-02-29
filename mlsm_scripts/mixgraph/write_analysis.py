@@ -1,6 +1,7 @@
 
 
 
+
 import dask
 import dask.dataframe as dd
 
@@ -182,6 +183,9 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path, all_output_path
     # df_group_read['lifetime'] = df_group_read['unix_timestamp'] - df_group_read['prev_timestamp']
     # df_group_read['lifetime_next'] = df_group_read['latter_timestamp'] - df_group_read['unix_timestamp']
 
+    df_group_write.sort_values(by=['seq'], inplace=True)
+
+
 
     df_group_write['timestamp'] = df_group_write['timestamp'].apply(convert_micro_to_sec)
     df_group_write['prev_timestamp'] = df_group_write['timestamp'].shift(1)
@@ -195,13 +199,21 @@ def ApplyGetLifetime(df_group_by_disknumber_offset, output_path, all_output_path
     df_group_write['seq_diff_pre'] = df_group_write['seq'] - df_group_write['pre_seq']
     df_group_write['seq_diff_latter'] = df_group_write['latter_seq'] - df_group_write['seq']
 
+    na_count_seq_diff_last = df_group_write['seq_diff_latter'].isna().sum()
+    non_na_count_seq_diff_last = len(df_group_write) - na_count_seq_diff_last
+    # print('na_count_seq_diff_last: ', na_count_seq_diff_last, 'non_na_count_seq_diff_last: ', non_na_count_seq_diff_last)
+    df_group_write.fillna(0, inplace=True)
+
+
 
     # df_group_read = df_group_read.apply(ApplyGetEDC)
     # df_group_write = GetEDC(df_group_write)
     # GetEDC(df_group_write)
-    cur_counter = increment_counter()
+
 
     # df_group_write = df_group_write.compute()
+
+    cur_counter = increment_counter()
 
     if cur_counter % 1000 == 0 :
         print('cur_counter: ', cur_counter)
@@ -223,6 +235,9 @@ def GenerateFeatures(server_trace ):
     #client = Client(cluster)
     cur_path = server_trace
 
+
+    start_time = datetime.datetime.now()
+
     # [key, op_type, cf_id, value_size, timestamp, seq, write_rate]
     df = dd.read_csv(cur_path, sep=' ',header=None, names=['key', 'op_type', 'cf_id', 'value_size', 'timestamp', 'seq', 'write_rate'])
     df = df.repartition(npartitions=1)
@@ -230,11 +245,21 @@ def GenerateFeatures(server_trace ):
     # df = df.head(1000)
     print('df', df)
 
+    end_time = datetime.datetime.now()
+    print('read time',end_time - start_time)
+
+
     group_by_columns = ['key']
     # df_group_by_type = df.groupby(['type'])
     # df_write = df_group_by_type.get_group('Write')
     # df_group_by_disknumber_offset = df_group_by_type.groupby(['disknumber', 'offset'])
+
+    start_time = datetime.datetime.now()
     df_group_by_disknumber_offset = df.groupby(group_by_columns)
+    end_time = datetime.datetime.now()
+    print('group time',end_time - start_time)
+
+
 
 
     trace_output_path = output_path.format( 'with_at_least_2_write')
@@ -252,15 +277,28 @@ def GenerateFeatures(server_trace ):
     with open(all_trace_output_path, 'w') as f:
         f.truncate(0)
     #df_return = df_group_by_disknumber_offset.map_partitions(lambda df: df.apply( ApplyGetLifetime, output_path=trace_output_path)).compute(scheduler='threads') 
-    #df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
+
+    # df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path,  all_output_path=all_trace_output_path )
 
     with dask.config.set(scheduler='threads', num_workers=40, memory_limit='64GB'):
-        df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, output_path=trace_output_path, all_output_path=all_trace_output_path).compute()
+        df_return = df_group_by_disknumber_offset.apply( ApplyGetLifetime, 
+                                                        output_path=trace_output_path, 
+                                                        all_output_path=all_trace_output_path,
+                                                        meta={'seq':'int64',
+                                                              'lifetime': 'int64',
+                                                              'pre_read_count': 'int64' ,
+                                                              'pre_seq': 'int64',
+                                                              'latter_seq': 'int64',
+                                                              'seq_diff_pre' : 'int64',
+                                                              'seq_diff_latter': 'int64'}).compute()
+
         # df_concat =  pd.concat(df_return)
         print('type of df_return: ', type(df_return))
 
         print('head of df_return: ', df_return.head(), 'len of df_return: ', len(df_return) )
-        #df_return.to_csv(all_trace_output_path, index=False)
+
+        # df_return.to_csv(all_trace_output_path, index=False)
+
     # df_concat.to_csv(output_path.format(server_trace), index=False)
     #client.close()
     #cluster.close()

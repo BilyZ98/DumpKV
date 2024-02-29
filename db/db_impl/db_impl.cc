@@ -276,6 +276,12 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   periodic_task_functions_.emplace(
       PeriodicTaskType::kRecordSeqnoTime,
       [this]() { this->RecordSeqnoToTimeMapping(); });
+  training_data_.reset(new TrainingData(nullptr, 
+                                        immutable_db_options_.num_features,
+                                        immutable_db_options_.num_classification  ));
+  InitTrainingParams();
+  lightgbm_handle_ = nullptr;
+  lightgbm_fastConfig_ = nullptr;
 
   versions_.reset(new VersionSet(dbname_, &immutable_db_options_, file_options_,
                                  table_cache_.get(), write_buffer_manager_,
@@ -696,8 +702,8 @@ Status DBImpl::CloseHelper() {
     delete txn_entry.second;
   }
 
-  LGBM_BoosterFree(lightgbm_handle_);
-  LGBM_FastConfigFree(lightgbm_fastConfig_);
+  // LGBM_BoosterFree(lightgbm_handle_);
+  // LGBM_FastConfigFree(lightgbm_fastConfig_);
 
 
   // versions need to be destroyed before table_cache since it can hold
@@ -1847,6 +1853,73 @@ static void CleanupGetMergeOperandsState(void* arg1, void* /*arg2*/) {
 }
 
 }  // namespace
+
+InternalIterator* DBImpl::NewInternalIteratorStartingFromLevel0(
+    const ReadOptions& read_options, ColumnFamilyData* cfd,
+    SuperVersion* super_version, Arena* arena, SequenceNumber sequence,
+    bool allow_unprepared_value, ArenaWrappedDBIter* db_iter) {
+  InternalIterator* internal_iter;
+  assert(arena != nullptr);
+  // Need to create internal iterator from the arena.
+  MergeIteratorBuilder merge_iter_builder(
+      &cfd->internal_comparator(), arena,
+      !read_options.total_order_seek &&
+          super_version->mutable_cf_options.prefix_extractor != nullptr,
+      read_options.iterate_upper_bound);
+  // Collect iterator for mutable memtable
+  // auto mem_iter = super_version->mem->NewIterator(read_options, arena);
+  Status s;
+  // if (!read_options.ignore_range_deletions) {
+  //   TruncatedRangeDelIterator* mem_tombstone_iter = nullptr;
+  //   auto range_del_iter = super_version->mem->NewRangeTombstoneIterator(
+  //       read_options, sequence, false /* immutable_memtable */);
+  //   if (range_del_iter == nullptr || range_del_iter->empty()) {
+  //     delete range_del_iter;
+  //   } else {
+  //     mem_tombstone_iter = new TruncatedRangeDelIterator(
+  //         std::unique_ptr<FragmentedRangeTombstoneIterator>(range_del_iter),
+  //         &cfd->ioptions()->internal_comparator, nullptr /* smallest */,
+  //         nullptr /* largest */);
+  //   }
+  //   merge_iter_builder.AddPointAndTombstoneIterator(mem_iter,
+  //                                                   mem_tombstone_iter);
+  // } else {
+    // merge_iter_builder.AddIterator(mem_iter);
+  // }
+
+  // Collect all needed child iterators for immutable memtables
+  // if (s.ok()) {
+  //   super_version->imm->AddIterators(read_options, &merge_iter_builder,
+  //                                    !read_options.ignore_range_deletions);
+  // }
+  TEST_SYNC_POINT_CALLBACK("DBImpl::NewInternalIterator:StatusCallback", &s);
+  if (s.ok()) {
+    // Collect iterators for files in L0 - Ln
+    if (read_options.read_tier != kMemtableTier) {
+      super_version->current->AddIterators(read_options, file_options_,
+                                           &merge_iter_builder,
+                                           allow_unprepared_value);
+    }
+    internal_iter = merge_iter_builder.Finish(
+        read_options.ignore_range_deletions ? nullptr : db_iter);
+    if(internal_iter == nullptr) {
+      super_version->Unref();
+      return internal_iter;
+    }
+    SuperVersionHandle* cleanup = new SuperVersionHandle(
+        this, &mutex_, super_version,
+        read_options.background_purge_on_iterator_cleanup ||
+            immutable_db_options_.avoid_unnecessary_blocking_io);
+    internal_iter->RegisterCleanup(CleanupSuperVersionHandle, cleanup, nullptr);
+
+    return internal_iter;
+  } else {
+    CleanupSuperVersion(super_version);
+  }
+  return NewErrorInternalIterator<Slice>(s, arena);
+}
+
+
 
 InternalIterator* DBImpl::NewInternalIterator(
     const ReadOptions& read_options, ColumnFamilyData* cfd,

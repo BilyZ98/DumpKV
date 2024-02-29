@@ -213,6 +213,7 @@ class VersionBuilder::Rep {
 
       if (garbage_blob_count_ + count > shared_meta_->GetTotalBlobCount() ||
           garbage_blob_bytes_ + bytes > shared_meta_->GetTotalBlobBytes()) {
+        assert(false);
         return false;
       }
 
@@ -357,6 +358,21 @@ class VersionBuilder::Rep {
     (*expected_linked_ssts)[blob_file_number].emplace(table_file_number);
   }
 
+  static void UpdateExpectedLinkedSsts(
+      uint64_t table_file_number,  std::unordered_set<uint64_t> blob_file_numbers,
+      ExpectedLinkedSsts* expected_linked_ssts) {
+    assert(expected_linked_ssts);
+
+    for (auto blob_file_number : blob_file_numbers) {
+    if (blob_file_number == kInvalidBlobFileNumber) {
+      return;
+    }
+
+    (*expected_linked_ssts)[blob_file_number].emplace(table_file_number);
+    }
+  }
+  
+
   template <typename Checker>
   Status CheckConsistencyDetailsForLevel(
       const VersionStorageInfo* vstorage, int level, Checker checker,
@@ -378,14 +394,20 @@ class VersionBuilder::Rep {
 
     assert(level_files[0]);
     UpdateExpectedLinkedSsts(level_files[0]->fd.GetNumber(),
-                             level_files[0]->oldest_blob_file_number,
+                             level_files[0]->linked_blob_files,
                              expected_linked_ssts);
+    // UpdateExpectedLinkedSsts(level_files[0]->fd.GetNumber(),
+    //                          level_files[0]->oldest_blob_file_number,
+    //                          expected_linked_ssts);
 
     for (size_t i = 1; i < level_files.size(); ++i) {
       assert(level_files[i]);
       UpdateExpectedLinkedSsts(level_files[i]->fd.GetNumber(),
-                               level_files[i]->oldest_blob_file_number,
+                               level_files[i]->linked_blob_files,
                                expected_linked_ssts);
+      // UpdateExpectedLinkedSsts(level_files[i]->fd.GetNumber(),
+      //                          level_files[i]->oldest_blob_file_number,
+      //                          expected_linked_ssts);
 
       auto lhs = level_files[i - 1];
       auto rhs = level_files[i];
@@ -762,6 +784,7 @@ class VersionBuilder::Rep {
     if (!mutable_meta) {
       std::ostringstream oss;
       oss << "Blob file #" << blob_file_number << " not found";
+      assert(false);
 
       return Status::Corruption("VersionBuilder", oss.str());
     }
@@ -770,6 +793,7 @@ class VersionBuilder::Rep {
                                   blob_file_garbage.GetGarbageBlobBytes())) {
       std::ostringstream oss;
       oss << "Garbage overflow for blob file #" << blob_file_number;
+      assert(false);
       return Status::Corruption("VersionBuilder", oss.str());
     }
 
@@ -812,6 +836,16 @@ class VersionBuilder::Rep {
     assert(level != VersionStorageInfo::FileLocation::Invalid().GetLevel());
 
     const int current_level = GetCurrentLevelForTableFile(file_number);
+    // const FileLocation location = GetFileLocation(sst_file_number);
+    // assert(location.IsValid());
+
+    // const int level = location.GetLevel();
+    // assert(level >= 0);
+
+    // const size_t pos = location.GetPosition();
+
+    // FileMetaData* const sst_meta = files_[level][pos];
+    // assert(sst_meta);
 
     if (level != current_level) {
       if (level >= num_levels_) {
@@ -840,17 +874,44 @@ class VersionBuilder::Rep {
 
       return Status::OK();
     }
+    const FileMetaData* const meta =
+        base_vstorage_->GetFileMetaDataByNumber(file_number);
+    for(auto blob_file_num: meta->linked_blob_files) {
+      if(blob_file_num != kInvalidBlobFileNumber) {
+        MutableBlobFileMetaData* const mutable_meta =
+            GetOrCreateMutableBlobFileMetaData(blob_file_num);
+        if (mutable_meta) {
+          mutable_meta->UnlinkSst(file_number);
+        }
+
+      }
 
     const uint64_t blob_file_number =
         GetOldestBlobFileNumberForTableFile(level, file_number);
+      if(blob_file_number != kInvalidBlobFileNumber) {
+        if(meta->linked_blob_files.find(blob_file_number) == meta->linked_blob_files.end()) {
+          assert(false);
+        }
 
-    if (blob_file_number != kInvalidBlobFileNumber) {
-      MutableBlobFileMetaData* const mutable_meta =
-          GetOrCreateMutableBlobFileMetaData(blob_file_number);
-      if (mutable_meta) {
-        mutable_meta->UnlinkSst(file_number);
       }
+
+
     }
+
+
+
+    // const uint64_t blob_file_number =
+    //     GetOldestBlobFileNumberForTableFile(level, file_number);
+
+    // if (blob_file_number != kInvalidBlobFileNumber) {
+    //   MutableBlobFileMetaData* const mutable_meta =
+    //       GetOrCreateMutableBlobFileMetaData(blob_file_number);
+    //   if (mutable_meta) {
+    //     mutable_meta->UnlinkSst(file_number);
+    //   }
+    // }
+
+
 
     auto& level_state = levels_[level];
 
@@ -928,15 +989,26 @@ class VersionBuilder::Rep {
     assert(add_files.find(file_number) == add_files.end());
     add_files.emplace(file_number, f);
 
-    const uint64_t blob_file_number = f->oldest_blob_file_number;
-
-    if (blob_file_number != kInvalidBlobFileNumber) {
+    for(auto blob_file_num: f->linked_blob_files) {
+      if (blob_file_num == kInvalidBlobFileNumber) {
+        continue;
+      }
       MutableBlobFileMetaData* const mutable_meta =
-          GetOrCreateMutableBlobFileMetaData(blob_file_number);
+          GetOrCreateMutableBlobFileMetaData(blob_file_num);
       if (mutable_meta) {
         mutable_meta->LinkSst(file_number);
       }
     }
+
+    // const uint64_t blob_file_number = f->oldest_blob_file_number;
+
+    // if (blob_file_number != kInvalidBlobFileNumber) {
+    //   MutableBlobFileMetaData* const mutable_meta =
+    //       GetOrCreateMutableBlobFileMetaData(blob_file_number);
+    //   if (mutable_meta) {
+    //     mutable_meta->LinkSst(file_number);
+    //   }
+    // }
 
     table_file_levels_[file_number] = level;
 
@@ -1384,8 +1456,12 @@ class VersionBuilder::Rep {
 
    size_t lifetime_bucket_size = vstorage->GetLifetimeBlobFiles().size(); 
 
+
+   // const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
+   const uint64_t oldest_blob_file_with_linked_ssts =    0;
+
    // const uint64_t oldest_blob_file_with_linked_ssts = GetMinOldestBlobFileNumber();
-    const uint64_t oldest_blob_file_with_linked_ssts = 0;
+
 
  
     for(size_t i=0; i < lifetime_bucket_size; i++) {

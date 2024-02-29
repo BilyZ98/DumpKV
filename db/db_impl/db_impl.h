@@ -47,11 +47,13 @@
 #include "db/wal_manager.h"
 #include "db/write_controller.h"
 #include "db/write_thread.h"
+#include "db/training//training_data.h"
 #include "logging/event_logger.h"
 #include "monitoring/instrumented_mutex.h"
 #include "options/db_options.h"
 #include "port/port.h"
 #include "rocksdb/db.h"
+#include "rocksdb/key_meta.h"
 #include "rocksdb/env.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/status.h"
@@ -160,6 +162,8 @@ class Directories {
   std::unique_ptr<FSDirectory> wal_dir_;
 };
 
+
+
 // While DB is the public interface of RocksDB, and DBImpl is the actual
 // class implementing it. It's the entrance of the core RocksdB engine.
 // All other DB implementations, e.g. TransactionDB, BlobDB, etc, wrap a
@@ -204,6 +208,18 @@ class DBImpl : public DB {
   Status PutEntity(const WriteOptions& options,
                    ColumnFamilyHandle* column_family, const Slice& key,
                    const WideColumns& columns) override;
+
+  Status CheckKeyExistenceInKeyMeta(const Slice& key);
+  Status UpdateKeyMeta(const Slice &key, const uint64_t& sequence, uint64_t size);
+  Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
+                           const uint64_t& blob_size,
+                           const uint8_t& n_within,
+                           const std::vector<float>& edcs,
+                           const uint64_t& future_distance);
+
+
+  void SampleKeyMeta();
+  // { return Status::OK();}
 
   using DB::Merge;
   Status Merge(const WriteOptions& options, ColumnFamilyHandle* column_family,
@@ -780,6 +796,14 @@ class DBImpl : public DB {
                                         bool allow_unprepared_value,
                                         ArenaWrappedDBIter* db_iter = nullptr);
 
+  InternalIterator* NewInternalIteratorStartingFromLevel0(const ReadOptions& read_options,
+                                        ColumnFamilyData* cfd,
+                                        SuperVersion* super_version,
+                                        Arena* arena, SequenceNumber sequence,
+                                        bool allow_unprepared_value,
+                                        ArenaWrappedDBIter* db_iter = nullptr);
+
+
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;
   }
@@ -1285,14 +1309,21 @@ class DBImpl : public DB {
 
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
-  BoosterHandle lightgbm_handle_;
+  std::shared_ptr<BoosterHandle> lightgbm_handle_;
+  std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ ;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
-  FastConfigHandle lightgbm_fastConfig_ ;
   // Need to allocate memory for keys 
   // Call AllocateKey?
   std::vector<Slice> key_ranges_;
   std::vector<std::string> key_ranges_str_;
   int lightgbm_num_iterations_;
+
+  std::mutex key_meta_mutex_;
+  std::unordered_map<std::string, KeyMeta> key_metas_; 
+  std::unique_ptr<TrainingData> training_data_;
+  std::unordered_map<std::string, std::string> training_params_;
+
+
   // State below is protected by mutex_
   // With two_write_queues enabled, some of the variables that accessed during
   // WriteToWAL need different synchronization: log_empty_, alive_log_files_,
@@ -1308,6 +1339,9 @@ class DBImpl : public DB {
 
   // table_cache_ provides its own synchronization
   std::shared_ptr<Cache> table_cache_;
+
+  
+
 
   ErrorHandler error_handler_;
 
@@ -1473,6 +1507,7 @@ class DBImpl : public DB {
   //   uint64_t timestamp;
 
   // };
+  void InitTrainingParams();
   Status ReadFeaturesFromFile(const std::string &file_path);
   Status LoadModel(std::string file_path) ;
   // Whether the batch requires to be assigned with an order

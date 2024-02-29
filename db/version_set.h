@@ -139,6 +139,19 @@ class VersionStorageInfo {
                      const VersionStorageLifetimeInfo& vs_lifetime_info,
                      EpochNumberRequirement epoch_number_requirement =
                          EpochNumberRequirement::kMustPresent);
+
+   VersionStorageInfo(const InternalKeyComparator* internal_comparator,
+                     const Comparator* user_comparator, int num_levels,
+                     CompactionStyle compaction_style,
+                     VersionStorageInfo* src_vstorage,
+                     bool _force_consistency_checks,
+                     Env* env,
+                     const VersionStorageLifetimeInfo& vs_lifetime_info,
+                     const VersionSet* versions,
+                     EpochNumberRequirement epoch_number_requirement =
+                         EpochNumberRequirement::kMustPresent);
+
+
   // No copying allowed
   VersionStorageInfo(const VersionStorageInfo&) = delete;
   void operator=(const VersionStorageInfo&) = delete;
@@ -245,6 +258,7 @@ class VersionStorageInfo {
   // REQUIRES: DB mutex held
   void ComputeBottommostFilesMarkedForCompaction();
 
+  bool ShouldGC(uint64_t creation_seq, uint64_t lifetime_label);
   void ComputeFilesMarkedForForcedBlobGCWithLifetime(
     double blob_garbage_collection_age_cutoff
   );
@@ -558,6 +572,11 @@ class VersionStorageInfo {
     return bottommost_files_marked_for_compaction_;
   }
 
+  const autovector<uint64_t>& BlobFilesMarkedForGC() const {
+    assert(finalized_);
+    return gc_blob_files_;
+  }
+
   // REQUIRES: ComputeCompactionScore has been called
   // REQUIRES: DB mutex held during access
   const autovector<std::pair<int, FileMetaData*>>& FilesMarkedForForcedBlobGC()
@@ -777,6 +796,8 @@ class VersionStorageInfo {
   autovector<std::pair<int, FileMetaData*>> files_marked_for_forced_blob_gc_;
   BlobFiles blob_files_marked_for_gc_;
 
+  autovector<uint64_t> gc_blob_files_;
+
   // Threshold for needing to mark another bottommost file. Maintain it so we
   // can quickly check when releasing a snapshot whether more bottommost files
   // became eligible for compaction. It's defined as the min of the max nonzero
@@ -830,6 +851,8 @@ class VersionStorageInfo {
   bool force_consistency_checks_;
 
   EpochNumberRequirement epoch_number_requirement_;
+
+  const VersionSet* versions_;
 
   friend class Version;
   friend class VersionSet;

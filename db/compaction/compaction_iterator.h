@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "rocksdb/key_meta.h"
 
 #include "db/column_family.h"
 #include "db/compaction/compaction.h"
@@ -218,8 +219,8 @@ CompactionIterator(
       std::vector<BlobFileBuilder*> blob_file_builder, bool allow_data_in_errors,
       bool enforce_single_del_contracts,
       const std::atomic<bool>& manual_compaction_canceled,
-      BoosterHandle booster_handle,
-      FastConfigHandle fast_config_handle,
+      std::shared_ptr<BoosterHandle> booster_handle,
+      std::shared_ptr<FastConfigHandle> fast_config_handle,
       ColumnFamilyData* cfd,
       const Compaction* compaction = nullptr,
       const CompactionFilter* compaction_filter = nullptr,
@@ -240,10 +241,13 @@ CompactionIterator(
       std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
       bool enforce_single_del_contracts,
       const std::atomic<bool>& manual_compaction_canceled,
-      BoosterHandle booster_handle,
-      FastConfigHandle fast_config_handle,
+      std::shared_ptr<BoosterHandle> booster_handle,
+      std::shared_ptr<FastConfigHandle> fast_config_handle,
       const autovector<MemTable*>* mems,
       ColumnFamilyData* cfd,
+      const VersionSet* version_set,
+      uint64_t num_classification = 0,
+      uint64_t num_features = 0, 
       const Compaction* compaction = nullptr,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
@@ -289,10 +293,17 @@ CompactionIterator(
 
   void SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle);
 
+  void SetKeyMeta(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex );
+
   void SetMemTables(const autovector<MemTable*>* mems);
 
+  void SetDBInternalIterator(InternalIterator* db_internal_iter);
+
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
+  void SetDBImpl(DBImpl* db_impl);
   void SetFeatures(const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
+
+  void SetGCBlobFiles(const autovector<uint64_t>* gc_blob_files);
 
 
   // Getters
@@ -311,6 +322,8 @@ CompactionIterator(
   }
   Status InputStatus() const { return input_.status(); }
 
+  const std::vector<uint64_t>& GetLifetimeKeysCount() const { return lifetime_keys_count_; }
+
  private:
   // Processes the input stream to find the next output
   void NextFromInput();
@@ -325,7 +338,7 @@ CompactionIterator(
   // return lifetime bucket 
   Status PredictLifetimeLabel( const KeyFeatures &kcontext , uint64_t* lifeteim_label) ;
 
-  bool ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label);
+  bool ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label, const Slice& key_meta_slice);
 
   // Passes the output value to the blob file builder (if any), and replaces it
   // with the corresponding blob reference if it has been actually written to a
@@ -334,9 +347,11 @@ CompactionIterator(
   bool ExtractLargeValueIfNeededImpl();
 
 
+  // bool GetFeaturesFromKeyMeta(std::vector<)
 
   bool GetFeatures( std::vector<double>* features);
 
+  Status WriteTrainDataToFile(const std::vector<double>& data, double label);
 
 
   // Extracts large values as described above, and updates the internal key's
@@ -375,6 +390,7 @@ CompactionIterator(
 
   bool DefinitelyInSnapshot(SequenceNumber seq, SequenceNumber snapshot);
 
+  uint64_t GetNewLifetimeLabel(std::shared_ptr<BlobFileMetaData> blob_file_meta, uint64_t cur_seq);
   uint64_t GetLifetimeLabelFromTTL(uint64_t orig_lifetime_label, uint64_t time_elapse_micros);
 
   bool DefinitelyNotInSnapshot(SequenceNumber seq, SequenceNumber snapshot);
@@ -401,9 +417,19 @@ CompactionIterator(
   CreatePrefetchBufferCollectionIfNeeded(const CompactionProxy* compaction);
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
+
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
-  BoosterHandle booster_handle_ =nullptr;
-  FastConfigHandle fast_config_handle_ =nullptr;
+  std::shared_ptr<BoosterHandle> booster_handle_ =nullptr;
+  std::shared_ptr<FastConfigHandle> fast_config_handle_ =nullptr;
+  DBImpl* db_ = nullptr;
+  const VersionSet* version_set_ = nullptr;
+  uint64_t num_classification_ =0;
+  uint64_t num_features_ = 0 ;
+  std::unique_ptr<WritableFile> train_data_file_ = nullptr;;
+  InternalIterator* db_internal_iter_ = nullptr;
+
+  const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
+  std::mutex* key_metas_mutex_ = nullptr;
   const autovector<MemTable*>* mems_;
   SequenceIterWrapper input_;
   const Comparator* cmp_;
@@ -476,6 +502,7 @@ CompactionIterator(
     uint8_t rep{0};
   } validity_info_;
 
+
   // Points to a copy of the current compaction iterator output (current_key_)
   // if valid.
   Slice key_;
@@ -518,6 +545,9 @@ CompactionIterator(
 
   uint64_t blob_garbage_collection_cutoff_file_number_;
 
+  std::unordered_set<uint64_t> gc_blob_files_;
+  std::vector<uint64_t> lifetime_keys_count_;
+
   std::unique_ptr<BlobFetcher> blob_fetcher_;
   std::unique_ptr<PrefetchBufferCollection> prefetch_buffers_;
 
@@ -558,6 +588,7 @@ CompactionIterator(
   // min seqno to preclude the data from the last level, if the key seqno larger
   // than this, it will be output to penultimate level
   const SequenceNumber preclude_last_level_min_seqno_ = kMaxSequenceNumber;
+
 
   void AdvanceInputIter() { input_.Next(); }
 

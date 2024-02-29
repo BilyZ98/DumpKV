@@ -5,9 +5,13 @@
 
 #include "db/compaction/compaction_iterator.h"
 
+#include <cstdint>
 #include <iterator>
 #include <limits>
 #include <algorithm>
+#include "db/dbformat.h"
+#include "rocksdb/env.h"
+#include "rocksdb/key_meta.h"
 #include "rocksdb/utilities/ldb_cmd.h"
 
 #include "db/blob/blob_fetcher.h"
@@ -15,17 +19,19 @@
 #include "db/blob/blob_index.h"
 #include "db/blob/prefetch_buffer_collection.h"
 #include "db/snapshot_checker.h"
+#include "db/db_impl/db_impl.h"
 #include "logging/logging.h"
 #include "port/likely.h"
 #include "rocksdb/listener.h"
 #include "rocksdb/compaction_trace_writer.h"
 #include "table/internal_iterator.h"
 #include "test_util/sync_point.h"
+#include "util/coding.h"
 
 namespace ROCKSDB_NAMESPACE {
 const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
-  {0, 281},
-  {1, 1000}
+  {0, 1000000},
+  {1, 3000000}
 };
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
@@ -48,10 +54,13 @@ CompactionIterator::CompactionIterator(
     std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
     bool enforce_single_del_contracts,
     const std::atomic<bool>& manual_compaction_canceled,
-    BoosterHandle booster_handle,
-    FastConfigHandle fast_config_handle,
+    std::shared_ptr<BoosterHandle> booster_handle,
+    std::shared_ptr<FastConfigHandle> fast_config_handle,
     const autovector<MemTable*>* mems,
     ColumnFamilyData* cfd,
+    const VersionSet* version_set,
+    uint64_t num_classification,
+    uint64_t num_features,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const std::shared_ptr<Logger> info_log,
@@ -72,6 +81,16 @@ CompactionIterator::CompactionIterator(
   mems_ = mems;
   fast_config_handle_ = fast_config_handle;
   booster_handle_ = booster_handle;
+  num_classification_ = num_classification;
+  num_features_ = num_features;
+  version_set_ = version_set;
+  lifetime_keys_count_.resize(blob_file_builders.size());
+  for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
+    lifetime_keys_count_[i] = 0;
+  }
+  const EnvOptions soptions;
+  Status s= env_->NewWritableFile("/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/compaction_infer_data.txt", &train_data_file_, soptions);
+  assert(s.ok());
 
   // is this ok?
   lifetime_blob_file_builders_ = std::move(blob_file_builders);
@@ -114,8 +133,8 @@ CompactionIterator::CompactionIterator(
     std::vector<BlobFileBuilder*> blob_file_builders, bool allow_data_in_errors,
     bool enforce_single_del_contracts,
     const std::atomic<bool>& manual_compaction_canceled,
-    BoosterHandle booster_handle,
-    FastConfigHandle fast_config_handle,
+    std::shared_ptr<BoosterHandle> booster_handle,
+    std::shared_ptr<FastConfigHandle> fast_config_handle,
     ColumnFamilyData* cfd,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
@@ -236,6 +255,10 @@ CompactionIterator::CompactionIterator(
 CompactionIterator::~CompactionIterator() {
   // input_ Iterator lifetime is longer than pinned_iters_mgr_ lifetime
   input_.SetPinnedItersMgr(nullptr);
+  if(train_data_file_ != nullptr) {
+
+    train_data_file_->Close();
+  }
 }
 
 void CompactionIterator::ResetRecordCounts() {
@@ -253,10 +276,19 @@ void CompactionIterator::SeekToFirst() {
 }
 
 void CompactionIterator::SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle) {
-  booster_handle_ = booster_handle;
-  fast_config_handle_ = fast_config_handle;
+  // booster_handle_ = booster_handle;
+  // fast_config_handle_ = fast_config_handle;
 }
 
+
+void CompactionIterator::SetKeyMeta(const std::unordered_map<std::string, KeyMeta>* key_metas , std::mutex* key_meta_mutex) {
+  key_metas_ = key_metas;
+  key_metas_mutex_ = key_meta_mutex;
+}
+
+void CompactionIterator::SetDBInternalIterator(InternalIterator* db_internal_iter) {
+  db_internal_iter_ = db_internal_iter;
+}
 
 void CompactionIterator::SetMemTables(const autovector<MemTable*>* mems) {
 
@@ -268,6 +300,17 @@ void CompactionIterator::SetCompactionTracer(std::shared_ptr<CompactionTracer> t
 
 void CompactionIterator::SetFeatures(const  std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features)   {
   features_ = features;
+
+}
+
+void CompactionIterator::SetDBImpl(DBImpl* db_impl) {
+  db_ = db_impl;
+}
+
+void CompactionIterator::SetGCBlobFiles(const autovector<uint64_t>* gc_blob_files) {
+  for (auto file_number : *gc_blob_files) {
+    gc_blob_files_.insert(file_number);
+  }
 
 }
 
@@ -363,13 +406,13 @@ void CompactionIterator::Next() {
 bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
                                               Slice* skip_until) {
   // TODO: support compaction filter for wide-column entities
-  assert(!compaction_filter_);
+  // assert(!compaction_filter_);
   if (!compaction_filter_ ||
       (ikey_.type != kTypeValue && ikey_.type != kTypeBlobIndex)) {
 
     return true;
   }
-  fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
+  // fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
   bool error = false;
   // If the user has specified a compaction filter and the sequence
   // number is greater than any external snapshot, then invoke the
@@ -392,6 +435,12 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
   {
     StopWatchNano timer(clock_, report_detailed_time_);
     if (kTypeBlobIndex == ikey_.type) {
+      BlobIndex blob_index;
+      Status s = blob_index.DecodeFrom(value_);
+      uint64_t blob_file_num = blob_index.file_number();
+      if(gc_blob_files_.find(blob_file_num) == gc_blob_files_.end()) {
+        return true;
+      }
       filter = compaction_filter_->FilterBlobByKey(
           level_, filter_key, &compaction_filter_value_,
           compaction_filter_skip_until_.rep());
@@ -411,8 +460,8 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
         // For integrated BlobDB impl, CompactionIterator reads blob value.
         // For Stacked BlobDB impl, the corresponding CompactionFilter's
         // FilterV2 method should read the blob value.
-        BlobIndex blob_index;
-        Status s = blob_index.DecodeFrom(value_);
+        // BlobIndex blob_index;
+        // Status s = blob_index.DecodeFrom(value_);
         if (!s.ok()) {
           status_ = s;
           validity_info_.Invalidate();
@@ -475,7 +524,7 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
     ikey_.type = kTypeDeletion;
     current_key_.UpdateInternalKey(ikey_.sequence, kTypeDeletion);
     // no value associated with delete
-    value_.clear();
+    // value_.clear();
     iter_stats_.num_record_drop_user++;
   } else if (filter == CompactionFilter::Decision::kPurge) {
     // convert the current key to a single delete; key_ is pointing into
@@ -982,7 +1031,7 @@ void CompactionIterator::NextFromInput() {
                DefinitelyInSnapshot(ikey_.sequence, earliest_snapshot_) &&
                compaction_->KeyNotExistsBeyondOutputLevel(ikey_.user_key,
                                                           &level_ptrs_)) {
-      printf("Key deletion & doesn't exist outside of this range\n");
+      // printf("Key deletion & doesn't exist outside of this range\n");
       // TODO(noetzli): This is the only place where we use compaction_
       // (besides the constructor). We should probably get rid of this
       // dependency and find a way to do similar filtering during flushes.
@@ -1009,7 +1058,7 @@ void CompactionIterator::NextFromInput() {
       ++iter_stats_.num_record_drop_obsolete;
       CompactionTraceRecord record(env_->NowMicros(), input_.key().ToString());
       compaction_tracer_->WriteDropKey(record);
-      fprintf(stdout,"Obsolete due to earlier  delete\n");
+      // fprintf(stdout,"Obsolete due to earlier  delete\n");
 
       if (!bottommost_level_) {
         ++iter_stats_.num_optimized_del_drop_obsolete;
@@ -1143,7 +1192,7 @@ void CompactionIterator::NextFromInput() {
     }
 
     if (need_skip) {
-      assert(false);
+      // assert(false);
       SkipUntil(skip_until);
     }
   }
@@ -1162,8 +1211,9 @@ void CompactionIterator::NextFromInput() {
   }
 }
 
-bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label) {
+bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t lifetime_label, const Slice& key_meta_slice) {
   if(!lifetime_blob_file_builders_[lifetime_label]) {
+    assert(false);
     return false;
   }
   // if (!blob_file_builder_) {
@@ -1175,25 +1225,50 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
   // uint64_t bucket_id = booster_handle_->
    
   // s = lifetime_blob_file_builders_[lifetime_label]->Add(user_key(), value_, &blob_index_);
+
+  //s = lifetime_blob_file_builders_[lifetime_label]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+
   s = lifetime_blob_file_builders_[lifetime_label]->Add(key(), value_, &blob_index_);
+
 
   if (!s.ok()) {
     status_ = s;
     validity_info_.Invalidate();
+    assert(false);
 
     return false;
   }
 
   if (blob_index_.empty()) {
+    assert(false);
     return false;
   }
 
+  assert(key_meta_slice.size() > 0);
+  blob_index_.append(key_meta_slice.data(), key_meta_slice.size());
+
   value_ = blob_index_;
+  assert(value_.size() > 0);
 
   return true;
 }
 
 
+Status CompactionIterator::WriteTrainDataToFile(const std::vector<double>& data, double label) {
+  Status s;
+  for(size_t i = 0; i < data.size(); i++) {
+    std::string data_with_sep = std::to_string(data[i]) + " ";
+    s = train_data_file_->Append(data_with_sep);
+    
+  }
+  if(!s.ok()) {
+    return s;
+  }
+  std::string label_str = std::to_string(label) + "\n";
+  s = train_data_file_->Append(label_str);
+  return s;
+
+}
 bool CompactionIterator::GetFeatures( std::vector<double>* feature_vec ) {
   uint64_t seq=  ikey().sequence;
   // std::string user_key_str = user_key().ToString();
@@ -1234,66 +1309,358 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
 
   Status s;
   blob_index_.clear();
-  // uint64_t bucket_id = booster_handle_->
+    // uint64_t bucket_id = booster_handle_->
   if (blob_file_builder_) {
     assert(false);
     s = blob_file_builder_->Add(user_key(), value_, &blob_index_);
   } else {
+    bool is_iter_valid = false;
+    if(db_internal_iter_) {
+      db_internal_iter_->Seek(key());
+      is_iter_valid = db_internal_iter_->Valid(); 
+    }
+    int maxIndex = 1;
+    uint32_t past_distances_count = 0;
+    std::vector<uint64_t> past_distances(max_n_past_timestamps);
+    std::vector<float> edcs(n_edc_feature);
+    uint64_t past_seq;
+    uint64_t distance;
+    if(is_iter_valid && db_internal_iter_->user_key().compare(user_key()) == 0) {
+      bool get_feat = false;
+      BlobIndex prev_blob_index;
+      Slice prev_value = db_internal_iter_->value();
+      uint64_t blob_index_len = 0;
+      s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
+      assert(s.ok());
+      prev_value.remove_prefix(blob_index_len);
+      bool ok = GetVarint32(&prev_value, &past_distances_count);
+      // int32_t counter = past_distances_count;
 
-    assert(lifetime_blob_file_builders_.size() > 0);
-    std::vector<double> feature_vec;
-    // Todo: get features from memtable
-
-    bool get_feat = GetFeatures(&feature_vec);
-    
-    int maxIndex = 0;
-    if(!get_feat) {
-      // fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
-      // return false;
-      // assert(false);
-    } else {
-      int64_t out_len = 0;
-      uint64_t classification_num = lifetime_blob_file_builders_.size();
-      assert(classification_num >= 1);
-      // if(compaction_) {
-
-      //   classification_num = compaction_->real_compaction()->immutable_options()->num_classification;
-      // } else {
-      //   assert(false);
-      // }
-
-      assert(fast_config_handle_);
-      std::vector<double> out_result(classification_num, 0.0);
-      int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
-          fast_config_handle_, feature_vec.data(), &out_len, out_result.data());
-      if(predict_res != 0) {
-        fprintf(stderr, " predict error \n");
-        assert(false);
+      assert(ok);
+      std::vector<int32_t> indptr(2);
+      indptr[0] = 0;
+      std::vector<int32_t> indices;
+      indices.reserve(num_features_);
+      std::vector<double> data;
+      data.reserve(num_features_);
+      uint32_t this_past_distance = 0;
+      uint8_t n_within = 0;
+      uint32_t i = 0;
+      for(i=0; i < past_distances_count && i < max_n_past_timestamps; i++) {
+        ok = GetVarint64(&prev_value, &past_distances[i]);
+        this_past_distance +=  past_distances[i];  
+        indices.emplace_back(i);
+        data.emplace_back(static_cast<double>(past_distances[i]));
+        if (this_past_distance < memory_window) {
+          ++n_within;
+        }
+        assert(ok);
       }
 
-      // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
-      maxIndex = out_result[0] > 0.5 ? 1: 0;
-    }
-    // features['insert_time'] = pd.to_numeric(features['insert_time'])
-    // features['period_num_writes'] = pd.to_numeric(features['period_num_writes'])
-    // features['key_range_idx'] = pd.to_numeric(features['key_range_idx'])
+      uint64_t blob_size = prev_blob_index.size();
+      indices.emplace_back(max_n_past_timestamps);
+      data.emplace_back(static_cast<double>(blob_size));
 
-    // feature_vec.emplace_back(static_cast<double>(key_feat->time_stamp));
-    // feature_vec.emplace_back(static_cast<double>(key_feat->write_rate_mb_per_sec));
-    // feature_vec.emplace_back(static_cast<double>(key_feat->key_range_id));
+      indices.emplace_back(max_n_past_timestamps + 1);
+      data.emplace_back(static_cast<double>(n_within));
+      // counter += 2;
 
+      if(past_distances_count> 0) {
+        for(i=0; i < n_edc_feature; i++) {
+          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edcs[i]));
+          assert(ok);
+        }
+      }
+      //update edcs
+      ParsedInternalKey past_key;
+      s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
+      past_seq = past_key.sequence;
+      distance = ikey().sequence - past_seq;
+
+      // Need to set up edcs if past_distances_count = 0
+      if(past_distances_count > 0) {
+        s = db_->AddTrainingSample(past_distances,
+                               blob_size,
+                               n_within,
+                               edcs,
+                               distance);
+        assert(s.ok()); 
+      }
+      if(past_distances_count > 0) {
+        for(size_t k=0; k < n_edc_feature; k++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+          edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
+          indices.emplace_back(max_n_past_timestamps+2+k);
+          data.emplace_back(edcs[k]);
+        }
+
+      } else {
+        for(size_t k=0; k < n_edc_feature; k++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+          edcs[k] = hash_edc[_distance_idx]  + 1;
+          // edcs[k] = 1;
+          indices.emplace_back(max_n_past_timestamps+2+k);
+          data.emplace_back(edcs[k]);
+        }
+      }
+
+      if(fast_config_handle_) {
+
+        std::string inference_params = "num_threads=1 verbosity=0";
+        std::vector<double> out_result(1, 0.0);
+        int64_t out_len ;
+        int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+                                  static_cast<void *>(indptr.data()),
+                                  C_API_DTYPE_INT32,
+                                  indices.data(),
+                                  static_cast<void *>(data.data()),
+                                  C_API_DTYPE_FLOAT64,
+                                  2,
+                                  data.size(),
+                                  num_features_,  //remove future t
+                                  C_API_PREDICT_NORMAL,
+                                  0,
+                                  32,
+                                  inference_params.c_str(),
+                                  &out_len,
+                                  out_result.data());
+        assert(predict_res == 0);
+        maxIndex = out_result[0] > 0.5 ? 1 : 0;
+
+      }
+      lifetime_keys_count_[maxIndex] += 1;
+
+      // count new past_distances
+      past_distances_count += 1;
     
-     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
+      // if(fast_config_handle_ ) {
+      //   assert(lifetime_blob_file_builders_.size() > 0);
+      //   assert(num_features_ > 0);
+      //   assert(version_set_);
+      //   std::vector<double> feature_vec;
+      //   // Todo: get features from memtable
+
+      //   auto key_str = user_key().ToString();
+      //   key_metas_mutex_->lock();
+      //   if(key_metas_->find(key_str) == key_metas_->end()) {
+      //     maxIndex = 0;
+      //     // add new key meta.
+
+      //     key_metas_mutex_->unlock();
+      //   } else {
+      //     auto& key_meta = key_metas_->at(key_str);
+      //     std::vector<int32_t> indptr(2);
+      //     indptr[0] = 0;
+
+      //     // int32_t indices[compaction_->real_compaction()->immutable_options()->num_features];
+      //     // double data[compaction_->real_compaction()->immutable_options()->num_features];
+      //     std::vector<int32_t> indices;
+      //     indices.reserve(num_features_);
+      //     std::vector<double> data;
+      //     data.reserve(num_features_);
+      //     int32_t counter =0;
+
+      //     // uint64_t delta = version_set_->LastSequence() - key_meta->last_seq;
+      //     // const VersionSet* const version_set = compaction_->real_compaction()->input_version()->version_set();
+      //     uint64_t cur_seq = version_set_->LastSequence();
+      //     // uint64_t delta = cur_seq - key_meta.past_sequence_;
+      //     // indices.emplace_back(0);
+      //     // data.emplace_back(static_cast<double>(delta));
+      //     // counter++;
+      //     
+
+      //     uint8_t j = 0;
+      //     uint32_t this_past_distance = 0;
+      //     uint8_t n_within = 0;
+      //     if (key_meta._extra) {
+      //       for (j = 0; j < key_meta._extra->_past_distance_idx && j < max_n_past_distances; ++j) {
+      //         uint8_t past_distance_idx = (key_meta._extra->_past_distance_idx - 1 - j) % max_n_past_distances;
+      //         uint32_t &past_distance = key_meta._extra->_past_distances[past_distance_idx];
+      //         this_past_distance += past_distance;
+      //         // indices[feature_idx] = j + 1;
+      //         indices.emplace_back(j  );
+      //         // data[feature_idx++] = past_distance;
+      //         data.emplace_back(static_cast<double>(past_distance));
+      //         if (this_past_distance < memory_window) {
+      //             ++n_within;
+      //         }
+      //       }
+      //     }
+      //     counter += j;
+
+      //     indices.emplace_back(max_n_past_timestamps);
+      //     data.emplace_back(static_cast<double>(key_meta.size_));
+      //     counter++;
+      //     // indices[feature_idx] = max_n_past_timestamps;
+      //     // data[feature_idx++] = key_meta.size_;
+
+      //     indices.emplace_back(max_n_past_timestamps + 1);
+      //     data.emplace_back(static_cast<double>(n_within));
+      //     counter++;
+      //     // indices[feature_idx] = max_n_past_timestamps + 1;
+      //     // data[feature_idx++] = n_within;
+
+
+      //     if (key_meta._extra) {
+      //       for (int k = 0; k < n_edc_feature; ++k) {
+      //         // indices[feature_idx] = max_n_past_timestamps +  2 + k;
+      //         indices.emplace_back(max_n_past_timestamps +  2 + k);
+      //         // uint32_t _distance_idx = std::min(uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
+      //         //                              max_hash_edc_idx);
+      //         // data[feature_idx++] = key_meta._extra->_edc[k] * hash_edc[_distance_idx];
+      //         //
+      //         // uint32_t _distance_idx = std::min(uint32_t(key_meta.past_sequence_ - key_meta.past_sequqence_2_) / edc_windows[k],
+      //         //                              max_hash_edc_idx);
+      //         // data.emplace_back(key_meta._extra->_edc[k] * hash_edc[_distance_idx]);
+      //         data.emplace_back(key_meta._extra->_edc[k]);
+      //       }
+      //     } else {
+      //       // data[feature_idx++] = hash_edc[_distance_idx];
+      //       for(int k = 0; k < n_edc_feature; ++k) {
+
+      //         indices.emplace_back(max_n_past_timestamps +  2 + k);
+      //         uint32_t _distance_idx = std::min(uint32_t(key_meta.past_sequence_ - key_meta.past_sequqence_2_) / edc_windows[k],
+      //                                      max_hash_edc_idx);
+      //         // uint32_t _distance_idx = std::min(uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
+      //         //                              max_hash_edc_idx);
+      //         // data.emplace_back(hash_edc[_distance_idx]);
+      //         data.emplace_back(0);
+      //       }
+      //     }
+
+      //     key_metas_mutex_->unlock();
+      //     counter += n_edc_feature;
+      //     indptr[1] = counter;
+
+
+
+      //     // bool get_feat = GetFeatures(&feature_vec);
+      //     
+      //     // if(!get_feat) {
+      //     //   fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
+      //     //   // return false;
+      //     //   assert(false);
+      //     // }
+      //     //
+      //     //
+      //     //LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForCSRSingleRowFast(FastConfigHandle fastConfig_handle,
+      //                                                            // const void* indptr,
+      //                                                            // const int indptr_type,
+      //                                                            // const int32_t* indices,
+      //                                                            // const void* data,
+      //                                                            // const int64_t nindptr,
+      //                                                            // const int64_t nelem,
+      //                                                            // int64_t* out_len,
+      //                                                            // double* out_result);
+
+
+      //     int64_t out_len = 0;
+      //     uint64_t classification_num = lifetime_blob_file_builders_.size();
+      //     assert(classification_num >= 1);
+      //     // std::vector<double> out_result(classification_num, 0.0);
+      //     std::vector<double> out_result(1, 0.0);
+
+      //     // std::string inference_params = "num_threads=1";
+      //     std::unordered_map<std::string, std::string>  training_params = {
+      //           //don't use alias here. C api may not recongize
+      //           {"boosting",         "gbdt"},
+      //           {"objective",        "binary"},
+      //           {"num_iterations",   "32"},
+      //           {"num_leaves",       "32"},
+      //           {"bagging_freq",     "5"},
+      //           {"bagging_fraction", "0.8"},
+      //           {"learning_rate",    "0.1"},
+      //           {"verbosity",        "0"},
+      //   };
+      //   std::string params_string;
+      //   for (const auto& kv : training_params) {
+      //     params_string += kv.first + "=" + kv.second + " ";
+      //       // converted_params.push_back(kv.first + "=" + kv.second);
+      //   }
+      //   auto params = params_string.c_str();
+
+      //   int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+      //                             static_cast<void *>(indptr.data()),
+      //                             C_API_DTYPE_INT32,
+      //                             indices.data(),
+      //                             static_cast<void *>(data.data()),
+      //                             C_API_DTYPE_FLOAT64,
+      //                             2,
+      //                             data.size(),
+      //                             num_features_,  //remove future t
+      //                             C_API_PREDICT_NORMAL,
+      //                             0,
+      //                             32,
+      //                             params,
+      //                             &out_len,
+      //                             out_result.data());
+      //     // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
+      //     //                                                          indptr, C_API_DTYPE_INT32,
+      //     //                                                          indices,
+      //     //                                                          data,
+      //     //                                                          2,
+      //     //                                                          feature_idx,
+      //     //                                                          &out_len,
+      //     //                                                          out_result.data());
+      //     //
+      //     // assert(fast_config_handle_);
+      //     // int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
+      //     //     fast_config_handle_.get(), feature_vec.data(), &out_len, out_result.data());
+      //     if(predict_res != 0) {
+      //       fprintf(stderr, " predict error \n");
+      //       assert(false);
+      //     }
+      //     s = WriteTrainDataToFile(data,out_result[0]);
+      //     if(!s.ok()) {
+      //       fprintf(stderr, " write train data to file error \n");
+      //       assert(false);
+      //     }
+
+      //     // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
+      //     maxIndex = out_result[0] > 0.5 ? 1: 0;
+      //     lifetime_keys_count_[maxIndex] += 1;
+      //   }
+      // }
+    } else {
+      // no previous key write  
+      // write past_distances_count = 0 to file.
+      // No need to write past_distances and edcs to value 
+      assert(past_distances_count == 0);
+    }
+   
+     // s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
+    // s = lifetime_blob_file_builders_[maxIndex]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
+    s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
+
+    PutVarint32(&blob_index_, past_distances_count);
+    if(past_distances_count > 0) {
+      past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
+      PutVarint64(&blob_index_, distance ); 
+      // write past_distances to value
+      for(size_t i = 0; i < past_distances_count-1; i++) {
+        PutVarint64(&blob_index_, past_distances[i]);
+      }
+      // write edcs to value
+      // Need to update edcs
+      for(int i = 0; i < n_edc_feature; i++) {
+        PutFixed32(&blob_index_, edcs[i]);
+      }
+    }
+    // Add training example. We can all db_->AddtrainingExample() here
+    // Training example should be added before updating edcs
 
   }
+
   if (!s.ok()) {
     status_ = s;
     validity_info_.Invalidate();
+    assert(false);
 
     return false;
   }
 
   if (blob_index_.empty()) {
+    assert(false);
     return false;
   }
 
@@ -1313,6 +1680,10 @@ void CompactionIterator::ExtractLargeValueIfNeeded() {
   current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
 }
 
+uint64_t CompactionIterator::GetNewLifetimeLabel(std::shared_ptr<BlobFileMetaData> blob_file_meta, uint64_t cur_seq) {
+  return 0;
+
+}
 uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_label, uint64_t time_elapse_micros) {
   uint64_t orig_time_sec = LifetimeLabelToSecMap.at(orig_lifetime_label);
   // assert(orig_time_sec >= time_elapse_micros / 1000000);
@@ -1358,9 +1729,12 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
         &value_);
 
     BlobIndex blob_index;
+    uint64_t blob_index_len;
 
     {
-      const Status s = blob_index.DecodeFrom(value_);
+
+      // const Status s = blob_index.DecodeFrom(value_);
+      const Status s = blob_index.DecodeFromWithKeyMeta(value_, &blob_index_len);
 
       if (!s.ok()) {
         status_ = s;
@@ -1369,6 +1743,8 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
         return;
       }
     }
+    Slice key_meta_slice(value_.data() + blob_index_len, value_.size() - blob_index_len);
+    std::string key_meta_str(key_meta_slice.data(), key_meta_slice.size());
     // blob file creation timestamp
     //
     // blob file lifetime label
@@ -1378,21 +1754,45 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
     auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
     uint64_t lifetime_label = blob_file_meta->GetLifetimeLabel();
 
-    uint64_t creation_timestamp = blob_file_meta->GetCreationTimestamp();
+    // uint64_t creation_timestamp = blob_file_meta->GetCreationTimestamp();
 
-    uint64_t time_elapse =  env_->NowMicros()  - creation_timestamp;
-    uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
+    // uint64_t time_elapse =  env_->NowMicros()  - creation_timestamp;
+    // uint64_t new_lifetime_label = GetLifetimeLabelFromTTL(lifetime_label, time_elapse);
+
+    // uint64_t new_lifetime_label = GetNewLifetimeLabel(blob_file_meta, ikey_.sequence);
+    uint64_t new_lifetime_label = lifetime_label;
+
+
     bool should_gc = false;
-    if(compaction_ && compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC) {
+    // if(compaction_ && 
+    //   compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC ) {
+
+    //   should_gc = true;
+
+    // }
+    //
+    // if(compaction_ && 
+    //   compaction_->real_compaction()->compaction_reason() == CompactionReason::kForcedBlobGC 
+    //   ) {
+    //   assert(!gc_blob_files_.empty());
+    //   if(gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
+    //     should_gc = true;
+    //   }
+
+
+    // }
+    //
+    if(compaction_ && gc_blob_files_.find(blob_index.file_number()) != gc_blob_files_.end()) {
       should_gc = true;
-
     }
-    
 
-    if( !should_gc && lifetime_label == new_lifetime_label) {
-      
+    if(!should_gc) {
       return;
     }
+    // if( !should_gc && lifetime_label == new_lifetime_label) {
+    //   
+    //   return;
+    // }
 
 
 
@@ -1431,10 +1831,12 @@ void CompactionIterator::GarbageCollectBlobIfNeeded() {
 
     value_ = blob_value_;
 
-    if (ExtractLargeValueIfNeededImplWithLifetimeLabel(new_lifetime_label)) {
+    if (ExtractLargeValueIfNeededImplWithLifetimeLabel(new_lifetime_label, key_meta_str)) {
+
       return;
     }
 
+    assert(false);
     ikey_.type = kTypeValue;
     current_key_.UpdateInternalKey(ikey_.sequence, ikey_.type);
 

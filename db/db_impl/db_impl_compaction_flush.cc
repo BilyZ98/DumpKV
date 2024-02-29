@@ -270,8 +270,29 @@ Status DBImpl::FlushMemTableToOutputFile(
     // flush_job.SetBoosterHandle(this->lightgbm_handle_);
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
+    flush_job.SetKeyMetas(&key_metas_, &key_meta_mutex_);
+    flush_job.SetDBImpl(this);
+    // {
+    //   Arena arena;
+    //   // auto cfd = gc->column_family_data();
+    //   SuperVersion* sv = cfd->GetSuperVersion()->Ref();
+    //   ReadOptions read_options;
+    //   ScopedArenaIterator iter;
+    //   iter.set(this->NewInternalIteratorStartingFromLevel0(read_options, 
+    //                                                        cfd,
+    //                                                        sv,
+    //                                                        &arena,
+    //                                                        kMaxSequenceNumber,
+    //                                                        false));
+    //   // iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+    //   flush_job.SetInternalIterator(iter.get());
+
+    //   s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
+    //                     &switched_to_mempurge);
+    // }
     s = flush_job.Run(&logs_with_prep_tracker_, &file_meta,
                       &switched_to_mempurge);
+
     need_cancel = false;
   }
 
@@ -407,6 +428,7 @@ Status DBImpl::FlushMemTablesToOutputFiles(
 Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     const autovector<BGFlushArg>& bg_flush_args, bool* made_progress,
     JobContext* job_context, LogBuffer* log_buffer, Env::Priority thread_pri) {
+  assert(false);
   mutex_.AssertHeld();
 
   autovector<ColumnFamilyData*> cfds;
@@ -537,7 +559,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
 
       jobs[i]->SetCompactionTracer(compaction_tracer_);
       // jobs[i]->SetBoosterHandle(lightgbm_handle_);
-      jobs[i]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+      // jobs[i]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
       exec_status[i].second =
           jobs[i]->Run(&logs_with_prep_tracker_, &file_meta[i],
                        &(switched_to_mempurge.at(i)));
@@ -552,7 +574,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
     assert(exec_status.size() > 0);
     assert(!file_meta.empty());
     jobs[0]->SetCompactionTracer(compaction_tracer_);
-    jobs[0]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
+    // jobs[0]->SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     exec_status[0].second = jobs[0]->Run(
         &logs_with_prep_tracker_, file_meta.data() /* &file_meta[0] */,
         switched_to_mempurge.empty() ? nullptr : &(switched_to_mempurge.at(0)));
@@ -3795,7 +3817,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
             f->oldest_blob_file_number, f->oldest_ancester_time,
             f->file_creation_time, f->epoch_number, f->file_checksum,
             f->file_checksum_func_name, f->unique_id,
-            f->compensated_range_deletion_size);
+            f->compensated_range_deletion_size,
+            f->linked_blob_files);
 
         ROCKS_LOG_BUFFER(
             log_buffer,
@@ -3909,10 +3932,21 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
                             compaction_job_stats, job_context->job_id);
     mutex_.Unlock();
-    TEST_SYNC_POINT_CALLBACK(
-        "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
-    // Should handle erorr?
-    compaction_job.Run().PermitUncheckedError();
+    {
+      Arena arena;
+      auto cfd = c->column_family_data();
+      SuperVersion* sv = cfd->GetSuperVersion();
+      ReadOptions read_options;
+      ScopedArenaIterator iter;
+      iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+      compaction_job.SetGCIter(iter.get());
+
+    
+      TEST_SYNC_POINT_CALLBACK(
+          "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
+      // Should handle erorr?
+      compaction_job.Run().PermitUncheckedError();
+    }
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
 

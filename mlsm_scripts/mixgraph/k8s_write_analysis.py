@@ -64,6 +64,23 @@ def GetSeqLifetimeCDF(server_trace, output_dir):
     # print('count of write: ', len(df_write))
     df_seq_latter = df['seq_diff_latter']
 
+    num_zeros = len(df_seq_latter[df_seq_latter == 0])
+    print('num_zeros: ', num_zeros)
+    print('count of seq_latter: ', len(df_seq_latter))
+    exclude_zeros = df_seq_latter[df_seq_latter != 0]
+    plt.figure()
+    plt.xlabel('lifetime')
+    plt.ylabel('cdf')
+    plt.title('lifetime cdf of write')
+    exclude_zeros.hist(cumulative=True, density=1, bins=10000)
+    plt.savefig(os.path.join(output_dir, 'seq_lifetime_cdf_non_zero.png'))
+    plt.close()
+    print('avg of lifetime non zero: ', exclude_zeros.mean())
+
+    seq_65 = np.percentile(df_seq_latter, 65)
+    print('80th percentile of lifetime df_seq_latter: ', seq_65)
+
+
 
     # avg_size = df_write['value_size'].mean().compute()
     print('avg of lifetime: ', df_seq_latter.mean())
@@ -76,7 +93,8 @@ def GetSeqLifetimeCDF(server_trace, output_dir):
     plt.title('lifetime cdf of write')
     # cdf_x = np.sort(df_seq_latter.values)
     # cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
-    df_seq_latter.hist(cumulative=True, density=1, bins=1000)
+    df_seq_latter.hist(cumulative=True, density=1, bins=10000)
+
     plt.savefig(os.path.join(output_dir, 'seq_lifetime_cdf.png'))
     plt.close()
 
@@ -325,5 +343,6 @@ def GetOverwriteRatio():
 if __name__ == "__main__":
     # test_dask()
     GetSeqLifetimeCDF(data_path, output_dir)
+
 
 

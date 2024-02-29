@@ -526,9 +526,11 @@ Compaction* LevelCompactionBuilder::GetCompaction() {
       /* l0_files_might_overlap */ start_level_ == 0 && !is_l0_trivial_move_,
       compaction_reason_);
 
+  c->SetGCBlobFiles(vstorage_->BlobFilesMarkedForGC());
   // If it's level 0 compaction, make sure we don't execute any other level 0
   // compactions in parallel
   compaction_picker_->RegisterCompaction(c);
+
 
   // Creating a compaction influences the compaction score because the score
   // takes running compactions into account (by skipping files that are already

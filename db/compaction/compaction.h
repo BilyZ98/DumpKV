@@ -11,6 +11,8 @@
 #include "db/version_set.h"
 #include "memory/arena.h"
 #include "options/cf_options.h"
+#include "rocksdb/filter_policy.h"
+#include "rocksdb/compaction_filter.h"
 #include "rocksdb/sst_partitioner.h"
 #include "util/autovector.h"
 
@@ -101,6 +103,16 @@ class Compaction {
   void operator=(const Compaction&) = delete;
 
   ~Compaction();
+
+  void SetGCBlobFiles(const autovector<uint64_t>& gc_blob_files) {
+    std::copy(gc_blob_files.begin(), gc_blob_files.end(),
+              std::back_inserter(gc_blob_files_));
+    // gc_blob_files_ = gc_blob_files;
+  }
+
+  const autovector<uint64_t>* GetGCBlobFiles() const { return &gc_blob_files_; }
+
+
 
   // Returns the level associated to the specified compaction input level.
   // If compaction_input_level is not specified, then input_level is set to 0.
@@ -283,9 +295,46 @@ class Compaction {
   // In case of compaction error, reset the nextIndex that is used
   // to pick up the next file to be compacted from files_by_size_
   void ResetNextCompactionIndex();
+  class GCFilter: public CompactionFilter {
+  public:
+    explicit GCFilter(InternalIterator* iter) : iter_(iter) {}
+    const char* Name() const override { return "GCFilter"; }
+
+    bool IsStackedBlobDbInternalCompactionFilter() const override{ return true; }
+    CompactionFilter::Decision FilterBlobByKey(
+      int /*level*/, const Slice& key, std::string* /*new_value*/,
+      std::string* /*skip_until*/) const override {
+      ParsedInternalKey parsed_compaction_key;
+      if(!ParseInternalKey(key, &parsed_compaction_key, false).ok()) {
+        assert(false);
+        return CompactionFilter::Decision::kKeep;
+      }
+      Slice user_key = ExtractUserKey(key);
+      iter_->Seek(user_key);
+      if (iter_->Valid()   ) {
+        ParsedInternalKey parsed_key;
+        Status s = ParseInternalKey(iter_->key(), &parsed_key, false);
+        if(!s.ok()) {
+          assert(false);
+        }
+        if(parsed_key.user_key.compare(user_key) == 0 && parsed_key.sequence == parsed_compaction_key.sequence) {
+          return CompactionFilter::Decision::kKeep;
+        }
+
+        return CompactionFilter::Decision::kRemove;
+      }
+      return CompactionFilter::Decision::kRemove;
+    }
+
+  private:
+    InternalIterator* iter_;
+  };
+  
 
   // Create a CompactionFilter from compaction_filter_factory
   std::unique_ptr<CompactionFilter> CreateCompactionFilter() const;
+
+  std::unique_ptr<CompactionFilter> CreateGCCompactionFilter(InternalIterator* db_internal_iter) const;
 
   // Create a SstPartitioner from sst_partitioner_factory
   std::unique_ptr<SstPartitioner> CreateSstPartitioner() const;
@@ -522,6 +571,8 @@ class Compaction {
 
   // Blob garbage collection age cutoff.
   double blob_garbage_collection_age_cutoff_;
+
+  autovector<uint64_t> gc_blob_files_;
 
   // only set when per_key_placement feature is enabled, -1 (kInvalidLevel)
   // means not supported.

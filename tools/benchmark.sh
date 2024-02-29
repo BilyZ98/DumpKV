@@ -1083,7 +1083,7 @@ function run_change_with_replay {
   time_cmd=$( get_cmd $log_file_name.time )
 # gdb --args
 # --seed=$( date +%s ) \
-  local num_features=21
+  local num_features=44
   local num_classes=2
   cmd="$time_cmd    gdb --args  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \

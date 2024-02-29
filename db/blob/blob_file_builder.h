@@ -72,6 +72,7 @@ class BlobFileBuilder {
 
   ~BlobFileBuilder();
 
+  Status AddWithSeq(const Slice& key, const Slice& value, uint64_t seq,  std::string* blob_index);
   Status Add(const Slice& key, const Slice& value, std::string* blob_index);
   Status Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket);
   Status Finish();
@@ -118,6 +119,8 @@ class BlobFileBuilder {
   uint64_t lifetime_label_;  
   const uint64_t creation_timestamp_;
   uint64_t lifetime_bucket_num_;
+  uint64_t min_seq_;
+  uint64_t max_seq_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

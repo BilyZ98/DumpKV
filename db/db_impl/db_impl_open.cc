@@ -1759,6 +1759,36 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
   return io_s;
 }
 
+
+ uint8_t max_n_past_timestamps = 32;
+ uint8_t max_n_past_distances = 31;
+ const uint8_t n_edc_feature = 10;
+ std::vector<double> hash_edc;
+ uint32_t max_hash_edc_idx;
+// set memory window to cur_max_sequence * 2?
+// Do we nreally need this?
+ uint32_t memory_window = 6710886;
+ uint8_t base_edc_window = 10;
+ std::vector<uint32_t> edc_windows;
+
+
+
+static void init_edc_windows() {
+  // edc_windows = vector<uint32_t>(n_edc_feature);
+  edc_windows.resize(n_edc_feature);
+  for (uint8_t i = 0; i < n_edc_feature; ++i) {
+      edc_windows[i] = pow(2, base_edc_window + i);
+  }
+}
+static void init_hash_edc() {
+    max_hash_edc_idx = (uint64_t) (memory_window / pow(2, base_edc_window)) - 1;
+    hash_edc = std::vector<double>(max_hash_edc_idx + 1);
+    for (size_t i = 0; i < hash_edc.size(); ++i)
+        hash_edc[i] = pow(0.5, i);
+}
+
+
+
 Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                     const std::vector<ColumnFamilyDescriptor>& column_families,
                     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
@@ -2085,23 +2115,23 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
 
   if(s.ok() && db_options.model_path != "") {
     // std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";
-    s = impl->LoadModel(db_options.model_path);
+    // s = impl->LoadModel(db_options.model_path);
   } else {
     assert(false);
   }
   if(s.ok() && db_options.data_file_path != "") {
     // std::string data_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_data.txt";
-    s = impl->ReadFeaturesFromFile(db_options.data_file_path);
+    // s = impl->ReadFeaturesFromFile(db_options.data_file_path);
   } else {
     printf("failed to load features data, msg: %s\n", s.ToString().c_str());
   }
+  init_hash_edc();
+  init_edc_windows();
+  // std::once_flag once_hash_edc;
+  // std::once_flag once_edc_windows;
+  // std::call_once(once_hash_edc,init_hash_edc);
+  // std::call_once(once_edc_windows, init_edc_windows );
 
-  if(s.ok()) {
-    printf("load model successfully\n");
-  } else {
-    printf("failed to load model, msg: %s\n", s.ToString().c_str());
-
-  }
   if(s.ok() && db_options.key_range_path != "") {
     // std::string key_range_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/key_ranges.txt"  ;
     s = impl->LoadKeyRangeFromFile(db_options.key_range_path);

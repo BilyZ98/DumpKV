@@ -47,6 +47,7 @@ Status FileMetaData::UpdateBoundaries(const Slice& key, const Slice& value,
           oldest_blob_file_number > blob_index.file_number()) {
         oldest_blob_file_number = blob_index.file_number();
       }
+      linked_blob_files.insert(blob_index.file_number());
     }
   }
 

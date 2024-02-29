@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "rocksdb/advanced_options.h"
+#include "rocksdb/key_meta.h"
 #include "rocksdb/comparator.h"
 #include "rocksdb/compression_type.h"
 #include "rocksdb/customizable.h"
@@ -1407,7 +1408,7 @@ struct DBOptions {
 
   uint64_t classification_num = 2; 
 
-  uint64_t num_features = 2;
+  uint64_t num_features = max_n_past_timestamps +  2 + n_edc_feature;
 
 };
 

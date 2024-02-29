@@ -101,6 +101,8 @@ static const SequenceNumber kDisableGlobalSequenceNumber =
 
 constexpr uint64_t kNumInternalBytes = 8;
 
+constexpr uint64_t kNumKeyMetaBytes = 8;
+
 // Defined in dbformat.cc
 extern const std::string kDisableUserTimestamp;
 
