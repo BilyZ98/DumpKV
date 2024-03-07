@@ -57,6 +57,10 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+GarbageCollectionOutput::GarbageCollectionOutput(GarbageCollection* gc) 
+: gc_(gc) {
+  assert(gc_ != nullptr);
+}
 
 GarbageCollectionJob::GarbageCollectionJob(
     int job_id,
@@ -97,7 +101,9 @@ GarbageCollectionJob::GarbageCollectionJob(
       job_context_(job_context),
       event_logger_(event_logger),
       thread_pri_(thread_pri),
-      db_(db)
+      db_(db),
+      write_hint_(Env::WLTH_NOT_SET),
+      gc_output_(gc)
       {
 
   assert(log_buffer_ != nullptr);
@@ -115,9 +121,12 @@ void GarbageCollectionJob::Prepare() {
 Status GarbageCollectionJob::Run(InternalIterator* iter) {
   assert(iter != nullptr);
 
+  const uint64_t start_micros = db_options_.clock->NowMicros();
   log_buffer_->FlushBufferToLog();
   LogGarbageCollection();
   Status s =ProcessGarbageCollection(iter);
+
+  gc_stats_.SetMicros(db_options_.clock->NowMicros() - start_micros);
   return s ;
 }
 
@@ -135,9 +144,15 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
   status = InstallGarbageCollectionResults(mutable_cf_options);
   assert(status.ok());
 
+  const auto & stats = gc_stats_.stats;
   auto stream = event_logger_->LogToBuffer(log_buffer_, 8192);
   stream << "job" << job_id_ << "event"
-    << "gc_finished";
+    << "gc_finished"
+    << "gc_time_micros" << stats.micros
+    << "gc_time_cpu_micros" << stats.cpu_micros
+    << "total_output_size" << stats.bytes_written_blob;
+
+
 
 
   auto vstorage = cfd->current()->storage_info();
@@ -185,6 +200,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
   bool isout=true;
 
+  uint64_t prev_cpu_micros = db_options_.clock->CPUMicros();
   // std::unique_ptr<Env> mock_env_;
   FileSystem* fs_in;
   SystemClock* clock_;
@@ -205,18 +221,45 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   uint64_t invalid_key_num = 0;
   uint64_t valid_value_size = 0;
   uint64_t invalid_value_size = 0;
-  uint64_t valid_key_size = 0;
-  uint64_t invalid_key_size = 0;
+  // uint64_t valid_key_size = 0;
+  // uint64_t invalid_key_size = 0;
   uint64_t total_blob_size = 0;
-  const uint64_t write_batch_cnt = 1024;
-  auto write_options = WriteOptions();
+  // auto write_options = WriteOptions();
   WriteBatch wb;
+
+  std::vector<std::string> blob_file_paths;
+  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(db_options_.num_classification  );
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( db_options_.num_classification, nullptr);
+    // auto vstorage = cfd_->current()->storage_info();
+
+    // auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
+
+  for(size_t i =0; i < blob_file_builders.size(); i++){
+    // uint64_t timestamp = env_->NowMicros();
+    uint64_t now_seq = versions_->LastSequence();
+    blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
+    new BlobFileBuilder(
+      versions_, fs_.get(),
+      gc_->immutable_options(),
+      gc_->mutable_cf_options(), &file_options_, db_id_, db_session_id_,
+      job_id_, cfd_in->GetID(), cfd_in->GetName(), Env::IOPriority::IO_LOW,
+      write_hint_, io_tracer_, nullptr,
+      BlobFileCreationReason::kCompaction, &blob_file_paths,
+      gc_output_.blob_file_additions(),
+        i, now_seq));
+
+      blob_file_builders_raw[i] = blob_file_builders[i].get();
+  }
+
+  std::string blob_index_str;
+  std::string prev_blob_index_str;
 
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
 
     uint64_t blob_file_num = blob_file->GetBlobFileNumber();
     std::string blob_file_path = BlobFileName(dbname_, blob_file->GetBlobFileNumber());;
+    uint64_t lifetime_label = blob_file->GetLifetimeLabel();
 
     std::unique_ptr<FSRandomAccessFile> file;
     constexpr IODebugContext* dbg = nullptr;
@@ -247,6 +290,14 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     uint64_t blob_offset = 0;
 
     auto cf_handle = db_-> DefaultColumnFamily();
+    // blob file builder might create multiple new blob files.
+    // default blob file size limit is 256MB.
+    // what should I do?
+    // Create a new function in blob file builder 
+    // and it doesn't close blob file until close blob 
+    // file function is called.
+    // Don't have any restriction on blob file size for now .
+    // Let's complte the logic and then we make optimization.
 
 
     while (true) {
@@ -256,14 +307,12 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       if (!s2.ok()){
         break;
       }
-      // Slice record_internal_key = record.key;
-      Slice blob_user_key(record.key);
-      blob_user_key.remove_suffix(8);
+
+      ParsedInternalKey parsed_blob_key;
+      s = ParseInternalKey(record.key, &parsed_blob_key, false);
       Slice blob_value(record.value);
 
-      // user_key.remove_suffix(8);
-      LookupKey lkey(blob_user_key, kMaxSequenceNumber);
-      // InternalIterator* internalIterator = iter->get();
+      LookupKey lkey(parsed_blob_key.user_key, kMaxSequenceNumber);
       iter->Seek(lkey.internal_key());
       s = iter->status();
       if (!s.ok()){
@@ -278,56 +327,50 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
           return s;
         }
         
-        if(parsed_ikey.user_key.compare(blob_user_key)==0 &&  parsed_ikey.type == rocksdb::kTypeBlobIndex) {
+        if(parsed_ikey.user_key.compare(parsed_blob_key.user_key)==0 &&
+          parsed_ikey.sequence == parsed_blob_key.sequence &&
+          parsed_ikey.type == rocksdb::kTypeBlobIndex) {
           uint64_t cur_blob_offset = blob_offset;
           uint64_t cur_blob_file_num = blob_file_num; 
-          BlobIndex blob_index;
-          s = blob_index.DecodeFrom(iter->value());
-          if (!s.ok()) {
+
+
+          blob_index_str.clear();
+          prev_blob_index_str.clear();
+          BlobIndex::EncodeBlob(&prev_blob_index_str, blob_file_num, blob_offset, record.value_size,
+                               CompressionType::kNoCompression);
+          s = blob_file_builders[lifetime_label]->AddWithoutBlobFileClose(record.key, record.value, &blob_index_str);
+          assert(s.ok());
+          BlobIndex new_blob_index;
+          new_blob_index.DecodeFrom(blob_index_str);
+          uint64_t new_blob_file_num = blob_file_builders[lifetime_label]->GetCurBlobFileNum();
+          if(blob_offset_map_.find(new_blob_file_num) == blob_offset_map_.end()) {
+            blob_offset_map_[new_blob_file_num] = new UnorderedMap<std::string, std::string>();
+          }
+          auto res = blob_offset_map_[new_blob_file_num]->emplace(prev_blob_index_str, blob_index_str);
+          assert(res.second);
+
+          if(!s.ok()) {
+            if(!s.IsShutdownInProgress()){
+              assert(false);
+            }
             return s;
           }
-  
-          uint64_t iter_blob_file_num = blob_index.file_number();
-          uint64_t iter_blob_offset = blob_index.offset();
-
-          if((cur_blob_file_num == iter_blob_file_num) && (cur_blob_offset == iter_blob_offset)) {
-
-
-            // s = db_->Put(write_options, cf_handle, blob_user_key,  blob_value);
-            // s = wb.PutGC(cf_handle, record.key, blob_value);
-            if(!s.ok()) {
-              if(!s.IsShutdownInProgress()){
-                assert(false);
-              }
-              // assert(false);
-              return s;
-            }
-            if(wb.Count() >= write_batch_cnt) {
-              // s = db_->Write(write_options, &wb);
-              if(!s.ok()) {
-                if(!s.IsShutdownInProgress()){
-                  assert(false);
-                }
-                return s;
-              }
-              wb.Clear();
-            }
-
-            valid_key_num++;
-            valid_value_size+=record.value_size;
-            valid_key_size+=record.key_size;
-          } else {
-            invalid_key_num++;
-            invalid_value_size+=record.value_size;
-            invalid_key_size+=record.key_size;
-          }
-
-          total_blob_size+=record.record_size();
-
+          valid_key_num++;
+          valid_value_size+=record.value_size;
+          // valid_key_size+=record.key_size;
+        } else {
+          invalid_key_num++;
+          invalid_value_size+=record.value_size;
+          // invalid_key_size+=record.key_size;
         }
+      } else {
+        invalid_key_num++;
+        invalid_value_size+=record.value_size;
+        // invalid_key_size+=record.key_size;
       }
 
-     }
+      total_blob_size+=record.record_size();
+    }
    
     // if (isout){
     //   fout<<"job_id: "<<job_id_<<std::endl;
@@ -345,27 +388,35 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     // fout << std::endl;
   
 
-      BlobLogFooter footer;
-      blob_log_reader.ReadFooter(&footer);
+      
+    BlobLogFooter footer;
+    blob_log_reader.ReadFooter(&footer);
+
+    uint64_t cur_new_blob_file = blob_file_builders[lifetime_label]->GetCurBlobFileNum();
+    auto res = blob_file_map_.emplace(blob_file_num, cur_new_blob_file);
+    assert(res.second);
+    s = blob_file_builders[lifetime_label]->CloseBlobFileIfNeeded() ;
+    assert(s.ok());
     
   }
-  if(wb.Count() > 0) {
-    // s = db_->Write(write_options, &wb);
-    if(!s.ok()) {
-      if(!s.IsShutdownInProgress()){
-        assert(false);
-      }
+  
+  for(size_t i =0; i < blob_file_builders.size(); i++){
+    s = blob_file_builders[i]->Finish();
+    if (!s.ok()) {
+      assert(false);
       return s;
     }
   }
-  gc_stats_.stats.num_input_records = valid_key_num + invalid_key_num;
   gc_stats_.stats.bytes_read_blob = total_blob_size;
-  gc_stats_.stats.num_output_records = valid_key_num;
-  gc_stats_.stats.bytes_written = valid_value_size + valid_key_size;
+  // gc_stats_.stats.bytes_written = valid_value_size + valid_key_size;
+  UpdateBlobStats();
+  gc_stats_.stats.num_output_files_blob = gc_output_.blob_file_additions()->size();
+  gc_stats_.stats.num_input_records = valid_key_num + invalid_key_num;
   gc_stats_.stats.num_dropped_records = invalid_key_num;
+  gc_stats_.stats.num_output_records = valid_key_num;
 
-
-  
+ gc_stats_.stats.cpu_micros =
+      db_options_.clock->CPUMicros() - prev_cpu_micros;
   UpdateGarbageCollectionStats();
   auto stream = event_logger_->LogToBuffer(log_buffer_, 8192);
   stream << "job" << job_id_ << "valid_key_num" << valid_key_num 
@@ -379,6 +430,14 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
   return s;
 }
+void GarbageCollectionJob::UpdateBlobStats() {
+  gc_stats_.stats.num_output_files_blob = gc_output_.blob_file_additions()->size();
+  for (const auto& blob :*gc_output_.blob_file_additions()) {
+    gc_stats_.stats.bytes_written_blob += blob.GetTotalBlobBytes();
+  }
+}
+
+
 
 void GarbageCollectionJob::UpdateGarbageCollectionStats() {
 
@@ -417,6 +476,16 @@ void GarbageCollectionJob::CleanupGarbageCollection() {
 Status GarbageCollectionJob::InstallGarbageCollectionResults(const MutableCFOptions& mutable_cf_options) {
   VersionEdit* const edit = gc_->edit();
   gc_->AddInputDeletions(edit);
+  std::unordered_map<uint64_t, BlobGarbageMeter::BlobStats> blob_total_garbage;
+
+  for (const auto& blob : *gc_output_.blob_file_additions()) {
+    edit->AddBlobFile(blob);
+  }
+  assert(!blob_file_map_.empty());
+  edit->AddBlobFileMap(&blob_file_map_);
+  assert(!blob_offset_map_.empty());
+  edit->AddBlobOffsetMap(&blob_offset_map_);
+
   return versions_->LogAndApply(gc_->column_family_data(), 
                                 mutable_cf_options, edit,
                                 db_mutex_, db_directory_);

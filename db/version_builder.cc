@@ -261,6 +261,8 @@ class VersionBuilder::Rep {
   int num_levels_;
   LevelState* levels_;
   std::unordered_set<uint64_t> deleted_blob_files_;
+  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+  UnorderedMap<uint64_t, uint64_t> blob_file_map_;
   // Store sizes of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
   // on invalid levels. The version is not consistent if in the end the files
@@ -713,6 +715,22 @@ class VersionBuilder::Rep {
     deleted_blob_files_.insert(blob_file_number);
     return Status::OK();
   }
+
+  Status ApplyBlobFileMap(const UnorderedMap<uint64_t, uint64_t>& blob_file_map) {
+    if(blob_file_map.empty()) {
+      return Status::OK();
+    }
+    
+    blob_file_map_ = blob_file_map;
+    return Status::OK();
+  }
+  
+  Status ApplyBlobFileOffsetMapping(const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& blob_offset_map) {
+    blob_offset_map_ = blob_offset_map;
+    return Status::OK();
+
+  }
+
   Status ApplyBlobFileAddition(const BlobFileAddition& blob_file_addition) {
     const uint64_t blob_file_number = blob_file_addition.GetBlobFileNumber();
     const uint64_t lifetime_label = blob_file_addition.GetLifetimeLabel();
@@ -725,8 +743,6 @@ class VersionBuilder::Rep {
     }
 
     if(deleted_blob_files_.find(blob_file_number) != deleted_blob_files_.end()) {
-      
-
       deleted_blob_files_.erase(blob_file_number);
       // std::ostringstream oss;
       // oss << "Blob file #" << blob_file_number << " already deleted";
@@ -1040,6 +1056,16 @@ class VersionBuilder::Rep {
       }
     }
 
+    {
+      const Status s = ApplyBlobFileMap(edit->GetBlobFileMap());
+      assert(s.ok());
+    }
+
+    {
+      const Status s = ApplyBlobFileOffsetMapping(edit->GetBlobOffsetMap());
+      assert(s.ok());
+    }
+
     // Note: we process the blob file related changes first because the
     // table file addition/deletion logic depends on the blob files
     // already being there.
@@ -1180,7 +1206,6 @@ class VersionBuilder::Rep {
         }
 
       }
-
       ++base_it;
     }
 
@@ -1607,6 +1632,9 @@ class VersionBuilder::Rep {
     SaveSSTFilesTo(vstorage);
 
     SaveBlobFilesTo(vstorage);
+
+    vstorage->AddBlobFileMap(blob_file_map_);
+    vstorage->AddBlobOffsetMap(blob_offset_map_);
 
     vstorage->SortBlobFiles();
 

@@ -1690,6 +1690,7 @@ void InternalStats::DumpCFMapStats(
       (*levels_stats)[level] = level_stats;
     }
   }
+  compaction_stats_sum->Add(gc_stats_);
   // Cumulative summary
   double w_amp = (0 == curr_ingest)
                      ? 0.0
@@ -1698,7 +1699,7 @@ void InternalStats::DumpCFMapStats(
                            static_cast<double>(curr_ingest);
   // Stats summary across levels
   std::map<LevelStatType, double> sum_stats;
-  compaction_stats_sum->bytes_read_blob += gc_stats_.bytes_read_blob;
+  // compaction_stats_sum->bytes_read_blob += gc_stats_.bytes_read_blob;
   PrepareLevelStats(&sum_stats, total_files, total_files_being_compacted,
                     total_file_size, 0, w_amp, *compaction_stats_sum);
   (*levels_stats)[-1] = sum_stats;  //  -1 is for the Sum level

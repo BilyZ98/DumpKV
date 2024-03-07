@@ -5,6 +5,7 @@
 
 #include "db/blob/blob_fetcher.h"
 
+#include "db/blob/blob_index.h"
 #include "db/version_set.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -27,7 +28,11 @@ Status BlobFetcher::FetchBlob(const Slice& user_key,
                               uint64_t* bytes_read) const {
   assert(version_);
 
-  return version_->GetBlob(read_options_, user_key, blob_index, prefetch_buffer,
+  std::string blob_index_str;
+  blob_index.EncodeBlob(&blob_index_str, blob_index.file_number(), 
+  blob_index.offset(), blob_index.size(), 
+  CompressionType::kNoCompression );
+  return version_->GetBlob(read_options_, user_key, blob_index, blob_index_str, prefetch_buffer,
                            blob_value, bytes_read);
 }
 

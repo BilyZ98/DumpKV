@@ -180,6 +180,59 @@ Status BlobFileBuilder::AddWithSeq(const Slice& key, const Slice& value, uint64_
 
 
 }
+
+Status BlobFileBuilder::AddWithoutBlobFileClose(const Slice& key, const Slice& value, std::string* blob_index) {
+  assert(blob_index);
+  assert(blob_index->empty());
+
+  if (value.size() < min_blob_size_) {
+    return Status::OK();
+  }
+
+  {
+    const Status s = OpenBlobFileIfNeeded();
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  Slice blob = value;
+  std::string compressed_blob;
+
+  {
+    const Status s = CompressBlobIfNeeded(&blob, &compressed_blob);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  uint64_t blob_file_number = 0;
+  uint64_t blob_offset = 0;
+
+  {
+    const Status s =
+        WriteBlobToFile(key, blob, &blob_file_number, &blob_offset);
+    if (!s.ok()) {
+      return s;
+    }
+  }
+
+  {
+    const Status s =
+        PutBlobIntoCacheIfNeeded(value, blob_file_number, blob_offset);
+    if (!s.ok()) {
+      ROCKS_LOG_WARN(immutable_options_->info_log,
+                     "Failed to pre-populate the blob into blob cache: %s",
+                     s.ToString().c_str());
+    }
+  }
+
+  BlobIndex::EncodeBlob(blob_index, blob_file_number, blob_offset, blob.size(),
+                        blob_compression_type_);
+
+  return Status::OK();
+
+}
 Status BlobFileBuilder::Add(const Slice& key, const Slice& value,
                             std::string* blob_index) {
   assert(blob_index);
@@ -260,6 +313,7 @@ Status BlobFileBuilder::OpenBlobFileIfNeeded() {
 
   assert(file_number_generator_);
   const uint64_t blob_file_number = file_number_generator_();
+  cur_blob_file_num_ = blob_file_number;
 
   assert(immutable_options_);
   assert(!immutable_options_->cf_paths.empty());

@@ -24,6 +24,7 @@
 #include "rocksdb/cache.h"
 #include "table/table_reader.h"
 #include "table/unique_id_impl.h"
+#include "util/hash_containers.h"
 #include "util/autovector.h"
 
 namespace ROCKSDB_NAMESPACE {
@@ -450,6 +451,8 @@ class VersionEdit {
     return deleted_blob_files_;
   }
 
+
+
   // Add the specified table file at the specified level.
   // REQUIRES: "smallest" and "largest" are smallest and largest keys in file
   // REQUIRES: "oldest_blob_file_number" is the number of the oldest blob file
@@ -529,6 +532,35 @@ class VersionEdit {
     //     blob_file_number, total_blob_count, total_blob_bytes,
     //     std::move(checksum_method), std::move(checksum_value));
   }
+
+  using BlobOffsetMap = UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>;
+  const BlobOffsetMap& GetBlobOffsetMap() const {
+    return blob_offset_map_;
+  }
+
+  // source memory of blob_offset_map should not be deallocated before the destructor 
+  // of VersionEdit
+  void AddBlobOffsetMap(BlobOffsetMap* blob_offset_map) {
+    for(const auto& blob_offset: *blob_offset_map) {
+      blob_offset_map_.emplace(blob_offset.first, blob_offset.second);
+    }
+    // blob_offset_map_ = blob_offset_map;
+  }
+
+  const UnorderedMap<uint64_t, uint64_t>& GetBlobFileMap() const {
+    return blob_file_map_;
+  }
+  void AddBlobFileMap(const UnorderedMap<uint64_t, uint64_t>* blob_file_map) {
+    for(const auto& blob_file: *blob_file_map) {
+      blob_file_map_.emplace(blob_file.first, blob_file.second);
+    }
+    // blob_file_map_ = blob_file_map;
+  }
+
+
+  // const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>* GetBlobOffsetMap() const {
+  //   return blob_offset_map_;
+  // }
 
   void AddBlobFile(BlobFileAddition blob_file_addition) {
     blob_file_additions_.emplace_back(std::move(blob_file_addition));
@@ -703,6 +735,9 @@ class VersionEdit {
 
   BlobFileAdditions blob_file_additions_;
   BlobFileGarbages blob_file_garbages_;
+
+  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+  UnorderedMap<uint64_t, uint64_t> blob_file_map_;
 
   WalAdditions wal_additions_;
   WalDeletion wal_deletion_;

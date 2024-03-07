@@ -203,6 +203,29 @@ class VersionStorageInfo {
 
   void AddBlobFileWithLifetimeBucket(std::shared_ptr<BlobFileMetaData> blob_file_meta);
 
+  const UnorderedMap<uint64_t, uint64_t>& GetBlobFileMap() const {
+    return blob_file_map_;
+  }
+
+  void AddBlobFileMap(const UnorderedMap<uint64_t, uint64_t>& blob_file_map) {
+    for(auto& [orig_blob_file_number, new_blob_file_num]: blob_file_map) {
+      assert(blob_file_map_.find(orig_blob_file_number) == blob_file_map_.end());
+      blob_file_map_[orig_blob_file_number] = new_blob_file_num;
+    }
+  }
+
+  const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& GetBlobOffsetMap() const {
+    return blob_offset_map_;
+  }
+  // UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+  void AddBlobOffsetMap(const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& blob_offset_map) {
+    // blob_offset_map_ = blob_offset_map;
+    for(auto& [blob_file_number, offset_map]: blob_offset_map) {
+      assert(blob_offset_map_.find(blob_file_number) == blob_offset_map_.end());
+      blob_offset_map_[blob_file_number] = offset_map;
+    }
+  };
+
 
   void AddBlobFile(std::shared_ptr<BlobFileMetaData> blob_file_meta);
 
@@ -478,6 +501,10 @@ class VersionStorageInfo {
 
   }
 
+  bool HasBlobFile(uint64_t blob_file_number) const {
+    return FastGetBlobFileMetaData(blob_file_number) != nullptr;
+  }
+
   // REQUIRES: This version has been saved (see VersionBuilder::SaveTo)
   std::shared_ptr<BlobFileMetaData> GetBlobFileMetaData(
       uint64_t blob_file_number) const {
@@ -747,6 +774,18 @@ class VersionStorageInfo {
 
   UnorderedMap<uint64_t, std::shared_ptr<BlobFileMetaData>> blob_file_numer_to_blob_meta_map_; 
 
+  UnorderedMap<uint64_t, uint64_t> blob_file_inheritance; 
+  // file_number+orig_offset(16byte) : offset(8 byte)
+  // Versionbuilder need to hold the lock to insert item. Maybe holding the 
+  // lock is not required.
+  // Let's see how file_locations_ is built.
+  // Maybe we can just copy blob_offset_map from previous version 
+  // and then insert new blob offset map into current one.
+  // UnorderedMap<std::tring, uint64_t>* is built during gc process.
+  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+
+  UnorderedMap<uint64_t, uint64_t> blob_file_map_;
+
   // Level that L0 data should be compacted to. All levels < base_level_ should
   // be empty. -1 if it is not level-compaction so it's not applicable.
   int base_level_;
@@ -995,6 +1034,20 @@ class Version {
                  const BlobIndex& blob_index,
                  FilePrefetchBuffer* prefetch_buffer, PinnableSlice* value,
                  uint64_t* bytes_read) const;
+
+  Status GetBlob(const ReadOptions& read_options, const Slice& user_key,
+                 const BlobIndex& blob_index,
+                 const Slice& orgi_blob_index_slice,
+                 FilePrefetchBuffer* prefetch_buffer, PinnableSlice* value,
+                 uint64_t* bytes_read) const;
+
+
+  uint64_t GetLatestBlobFileNum(const uint64_t orig_blob_file_number, const std::unordered_map<uint64_t, uint64_t>& blob_file_map) const ;
+
+  const std::string& GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+                                        const Slice& orgi_blob_index_slice,
+                                        const UnorderedMap<uint64_t, uint64_t>& blob_file_map,
+                                        const UnorderedMap<uint64_t,UnorderedMap<std::string, std::string>*>& blob_offset_map) const ;
 
   using BlobReadContext =
       std::pair<BlobIndex, std::reference_wrapper<const KeyContext>>;

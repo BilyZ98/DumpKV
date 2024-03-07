@@ -7584,24 +7584,28 @@ High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3     
 
 Blob file count: 246, total size: 4.1 GB, garbage size: 0.8 GB, space amp: 1.2
 ```
-standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime 
-w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5
-space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2
-blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2
-Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB
-Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB
-Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB
-Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB
-garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB
+standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime -> online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet -> online model, dedicated gc job, write count is counted, model is not good -> fix model prediction bug, 100k number of samples triggers model train, default-1
+```
+w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5 -> 1.2 -> 1.7 -> 1.8
+space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2 -> 1.0 -> 1.0 -> 1.0
+blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2 -> 4.1 -> 4.1 -> 3.8
+Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB -> 4.8 GB -> 6.8GB -> 7.8 GB
+Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB -> 4.4 GB -> 1.9 GB -> 1.9 GB
+Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB -> 3.2 GB -> 5.2 GB -> 6.1GB
+Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB -> 6.1 GB -> 9.3 GB -> 9.9 GB
+garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB
 
-Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s
+Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s
 Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1891.7 total, 8.0 interval
  -> Uptime(secs): 2094.8 total, 1.0 interval
  -> Uptime(secs): 1974.1 total, 8.0 interval
  -> Uptime(secs): 1777.4 total, 1.0 interval
  -> Uptime(secs): 1776.5 total, 1.0 interval
- ```
+ -> Uptime(secs): 1777.9 total, 1.0 interval
+ -> Uptime(secs): 1773.8 total, 1.0 interval
+ -> Uptime(secs): 1777.0 total, 1.0 interval
+```
  std rocksdb gc: Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
  ->
 lifetime blob gc: Cumulative compaction: 15.23 GB write, 8.24 MB/s write, 9.02 GB read, 4.88 MB/s read, 1536.1 seconds
@@ -7615,14 +7619,19 @@ online model with obsolete key checking(working model ) :Cumulative compaction: 
 online model with key meta stored in lsm-tree value， default 0 lifetime:  Cumulative compaction: 17.72 GB write, 10.21 MB/s write, 11.41 GB read, 6.58 MB/s read, 2804.5 seconds
 ->
 online model with key meta stored in lsm-tree value， default 1 lifetime: Cumulative compaction: 13.43 GB write, 7.74 MB/s write, 7.14 GB read, 4.11 MB/s read, 2378.3 seconds
- ```
+->
+online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet : Cumulative compaction: 7.94 GB write, 4.59 MB/s write, 1.61 GB read, 0.93 MB/s read, 1500.9 seconds
+->
+online model, dedicated gc job, write count is counted, model is not good:  Cumulative compaction: 7.96 GB write, 4.59 MB/s write, 1.63 GB read, 0.94 MB/s read, 1497.9 seconds
+->
+fix model prediction bug, default-1: Cumulative compaction: 8.01 GB write, 4.62 MB/s write, 1.69 GB read, 0.97 MB/s read, 1161.6 seconds
 
 with_model_wisckey_style_gc:
- ```
+```
  Cumulative compaction: 15.53 GB write, 8.42 MB/s write, 2.47 GB read, 1.34 MB/s read, 843.9 seconds
 
 Cumulative writes: 18M writes, 18M keys, 18M commit groups, 1.0 writes per commit group, ingest: 14.38 GB, 7.78 MB/s
- ```
+```
 [Status: Done]
 
 
@@ -8304,13 +8313,12 @@ No label issue.
 ```
  key label ratio 0: 357709, 1: 319766
 ```
-
 Is this because of inadequate training iterations?
 Need to add test set and see regression acc. 
 What function should I call ?
 Let's just print predict result for now.
 Later I will call 
-```c
+```
 LIGHTGBM_C_EXPORT int LGBM_BoosterGetEval(BoosterHandle handle, int data_idx, int *out_len, double *out_results)
 ```
 
@@ -8713,7 +8721,7 @@ Let's just call model for now.
 
 Need to copy new past_distances and edcs to value.  
 
-[Status: Ongoing]
+[Status: Done]
 
 [Todo]
 Update key meta no matter model is available or not.
@@ -8721,7 +8729,7 @@ If key is not found then we need to set up initial edc and
 put it in value of lsm-tree.
 Should I rearrange the order of features.?
 Let's keep it the same.
-[Status: Ongoing]
+[Status: Done]
 
 [Todo]
 Fix no finished flush and dead lock if it is.
@@ -8906,7 +8914,7 @@ ForcedBlobGC job starts later than that in deafult 0 lifetime impl.
 
 [Todo]
 Add train data mutex to protect train data from current update.
-[Status: Not started]
+[Status: Done]
 
 [Todo]
 Most keys are only written once.
@@ -8918,7 +8926,8 @@ But there are too many sst and blob files. 3 time more than default 0.
 [Todo]
 Add creation time and gc time for blob files to make 
 sure that time limit works as expected.
-[Status: Not started]
+It works
+[Status: Done]
 
 [Todo]
 Compared flush job cost time between mlsm and standard rocksdb.
@@ -8977,7 +8986,7 @@ Set lifetime category based on distribution .
 [Todo]
 Can we have a better way to reduce number of ssts?
 It's not good to have fragmented ssts.
-[Status: Not started]
+[Status: Abandoned]
 
 [Todo]
 Need to mention how we deal with cold start.
@@ -8989,7 +8998,7 @@ there is no model.
 Update two db internal iter call to one call.
 Right now compaction filter do a call ,
 PrepareOutput() does another call.
-[Status: Not started]
+[Status: Abandanoned]
 
 [Todo]
 Don't get iter from mem when creating db internal iterator for flush job. 
@@ -9093,7 +9102,7 @@ Add drop rate count for blob files?
 std rocksdb drop rate: 3.1 / 29  = 0.1068965
 mlsm default 1 lifetime online model with value in lsm-tree:  3.3 / 79 = 0.041772
 
-[Status: Not started]
+[Status: Abandoned]
 
 Titan do wisckey similar gc 
 https://cn.pingcap.com/blog/titan-design-and-implementation/
@@ -9138,10 +9147,946 @@ What I need to do is to implement our own gc process.
 [Status: Ongoing]
 
 [Todo]
+Figure out how blob_gc_ratio or score is calculated in terakdb. 
+```
+  auto push_candidate = [&](FileMetaData* f) {
+    if (f->is_gc_permitted() && !f->being_compacted) {
+      GarbageFileInfo gc_blob(f);
+      if (gc_blob.estimate_size <= fragment_size ||
+          gc_blob.score >= mutable_cf_options.blob_gc_ratio ||
+          gc_blob.f->marked_for_compaction) {
+        candidate_blob_vec.emplace_back(gc_blob);
+      }
+    }
+  };
+```
+
+compaction_picker.cc
+```
+// Try to perform garbage collection from certain column family.
+// Resulting as a pointer of compaction, nullptr as nothing to do.
+// GC picker's principle:
+// 1. pick the largest score blob, which must more than gc ratio
+// 2. fragment should be take away by the way
+// 3. it marked for compaction
+Compaction* CompactionPicker::PickGarbageCollection(
+    const std::string& /*cf_name*/, const MutableCFOptions& mutable_cf_options,
+    VersionStorageInfo* vstorage, LogBuffer* /*log_buffer*/) {
+  // Setting fragment_size as one eighth target_blob_file_size prevents
+  // selecting massive files to single compaction which would pin down the
+  // maximum deletable file number for a long time resulting possible storage
+  // leakage.
+  size_t target_blob_file_size = MaxBlobSize(
+      mutable_cf_options, ioptions_.num_levels, ioptions_.compaction_style);
+
+  size_t fragment_size = mutable_cf_options.blob_file_defragment_size;
+  if (fragment_size == 0) {
+
+```
+
+version_set.cc
+```
+void VersionStorageInfo::ComputeCompactionScore(
+    const ImmutableCFOptions& immutable_cf_options,
+    const MutableCFOptions& mutable_cf_options) {
+  for (int level = 0; level <= MaxInputLevel(); level++) {
+    double score;
+    if (level == 0) {
+
+// Calculate total_garbage_ratio_ as criterion for NeedsGarbageCollection().
+  uint64_t num_antiquation = 0;
+  uint64_t num_entries = 0;
+  bool marked = false;
+  for (auto& f : LevelFiles(-1)) {
+    if (!f->is_gc_permitted()) {
+      continue;
+    }
+    // if a file being_compacted, gc_status must be kGarbageCollectionCandidate
+    marked |= f->marked_for_compaction;
+    num_antiquation += f->num_antiquation;
+    num_entries += f->prop.num_entries;
+  }
+  blob_marked_for_compaction_ = marked;
+  total_garbage_ratio_ = num_antiquation / std::max<double>(1, num_entries);
+
+  is_pick_compaction_fail = false;
+  ComputeFilesMarkedForCompaction();
+  C
+```
+version_builder.cc
+```
+        if (finish) {
+          uint64_t entry_depended = std::max<uint64_t>(1, item.entry_depended);
+          entry_depended = std::min(item.f->prop.num_entries, entry_depended);
+          uint64_t num_antiquation = item.f->prop.num_entries - entry_depended;
+          switch (item.f->gc_status) {
+            case FileMetaData::kGarbageCollectionForbidden:
+
+```
+What does entry_depended mean?
+Does it mean that number of keys in sst file pointing to vsst?
+[Status: Ongoing]
+
+[Todo]
+Store blob offset map in hash map during gc.
+Store this map items in wal to avoid data loss and map relation loss.
+Rebuild this map after reboot.
+Store smallest blob file number of all keys in sst file meta.
+We can safely delete blob file map after no sst holds blob file number 
+<= this blob file number.
+
+Design change.
+Store old blob file number + offset : new offset 
+in new blob file number.
+We need to store blob dependency file map to get blob file mapping.
+This way we don't need to cost memory with more keys insertion.
+How to build blob file depdendency map?
+Store blob offset map or index blob in separate file because 
+we need to maintain immediate mapping.
+We can delete immediate blob file but we can nnot delete 
+this immediate mapping file.
+We can also sotre this mapping cache.
+How to implement this?
+Create a new file for x.blob_index when doing gc.
+x.bob_index should have the same file number as newly generated blob.
+Iterate through old blob file and keep blob file offset and len.
+check validity.
+len keeps the same as valid value. 
+Write [old blob file numer, old offset] : [ new offset, len ] to new blob dinex 
+file.
+This blob index file isfinished when newly gc blob file finish building.  
+
+Need to build dependence map.
+blob:1 -> blob:2, blob:3 
+blob:3 -> blob:7, blob:8
+
+How to do get?
+Forget about cache for now.
+First search blob index block of all blob index files that inherit from blob:1
+Only one blob index file includes offset of key in blob:1,
+then we repeat this process until the newest blob index file is searched.
+How does terakdb do get?
+block_based_table_reader. cc
+Get()
+```
+          if (!get_context->SaveValue(
+                  parsed_key,
+                  LazyBuffer(&static_state,
+                             {reinterpret_cast<uint64_t>(&biter)},
+                             biter.value(), rep_->file_number),
+                  &matched)) {
+            done = true;
+            break;
+
+```
+
+```
+LazyBuffer Version::TransToCombined(const Slice& user_key, uint64_t sequence,
+                                    const LazyBuffer& value) const {
+  auto s = value.fetch();
+  if (!s.ok()) {
+    return LazyBuffer(std::move(s));
+  }
+  uint64_t file_number = SeparateHelper::DecodeFileNumber(value.slice());
+  auto& dependence_map = storage_info_.dependence_map();
+  auto find = dependence_map.find(file_number);
+  if (find == dependence_map.end()) {
+    return LazyBuffer(Status::Corruption("Separate value dependence missing"));
+  } else {
+    return LazyBuffer(
+        this,
+        {reinterpret_cast<uint64_t>(user_key.data()), user_key.size(), sequence,
+         reinterpret_cast<uint64_t>(&*find)},
+        Slice::Invalid(), find->second->fd.GetNumber());
+  }
+}
+```
+
+db_impl.cc
+```
+if (s.ok() && lazy_val != nullptr) {
+    lazy_val->pin(LazyBufferPinLevel::DB);
+    s = lazy_val->fetch();
+  }
+
+
+```
+
+Finally found it 
+This function is responsible fo fetching value from blob.
+```
+Status Version::fetch_buffer(LazyBuffer* buffer) const {
+  auto context = get_context(buffer);
+  Slice user_key(reinterpret_cast<const char*>(context->data[0]),
+                 context->data[1]);
+  uint64_t sequence = context->data[2];
+  auto pair = *reinterpret_cast<DependenceMap::value_type*>(context->data[3]);
+  if (pair.second->fd.GetNumber() != pair.first) {
+    RecordTick(db_statistics_, READ_BLOB_INVALID);
+  } else {
+    RecordTick(db_statistics_, READ_BLOB_VALID);
+  }
+  bool value_found = false;
+  SequenceNumber context_seq;
+  GetContext get_context(cfd_->internal_comparator().user_comparator(), nullptr,
+                         cfd_->ioptions()->info_log, db_statistics_,
+                         GetContext::kNotFound, user_key, buffer, &value_found,
+                         nullptr, nullptr, nullptr, env_, &context_seq);
+  IterKey iter_key;
+  iter_key.SetInternalKey(user_key, sequence, kValueTypeForSeek);
+  auto s = table_cache_->Get(
+      ReadOptions(), *pair.second, storage_info_.dependence_map(),
+      iter_key.GetInternalKey(), &get_context,
+      mutable_cf_options_.prefix_extractor.get(), nullptr, true);
+  if (!s.ok()) {
+    return s;
+  }
+  if (context_seq != sequence || (get_context.State() != GetContext::kFound &&
+                                  get_context.State() != GetContext::kMerge)) {
+
+```
+
+Call stack
+```
+(gdb) bt
+#0  terarkdb::TableCache::Get (this=0x155554a99320, options=..., file_meta=...,
+    dependence_map=..., k=..., get_context=0x1555517fb040, prefix_extractor=0x0,
+    file_read_hist=0x0, skip_filters=true, level=-1, inheritance=0x0)
+    at /mnt/nvme1n1/zt/terarkdb/db/table_cache.cc:443
+#1  0x000055555580c87b in terarkdb::Version::fetch_buffer (this=0x155553038000,
+    buffer=0x1555517fc140) at /mnt/nvme1n1/zt/terarkdb/db/version_set.cc:1299
+#2  0x00005555555aa4a3 in terarkdb::LazyBuffer::fetch (this=0x1555517fc140)
+    at /mnt/nvme1n1/zt/terarkdb/include/rocksdb/lazy_buffer.h:507
+#3  0x00005555559adc4b in terarkdb::LazyBuffer::dump(terarkdb::LazyBuffer&) && (
+    this=0x1555517fb570, _target=...) at /mnt/nvme1n1/zt/terarkdb/util/lazy_buffer.cc:678
+#4  0x00005555559500c2 in terarkdb::GetContext::SaveValue (this=0x1555517fbbd0,
+    parsed_key=..., value=..., matched=0x1555517fb48a)
+    at /mnt/nvme1n1/zt/terarkdb/table/get_context.cc:221
+#5  0x0000555555926263 in terarkdb::BlockBasedTable::Get (this=0x155553007050,
+    read_options=..., key=..., get_context=0x1555517fbbd0, prefix_extractor=0x0,
+    skip_filters=false) at /mnt/nvme1n1/zt/terarkdb/table/block_based_table_reader.cc:2522
+#6  0x00005555557ff80b in terarkdb::TableCache::Get (this=0x155554a99320, options=...,
+    file_meta=..., dependence_map=..., k=..., get_context=0x1555517fbbd0,
+    prefix_extractor=0x0, file_read_hist=0x155554b0d000, skip_filters=false, level=0,
+    inheritance=0x0) at /mnt/nvme1n1/zt/terarkdb/db/table_cache.cc:477
+#7  0x000055555580d191 in terarkdb::Version::Get (this=0x155553038000, read_options=...,
+    user_key=..., k=..., value=0x1555517fc140, status=0x1555517fc0a0,
+    merge_context=0x1555517fbe00, max_covering_tombstone_seq=0x1555517fbdc0, value_found=0x0,
+    key_exists=0x0, seq=0x0, callback=0x0) at /mnt/nvme1n1/zt/terarkdb/db/version_set.cc:1380
+#8  0x000055555565c2ed in terarkdb::DBImpl::GetImpl (this=0x155554ad8000, read_options=...,
+```
+
+I think one blob file will only flow to another blob file. It will not flow into multiple blob file.
+This way we can directly know which blob file to search for in future get request
+by following link instead of a graph.
+
+Decided to make single map relation between gc blob files which means
+one blob file can only flow into another new blob file but not multiple new 
+blob file during gc.
+This reduce the cost to search multiple blob file during get.
+
+Store blob file depenece map in version storge info.
+Update this map during version_builder.
+Get() will first find the newest blob file from this dependence map
+and then do value offset hash map or tree map to get the offset 
+of value in newest blob file. And finally we read blob value and return 
+to user.
+
+For now I will just store value offset hash map in memory.
+Later I will store this map in separate file.
+
+Checking if blob file has other parts besides key and value.
+There is also footer in blob file but I think it's irrelavent .
+Add blob file offset in BlobLogSequentialReader to get offset 
+for gc.
+
+Need to store offset map during gc in garbage_collection job.
+First create unordered_map in db_impl_compaction_flush.cc and then
+pass this map pointer to garbage_collection job ,
+and then pass this map pointerto version builder.
+When to delete this map.? Once there is no sst that potentialy 
+dependes on this blob file.
+Need to create blob writer during gc.
+sst value store blob file numer and offset, does it store len?
+It has blob file number, offset and len.
+We can save some bytes by removing blob file number. 
+Let's skip that for now.
+
+blob file num gen.
+```
+  const uint64_t blob_file_number = file_number_generator_();
+
+  assert(immutable_options_);
+  assert(!immutable_options_->cf_paths.empty());
+  std::string blob_file_path =
+      BlobFileName(immutable_options_->cf_paths.front().path, blob_file_number);
+
+
+```
+Need to add blob file addition and new blob offset mapping to version edit.
+Check how compaction does this and copy it.
+
+Need to add blobfileaddtion blob_file_addition.
+```
+
+  SubcompactionState(Compaction* c, const std::optional<Slice> _start,
+                     const std::optional<Slice> _end, uint32_t _sub_job_id)
+      : compaction(c),
+        start(_start),
+        end(_end),
+        sub_job_id(_sub_job_id),
+        compaction_outputs_(c, /*is_penultimate_level=*/false),
+        penultimate_level_outputs_(c, /*is_penultimate_level=*/true) {
+
+```
+compaction_outputs_ is created in subcompaction state.
+
+```
+CompactionJob::CompactionJob(
+    int job_id, Compaction* compaction, const ImmutableDBOptions& db_options,
+   std::string full_history_ts_low, std::string trim_ts,
+    BlobFileCompletionCallback* blob_callback, int* bg_compaction_scheduled,
+    int* bg_bottom_compaction_scheduled)
+    : compact_(new CompactionState(compaction)),
+      compaction_stats_(compaction->compaction_reason(), 1),
+
+```
+Don't know how to deal with linked sst and linked blob files.
+Need to track min blob file sst depends on and update its min blob 
+file during compaction. 
+
+linked_blob_files are update during UpdateBoundaries.
+Does this matter?
+linked_ssts are update during ApplyFileAddition()
+
+We can update linked_blob_files during compaction job.
+And then we can delete blob file offset mapping 
+during version builder.
+Number of blob files that are smaller than min  blob file number
+of all sst file depends on is the number of blob files that we can delete.
+
+Let's not delete this map for now .
+We can do this step later.
+
+Need to update get process to make get successful.
+
+Need to make sure blob files are in ascendent order 
+to allow binary search.
+
+Currently blob value offset is stored in blob index 
+instead of  key offset.
+[Status: Ongoing]
+
+
+[Todo]
+size of key in blob offest map is 9
+while it's 10 in sst file.
+Need to figure out why and fix this.
+Is this because of encode issue during gc job?
+It might be that the key is obsolte and the value is dropped. 
+It should not happen.
+
+encode code in gc job.
+```
+          BlobIndex::EncodeBlob(&prev_blob_index_str, blob_file_num, blob_offset, record.value_size,
+                               CompressionType::kNoCompression);
+
+```
+I see, it's because of key meta data that is appended to the end of value in lsm-tree.
+Need to remove key meta data from value before doing search in blob offset map.
+[Status: Done]
+
+[Todo]
+Issue: storage_info_.GetBlobFileMap().size() is 0 which should not happen.
+Need to fix this.
+Check version builder .
+Can VersionBuilder::SaveTo() and GetBlob happens concurrently ?
+I see there is blob:10 in blob_file_map when I start gdb.
+I don't think get holds any lock.
+There is no blob file map in another get.
+Is this because new version builder does not write blob file map to new version?
+I think I need to update copy constructor of version storage info
+to copy blob file map and blob offset map to new version storage info object.
+Need to do blob file map deletion later. For now I just leave it here.
+[Status: Done]
+
+[Todo]
+Update value in lsm-tree to point to latest blob file during compaction.
+[Status: Not started]
+
+Why is there so many sst files?
+
+[Todo]
+Make sure compaction filter not work.
+Cumulateive compaction is too slow.
+```
+ with_model_gc_1.0_0.8 ls | grep sst  | wc
+    504     504    5544
+Cumulative compaction: 7.94 GB write, 4.59 MB/s write, 1.61 GB read, 0.93 MB/s read, 1500.9 seconds
+```
+std rocksdb
+```
+➜  with_gc_1.0_0.8 ls | grep sst  | wc
+     56      56     616
+Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
+
+
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+  L0      2/0    6.58 MB   0.5      0.0     0.0      0.0       0.3      0.3       0.0   1.0      0.0     81.7     79.92             79.54        82    0.975       0      0       0.0       6.1
+ Sum     56/4   158.07 MB   0.0     21.8     0.4      0.6       1.1      0.5       0.0   4.4     27.8     35.8    804.19            801.97       141    5.704     29M  3107K      20.8      27.0
+```
+I comment out GCFilter creation and use defeault compaction_filter..
+
+No compaction rate change after comment out GCFilter creation.
+```
+Cumulative compaction: 7.95 GB write, 4.59 MB/s write, 1.62 GB read, 0.94 MB/s read, 1504.8 seconds
+
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+  L0      2/0   14.08 MB   0.6      0.0     0.0      0.0       0.4      0.4       0.0   1.0      0.0      5.7   1173.98            799.04        81   14.494       0      0       0.0       6.1
+ Sum     83/0   242.62 MB   0.0      4.8     0.7      0.9       1.9      1.0       0.0   1.2      3.3      5.4   1504.77           1129.46       192    7.837     30M  3301K       3.2       6.1
+```
+L0 flush cost too much time to do get and model calling..
+Maybe we can delay this model calling to L1 or L2
+Maybe use cache to get feature. 
+Model calssification is not working either..
+Need to figure out why.
+[Status: Done]
+
+[Todo]
+L0 flush cost too much time to do get and model calling..
+Maybe we can delay this model calling to L1 or L2
+Maybe use cache to get feature. 
+First I need to figure out why there is so many sst files.
+Too mayny level_max_size compaction reason which is not normal.
+```
+{"time_micros": 1709618367736725, "job": 228, "event": "compaction_started", "compaction_reason": "LevelMaxLevelSize", "files_L1": [709], "files_L2": [556, 560, 561], "gc_blob_files": [], "score": 1.68405, "input_data_size": 11272296, "oldest_snapshot_seqno": -1}
+```
+92 compaction whose reason is level_max_size.
+
+40 level_max_size compaction in std rocksdb.
+
+How score is calculated?
+How input_data_size is calculated?
+
+I see , we add extra key meta to value part so there is more sst files.
+key_size=${KEY_SIZE:-20}
+key size is 20 so it's expected that sst file size is larger than that 
+in std rocksdb.
+[Status: Done]
+
+[Todo]
+Change to use version iterator instead of db internal interator 
+to make sure validity check happens in gc process version.
+
+[Status: Not started]
+
+[Todo]
+Model calssification is not working either..
+Need to figure out why.
+Too many zero in trianing data. This should not happen.
+This is not right.
+Should call vector.reserve()
+```cpp
+    std::vector<uint64_t> past_distances(max_n_past_timestamps);
+```
+
+No edcs and past distances in training data.
+Still all keys are predicted as 1.
+No edcs data in inference. Added it.
+Need to make sure edcs store float number correctly.
+Do reinterpret_cast when writing edcs float to file 
+```cpp
+        PutFixed32(&blob_index_, reinterpret_cast<uint32_t&>(edcs[i]));
+```
+edcs now have non zero value.
+But there is still no past distances value.
+
+All key are classified as 0 after model is available. This is not right.
+Total blob size drop from 4.1 to 3.6 GB
+w-amp increase from  1.8 to 2.0
+w-blob increase from 9 to 11 GB
+
+Again, there is not past distances training data.
+n_within is normal so this means that past_distances is written to value in lsm-tree. 
+Found the root cause..
+I reserve memory space but I did not call emplace_back of past_distances.
+But what's weird is that cpp does not report error when I access past_distances[i] where i > 0.
+code that write past_distances to value in lsm-tree which does not use past_distances.size()
+```cpp
+      for(size_t i = 0; i < past_distances_count-1; i++) {
+```
+Hope this works and then I can move on to do pointer update 
+during compaction .
+This will take a while to finish.
+Still got quite amount of work items to finish before 
+I can run full benchmark.
+
+invalid_key_ratio is very low 0.2-0.3 after introduce model prediction. 
+```
+2024/03/06-22:30:01.748468 1941364 (Original Log Time 2024/03/06-22:30:01.721583) EVENT_LOG_v1 {"time_micros": 1709735401721540, "job": 226, "valid_key_num": 93169, "invalid_key_num": 18037, "valid_value_size": 74320731, "invalid_value_size": 14477034, "invalid_key_ratio": 0.162194}
+```
+Werid thing, all key are classified as 0 after first model is available.
+All keys are classified as  1 after second model is available. 
+Why is that ?
+There is some value classified as 1 because there is no past_distance_count that > 0 of the key.
+```
+
+2024/03/06-22:15:03.204416 1941371 [db/blob/blob_file_builder.cc:489] [default] [JOB 68] Generated blob file #221: 93633 total blobs, 80616244 total bytes, lifetime label: 1 creation timestamp: 4138270
+2024/03/06-22:15:55.108930 1941358 [db/blob/blob_file_builder.cc:489] [default] [JOB 74] Generated blob file #231: 55791 total blobs, 47805101 total bytes, lifetime label: 1 creation timestamp: 4413341
+2024/03/06-22:20:55.784199 1941370 [db/blob/blob_file_builder.cc:489] [default] [JOB 131] Generated blob file #410: 33978 total blobs, 29195327 total bytes, lifetime label: 0 creation timestamp: 6120309
+2024/03/06-22:21:17.423697 1941373 [db/blob/blob_file_builder.cc:489] [default] [JOB 132] Generated blob file #414: 54454 total blobs, 47066687 total bytes, lifetime label: 0 creation timestamp: 6207481
+2024/03/06-22:21:29.495561 1941364 [db/blob/blob_file_builder.cc:489] [default] [JOB 133] Generated blob file #415: 34366 total blobs, 29530451 total bytes, lifetime label: 0 creation timestamp: 6256389
+2024/03/06-22:21:40.071969 1941359 [db/blob/blob_file_builder.cc:489] [default] [JOB 135] Generated blob file #420: 55433 total blobs, 47903083 total bytes, lifetime label: 0 creation timestamp: 6329184
+2024/03/06-22:24:47.214161 1941369 EVENT_LOG_v1 {"time_micros": 1709735087214152, "job": 174, "event": "gc_started", "gc_files": [410, 414, 415, 420, 422, 221, 222, 225, 226, 229, 231]}
+
+2024/03/06-22:25:02.896741 1941369 [db/blob/blob_file_builder.cc:489] [default] [JOB 174] Generated blob file #541: 130577 total blobs, 112093311 total bytes, lifetime label: 0 creation timestamp: 7428544
+2024/03/06-22:25:27.042375 1941369 [db/blob/blob_file_builder.cc:489] [default] [JOB 174] Generated blob file #564: 145649 total blobs, 124775488 total bytes, lifetime label: 1 creation timestamp: 7428544
+2024/03/06-22:25:44.780826 1941369 [db/blob/blob_file_builder.cc:489] [default] [JOB 174] Generated blob file #583: 132445 total blobs, 113445916 total bytes, lifetime label: 1 creation timestamp: 7428544
+2024/03/06-22:25:44.781440 1941369 [db/blob/blob_file_builder.cc:489] [default] [JOB 174] Generated blob file #558: 28755 total blobs, 24674080 total bytes, lifetime label: 0 creation timestamp: 7428544
+
+```
+
+```
+ [JOB 138] Generated blob file #426: 55479 total blobs, 47938970 total bytes, lifetime label: 0 creation timestamp: 6450887
+ [JOB 138] Generated blob file #427: 38167 total blobs, 32684780 total bytes, lifetime label: 1 creation timestamp: 6450887
+```
+
+```
+
+2024/03/06-22:17:24.186355 1941373 [db/training/training_data.cc:307] key label ratio 0: 311489, 1: 188511 res_short_count: 297848, res_long_count: 202152
+2024/03/06-22:24:23.522786 1941371 [db/training/training_data.cc:307] key label ratio 0: 195067, 1: 304933 res_short_count: 160066, res_long_count: 339934
+2024/03/06-22:29:52.088006 1941372 [db/training/training_data.cc:307] key label ratio 0: 151436, 1: 348564 res_short_count: 118284, res_long_count: 381716
+```
+Seems model is biased towards majority of labeled keys.
+But it should not happen that all keys are classified as 0 or 1.
+
+Did I put blob files to their original lifetime bucket during gc ? I should put it 
+to longer lifetime bucket because it proves that model classification is worng..
+But for now I think I need to change model to do regression task.
+
+This code is problematic.
+Should decide past_distances_count before write it to value.
+```cpp
+    PutVarint32(&blob_index_, past_distances_count);
+    if(past_distances_count > 0) {
+      past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
+      PutVarint64(&blob_index_, distance ); 
+      // write past_distances to value
+      for(size_t i = 0; i < past_distances_count-1; i++) {
+        PutVarint64(&blob_index_, past_distances[i]);
+      }
+ 
+```
+
+All inference res of data is the same.
+Need to check data issue.
+```
+789.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000122 1.015625 1.125000 1.500000 0.767660
+792.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000488 0.767660
+795.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000002 1.001953 0.767660
+791.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000061 1.007812 0.767660
+788.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000122 1.015625 1.125000 0.767660
+791.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000061 0.767660
+1591272.000000 1323121.000000 1433107.000000 814.000000 3.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000244 1.016129 1.164062 1.000000 1.000000 1.000000 1.000000 1.000001 1.000977 1.031250 1.250061 1.508064 2.164062 0.767660
+809.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000122 1.015625 1.125000 1.500000 0.767660 
+123487.000000 1135455.000000 3106464.000000 715994.000000 1919905.000000 168250.000000 821.000000 4.000000 1.000000 1.000000 1.000000 1.000031 1.007812 1.125000 1.500004 2.003906 2.062538 2.262695 1.000000 1.000000 1.000000 1.000000 1.000492 1.035156 1.375001 2.001953 3.062538 3.262695 0.767660
+408329.000000 813.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000244 1.015625 1.125000 1.500000 2.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000732 1.062500 0.767660
+799.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000977 0.767660
+```
+Is this because of edcs data issue?
+
+Found another issue. 
+I should not put edcs when I first read edcs from value.
+```cpp
+      if(past_distances_count> 0) {
+        for(i=0; i < n_edc_feature; i++) {
+          float edc;
+          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+          edcs.emplace_back(edc);
+          // indices.emplace_back(max_n_past_timestamps+2+i);
+          // data.emplace_back(edcs[i]);
+          assert(ok);
+        }
+      }
+
+```
+Prediction value is not working after comment code above. 
+Need to do more check.
+Is this because of db_itnernal_iter issue?
+I should not create db_internal iter that refers memtable and immutable memtable..  
+Add       assert(distance > 0); to make sure db internal iter 
+does not retrieve keys that are in memtable.
+
+There is no data in edcs when past_distances_count == 0.
+So I call emplace_back(new_edc) to add new_edc to edcs.
+But I don't think this step fix anything.
+```cpp
+      } else {
+        for(size_t k=0; k < n_edc_feature; k++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+          float new_edc = hash_edc[_distance_idx]  + 1;
+          edcs.emplace_back(new_edc);
+          indices.emplace_back(max_n_past_timestamps+2+k);
+          data.emplace_back(new_edc);
+        }
+      }
+
+
+```
+
+Got a assertion false 
+```
+db_bench: /home/zt/rocksdb_kv_sep_lightgbm_binary_model/db/compaction/compaction_iterator.cc:1427: bool rocksdb::CompactionIterator::ExtractLargeValueIfNeededImpl(): Assertion `data.size() < num_features_' failed.
+```
+Should change to <=.
+
+This should not happen..
+There should be at least one past_distance in infer data.
+```
+810.000000 0.000000 1.000000 1.000000 1.000000 1.000488 1.031250 1.250000 1.500000 2.000000 2.000000 2.000000 0.452911
+810.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000015 1.003906 0.452911
+803.000000 0.000000 1.000000 1.000000 1.000000 1.000000 1.000122 1.015625 1.125000 1.500000 2.000000 2.000000 0.452911
+```
+
+Are fast_config handle updated? I think so
+
+Add additional condition to model calling 
+```cpp
+      if(fast_config_handle_ && past_distances_count > 0) {
+```
+
+I have already implemented internal iterator starting from level 0
+Still not change after doing code change above.
+Let's remove edcs from feature..
+
+Add indptr[1] = data.size()
+Dont' know if this is the root cause.
+
+Change model training trigger threshold from  500k to 100k toget fastter validation. 
+Finally  prediciton value is normal after adding indptr[1]
+Fuckx.
+
+Invalid key ratio increases a lot after model is working.
+But still got low invalid_key_ratio in some gc job.
+```
+2024/03/07-16:35:49.327204 885924 (Original Log Time 2024/03/07-16:35:49.324675) EVENT_LOG_v1 {"time_micros": 1709800549324647, "job": 50, "valid_key_num": 4036, "invalid_key_num": 9596, "valid_value_size": 3256271, "invalid_value_size": 7925179, "invalid_key_ratio": 0.703932}
+
+2024/03/07-16:43:16.790429 885923 (Original Log Time 2024/03/07-16:43:16.779019) EVENT_LOG_v1 {"time_micros": 1709800996778985, "job": 143, "valid_key_num": 1158, "invalid_key_num": 384, "valid_value_size": 928509, "invalid_value_size": 311545, "invalid_key_ratio": 0.249027}
+```
+
+Too many small blobs. Why is that ?
+There are some blob_file_deletion.
+Not all blob are deleted.
+
+
+[Status: Ongoing]
+
+[Todo]
+figure out why blob files are not deleted and fix it..
+[Status: Not started]
+
+
+[Todo]
+Fix read blob assertion false issue.
+It's because I did not call edit->AddBlobFileMap()
+[Status: Done]
+
+[Todo]
+Change GetBlob to use new function with blob_index_slice
+```
+Status BlobFetcher::FetchBlob(const Slice& user_key,
+                              const BlobIndex& blob_index,
+                              FilePrefetchBuffer* prefetch_buffer,
+                              PinnableSlice* blob_value,
+                              uint64_t* bytes_read) const {
+  assert(version_);
+
+
+```
+This code is called in invoke_filter and compaction iteration when 
+doing blob_index gc. 
+Update this function to encode blob_index into string and do the call.
+
+[Status: Done]
+
+[Todo]
+Always return from ExtractLargeValueIfNeeded();    
+No gc during compaction iterator.
+[Status: Done]
+
+[Todo]
+Make sure blob file picking is correct.
+Currently copmuteblobmarkforcompaction is called in AppendVersion .
+Should we call it in other places?
+```c++
+
+void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
+  v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
+```
+[Status: Done]
+
+
+[Todo]
+Add blob file mapping.
+Create blob file mapping during gc.
+Need to create another function in version builder.  
+
+[Status: Done]
+
+[Todo]
+Change blob file map and blob offset map from pointer to value.
+There is a bug when doing ApplyBlobOffsetMap;
+[Status: Done]
+
+[Todo]
+Make sure obsolete blob files are not inserted to new version
+during version builder..
+Need to check LOG and make sure gc blob files ared deleted.
+This has been done in code I written. 
+blob files in deleted_blob_files are not inserted to new version.
+[Status: Done]
+
+
+[Todo]
+Need to mention that we create indirect blob offset map in our paper 
+to solve one:one value offset binding between sst and blob file.
+[Status: Ongoing]
+
+[Todo]
+Consider move lifetime of blob to longer lifetime classification 
+during gc.
+[Status: Not started]
+
+
+What if one sst points to too many blob files?
+Any harm?
+What if many sst files point to one blob file?
+
+[Todo]
+Delay model prediction till compaction in level 0?
+[Status: Not started]
+
+[Todo]
 May need to mention one disadvantage of our method is that 
 it do more compaction compared to std rocksdb but with less write size.
 [Status: Abandoned]
 
 [Todo]
 Remove key data collection to speed up write speed.
+[Status: Not started]
+
+[Todo]
+Add write andread stats to compaction stats of garbage collection job.
+db impl must maintain internal compaction stats.
+I can run bench mark and set breakpoint to 
+get call stack.
+```cpp
+
+Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
+    int output_level = compact_->compaction->output_level();
+    cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
+                                                compaction_stats_);
+
+
+    void CompactionJob::UpdateCompactionJobStats(
+        const InternalStats::CompactionStats& stats) const {
+
+          compaction_job_stats_->elapsed_micros = stats.micros;
+          compaction_job_stats_->total_output_bytes = stats.bytes_written;
+          compaction_job_stats_->total_output_bytes_blob = stats.bytes_written_blob;  
+```
+
+```cpp
+
+Status CompactionJob::Run() {
+  ProcessKeyValueCompaction(&compact_->sub_compact_states[0]);
+  compaction_stats_.SetMicros(db_options_.clock->NowMicros() - start_micros);
+
+  compact_->AggregateCompactionStats(compaction_stats_, *compaction_job_stats_);
+
+    // read stats.
+    // add num_input_records
+    // and bytes_read_blob
+    // and num_droppped_records
+  UpdateCompactionStats();
+        void CompactionJob::UpdateCompactionInputStatsHelper(int* num_files,
+                                                             uint64_t* bytes_read,
+                                                             int input_level) {
+          const Compaction* compaction = compact_->compaction;
+          auto num_input_files = compaction->num_input_files(input_level);
+          *num_files += static_cast<int>(num_input_files);
+          for (size_t i = 0; i < num_input_files; ++i) {
+            const auto* file_meta = compaction->input(input_level, i);
+            *bytes_read += file_meta->fd.GetFileSize();
+            compaction_stats_.stats.num_input_records +=
+                static_cast<uint64_t>(file_meta->num_entries);
+              }
+          compaction_stats_.stats.bytes_read_blob =
+              compaction_job_stats_->total_blob_bytes_read;
+          compaction_stats_.stats.num_dropped_records =
+              compaction_stats_.DroppedRecords();
+
+            uint64_t DroppedRecords() {
+              uint64_t output_records = stats.num_output_records;
+              if (has_penultimate_level_output) {
+                output_records += penultimate_level_stats.num_output_records;
+              }
+              if (stats.num_input_records > output_records) {
+                return stats.num_input_records - output_records;
+              }
+              return 0;
+            }
+
+
+```
+When CompactionStats is updated?
+I can update CompactionStats during 
+Actually I have already do gc write stats update in GarbageCollectionJob::Install()
+```cpp
+Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options) {
+  cfd->internal_stats()->AddGCStats(thread_pri_, gc_stats_);
+```
+Did I update read stats?
+
+I add bytes_read_blob to sum level 
+```cpp
+void InternalStats::DumpCFMapStats(
+    const VersionStorageInfo* vstorage,
+    std::map<int, std::map<LevelStatType, double>>* levels_stats,
+    CompactionStats* compaction_stats_sum) {
+ 
+      compaction_stats_sum->bytes_read_blob += gc_stats_.bytes_read_blob;
+```
+
+```cpp
+  void AddGCStats(Env::Priority thread_pri,
+                  const CompactionStatsFull& gc_stats) {
+    gc_stats_.Add(gc_stats.stats);
+    comp_stats_by_pri_[thread_pri].Add(gc_stats.stats);
+
+  }
+      void Add(const CompactionStats& c) {
+      this->micros += c.micros;
+      this->cpu_micros += c.cpu_micros;
+      this->bytes_read_non_output_levels += c.bytes_read_non_output_levels;
+      this->bytes_read_output_level += c.bytes_read_output_level;
+      this->bytes_read_blob += c.bytes_read_blob;
+      this->bytes_written += c.bytes_written;
+      this->bytes_written_blob += c.bytes_written_blob;
+      this->bytes_moved += c.bytes_moved;
+      this->num_input_files_in_non_output_levels +=
+          c.num_input_files_in_non_output_levels;
+      this->num_input_files_in_output_level +=
+          c.num_input_files_in_output_level;
+      this->num_output_files += c.num_output_files;
+      this->num_output_files_blob += c.num_output_files_blob;
+      this->num_input_records += c.num_input_records;
+      this->num_dropped_records += c.num_dropped_records;
+      this->num_output_records += c.num_output_records;
+      this->count += c.count;
+      int num_of_reasons = static_cast<int>(CompactionReason::kNumOfReasons);
+      for (int i = 0; i < num_of_reasons; i++) {
+        counts[i] += c.counts[i];
+      }
+    }
+```
+How micros and cpu_micros 
+How does compaction iterator update bytes_written_blob ?
+```cpp
+  if(enable_blob_file_builder) {
+    sub_compact->Current().UpdateBlobStats();
+  }
+  void UpdateBlobStats() {
+    assert(!is_penultimate_level_);
+    stats_.num_output_files_blob = blob_file_additions_.size();
+    for (const auto& blob : blob_file_additions_) {
+      stats_.bytes_written_blob += blob.GetTotalBlobBytes();
+    }
+  }
+
+```
+Don't think compaction_job_stats is useful.
+Should I add separte garbage collection bytes? 
+I need to add bytes_written and bytes_written_blob to compaction stats for now
+to get true write amplifcation.
+Do I need to call this ?
+```cpp
+db/compaction/compaction_job.cc|1829 col 14| RecordTick(stats_, COMPACT_WRITE_BYTES, IOSTATS(bytes_written));
+```
+I will not  call this for now.
+
+call 
+```cpp
+void InternalStats::DumpCFMapStats(
+    const VersionStorageInfo* vstorage,
+    std::map<int, std::map<LevelStatType, double>>* levels_stats,
+    CompactionStats* compaction_stats_sum) {
+ 
+  compaction_stats_sum->Add(gc_stats_);
+```
+to add garbage collection job stats to internal stats.
+I think now w-amp is correct.
+w-amp does not change after adding bytes_written_blob to internal stats.
+Why is that ?
+```
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.4      0.4       0.0   1.0      0.0      5.8   1164.33            796.51        81   14.374       0      0       0.0       6.1
+  L1     12/1   39.10 MB   1.4      0.8     0.4      0.4       0.7      0.3       0.0   1.6      5.2      4.5    167.05            166.79        20    8.352     15M  1248K       0.0       0.0
+  L2     69/3   195.28 MB   0.9      0.8     0.3      0.5       0.7      0.2       0.0   2.5      4.8      4.2    166.52            166.27        86    1.936     15M  1986K       0.0       0.0
+  L3      4/0   10.78 MB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+ Sum     85/4   245.16 MB   0.0      6.8     0.7      0.9       1.9      1.0       0.0   1.7      3.5      5.7   1987.85           1617.50       187   10.630     37M  5715K       5.2       9.3
+ Int      0/0    0.00 KB   0.0      0.1     0.0      0.0       0.0      0.0       0.0 51494568.0      6.3      5.5      8.98              8.97         2    4.490    817K    77K       0.0       0.0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0      6.8     0.7      0.9       1.4      0.5       0.0   0.0      8.5      5.7    823.52            820.99       106    7.769     37M  5715K       5.2       3.2
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.4      0.4       0.0   0.0      0.0      5.8   1164.33            796.51        81   14.374       0      0       0.0       6.1
+
+Blob file count: 51, total size: 4.1 GB, garbage size: 0.0 GB, space amp: 1.0
+
+Uptime(secs): 1773.8 total, 8.0 interval
+Flush(GB): cumulative 6.543, interval 0.000
+Cumulative writes: 9986K writes, 9986K keys, 9986K commit groups, 1.0 writes per commit group, ingest: 7.87 GB, 4.54 MB/s
+```
+Actually w-amp does change after I checked w-amp before.
+w-amp before: 1.2
+w-amp now: 1.7
+wblob before: 6.1GB
+wblob now: 9.3GB
+drop rate before: 0.11
+drop rate now:0.154
+[Status: Done]
+
+[Todo]
+How cumulated compaction and writes is counted?
+[Status: Not started]
+
+[Todo]
+Write blob offset map to file.
+[Status: Not started]
+
+[Todo]
+Delete obsolete map items.
+[Status: Not started]
+
+[Todo]
+Multiple lifetime bucket.
+[Status: Not started]
+
+[Todo]
+Reduce flush time.
+[Status: Not started]
+
+[Todo]
+Save lots of time after removing training data logging and start
+thread training model.
+[Status: Not started]
+
+[Todo]
+Use model to do regression prediction of lifetime of key and 
+then put value to lifetime bucket that is close the predicted lifetime value. 
 [Status: Not started]

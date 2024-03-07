@@ -75,10 +75,15 @@ class BlobFileBuilder {
   Status AddWithSeq(const Slice& key, const Slice& value, uint64_t seq,  std::string* blob_index);
   Status Add(const Slice& key, const Slice& value, std::string* blob_index);
   Status Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket);
+  Status AddWithoutBlobFileClose(const Slice& key, const Slice& value, std::string* blob_index);
   Status Finish();
   uint64_t GetLifetimeLabel() const { return lifetime_label_; }
   uint64_t GetCreationTimestamp() const { return creation_timestamp_; }
   void Abandon(const Status& s);
+
+  Status CloseBlobFileIfNeeded();
+
+  uint64_t GetCurBlobFileNum() const { return cur_blob_file_num_; }
 
  private:
   bool IsBlobFileOpen() const;
@@ -87,7 +92,6 @@ class BlobFileBuilder {
   Status WriteBlobToFile(const Slice& key, const Slice& blob,
                          uint64_t* blob_file_number, uint64_t* blob_offset);
   Status CloseBlobFile();
-  Status CloseBlobFileIfNeeded();
 
   Status PutBlobIntoCacheIfNeeded(const Slice& blob, uint64_t blob_file_number,
                                   uint64_t blob_offset) const;
@@ -121,6 +125,8 @@ class BlobFileBuilder {
   uint64_t lifetime_bucket_num_;
   uint64_t min_seq_;
   uint64_t max_seq_;
+
+  uint64_t cur_blob_file_num_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

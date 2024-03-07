@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <cstdint>
 #include <cstdio>
 #include <list>
 #include <map>
@@ -2099,6 +2100,8 @@ VersionStorageInfo::VersionStorageInfo(
     oldest_snapshot_seqnum_ = ref_vstorage->oldest_snapshot_seqnum_;
     compact_cursor_ = ref_vstorage->compact_cursor_;
     compact_cursor_.resize(num_levels_);
+    blob_file_map_ = ref_vstorage->blob_file_map_;
+    blob_offset_map_ = ref_vstorage->blob_offset_map_; 
   }
   lifetime_blob_files_.resize(version_storage_lifetime_info.lifetime_bucket_num);
 }
@@ -2149,22 +2152,119 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
                         PinnableSlice* value, uint64_t* bytes_read) const {
   BlobIndex blob_index;
 
+  uint64_t blob_index_len;
   {
-    Status s = blob_index.DecodeFrom(blob_index_slice);
+    Status s = blob_index.DecodeFromWithKeyMeta(blob_index_slice, &blob_index_len);
     if (!s.ok()) {
       return s;
     }
   }
 
-  return GetBlob(read_options, user_key, blob_index, prefetch_buffer, value,
+  Slice blob_index_slice_without_key_meta(blob_index_slice.data(), blob_index_len);
+
+  return GetBlob(read_options, user_key, blob_index, 
+                blob_index_slice_without_key_meta,
+                prefetch_buffer, value,
                  bytes_read);
 }
+const std::string& Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+                                      const Slice& orig_blob_index_str,
+                                      const UnorderedMap<uint64_t, uint64_t>& blob_file_map,
+                                      const UnorderedMap<uint64_t,UnorderedMap<std::string, std::string>*>& blob_offset_map) const  {
+  uint64_t latest_blob_file_number = orig_blob_file_number;
+  const std::string cur_blob_index_str(orig_blob_index_str.ToStringView());
+  const std::string* cur_blob_index_str_ptr = &cur_blob_index_str;
+  while (true) {
+    auto cur_blob_file_it = blob_file_map.find(latest_blob_file_number);
+    if (cur_blob_file_it != blob_file_map.end()) {
+      uint64_t cur_blob_file_number = cur_blob_file_it->second;
+      auto cur_blob_offset_it = blob_offset_map.find(cur_blob_file_number);
+      if (cur_blob_offset_it != blob_offset_map.end()) {
+        auto cur_blob_offset_map = cur_blob_offset_it->second;
+        auto cur_blob_index_it = cur_blob_offset_map->find(*cur_blob_index_str_ptr);
+        if (cur_blob_index_it != cur_blob_offset_map->end()) {
+          cur_blob_index_str_ptr = &cur_blob_index_it->second;
+        } else {
+          assert(false);
+        }
+      } else {
+        assert(false);
+      }
+    } else {
+      return *cur_blob_index_str_ptr;
+    }
 
+    latest_blob_file_number = cur_blob_file_it->second;
+  }
+  
+}
+
+
+uint64_t Version::GetLatestBlobFileNum(const uint64_t orig_blob_file_number, const std::unordered_map<uint64_t, uint64_t>& blob_file_map) const {
+  uint64_t latest_blob_file_number = orig_blob_file_number;
+  while (true) {
+    auto it = blob_file_map.find(latest_blob_file_number);
+    if (it == blob_file_map.end()) {
+      break;
+    }
+    latest_blob_file_number = it->second;
+  }
+  return latest_blob_file_number;
+
+}
+Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
+               const BlobIndex& blob_index,
+               const Slice& orig_blob_index_slice,
+               FilePrefetchBuffer* prefetch_buffer, PinnableSlice* value,
+               uint64_t* bytes_read) const {
+  assert(value);
+
+  if (blob_index.HasTTL() || blob_index.IsInlined()) {
+    return Status::Corruption("Unexpected TTL/inlined blob index");
+  }
+
+  const uint64_t blob_file_number = blob_index.file_number();
+
+  // const std::string new_blob_index_str = 
+
+  BlobIndex new_blob_index;
+  auto blob_file_meta = storage_info_.GetBlobFileMetaData(blob_file_number);
+  Status s;
+  if (!blob_file_meta) {
+    const std::string& latest_blob_index_str = GetLatestBlobIndex(blob_file_number, 
+                                                                  orig_blob_index_slice, 
+                                                                  storage_info_.GetBlobFileMap(), 
+                                                                  storage_info_.GetBlobOffsetMap());
+    s = new_blob_index.DecodeFrom(Slice(latest_blob_index_str));
+    const uint64_t latest_blob_file_number = new_blob_index.file_number();
+    assert(s.ok());
+    blob_file_meta = storage_info_.GetBlobFileMetaData(latest_blob_file_number);
+    assert(blob_file_meta);
+    value->Reset();
+    s= blob_source_->GetBlob(
+        read_options, user_key, latest_blob_file_number, new_blob_index.offset(),
+        blob_file_meta->GetBlobFileSize(), new_blob_index.size(),
+        new_blob_index.compression(), prefetch_buffer, value, bytes_read);
+
+    // return Status::Corruption("Invalid blob file number");
+  } else {
+    assert(blob_source_);
+    value->Reset();
+    s = blob_source_->GetBlob(
+        read_options, user_key, blob_file_number, blob_index.offset(),
+        blob_file_meta->GetBlobFileSize(), blob_index.size(),
+        blob_index.compression(), prefetch_buffer, value, bytes_read);
+
+  }
+
+  return s;
+}
 Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
                         const BlobIndex& blob_index,
                         FilePrefetchBuffer* prefetch_buffer,
                         PinnableSlice* value, uint64_t* bytes_read) const {
   assert(value);
+  assert(false);
 
   if (blob_index.HasTTL() || blob_index.IsInlined()) {
     return Status::Corruption("Unexpected TTL/inlined blob index");
@@ -3410,30 +3510,30 @@ void VersionStorageInfo::ComputeCompactionScore(
         immutable_options, mutable_cf_options.periodic_compaction_seconds);
   }
 
-  if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
-    ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
-    if(!files_marked_for_forced_blob_gc_.empty()) {
-      std::string sst_files;
-      for(auto pair: files_marked_for_forced_blob_gc_) {
-          sst_files.append(std::to_string(pair.second->fd.GetNumber())+",");
-        }
-      std::string blob_files;
-      for(auto blob_file_num: gc_blob_files_) {
-          blob_files.append(std::to_string(blob_file_num)+",");
-      }
-      ROCKS_LOG_INFO(immutable_options.info_log, "Files marked for forced blob gc: %s | %s\n", sst_files.c_str(), blob_files.c_str());
-      // ROCKS_LOG_INFO(immutable_options.info_log, "Creating manifest %" PRIu64 "\n",
-      //            pending_manifest_file_number_);
+  // if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
+  //   ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+  //   if(!files_marked_for_forced_blob_gc_.empty()) {
+  //     std::string sst_files;
+  //     for(auto pair: files_marked_for_forced_blob_gc_) {
+  //         sst_files.append(std::to_string(pair.second->fd.GetNumber())+",");
+  //       }
+  //     std::string blob_files;
+  //     for(auto blob_file_num: gc_blob_files_) {
+  //         blob_files.append(std::to_string(blob_file_num)+",");
+  //     }
+  //     ROCKS_LOG_INFO(immutable_options.info_log, "Files marked for forced blob gc: %s | %s\n", sst_files.c_str(), blob_files.c_str());
+  //     // ROCKS_LOG_INFO(immutable_options.info_log, "Creating manifest %" PRIu64 "\n",
+  //     //            pending_manifest_file_number_);
 
 
-      }
+  //     }
 
-  }
+  // }
 
   // if(mutable_cf_options.enable_blob_garbage_collection && mutable_cf_options.blob_garbage_collection_age_cutoff > 0.0) {
 
-  //   ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
-  //   // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
+    // ComputeBlobsMarkedForForcedGC( mutable_cf_options.blob_garbage_collection_age_cutoff) ;
+    // ComputeFilesMarkedForForcedBlobGCWithLifetime(mutable_cf_options.blob_garbage_collection_age_cutoff);
   // }
 
 
@@ -3580,30 +3680,19 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       assert(false);
     }
     uint64_t lifetime_ttl = lifetime_label_iter->second;
-    size_t to_be_gced_idx = 0;
-    uint64_t micros_to_sec = 1000000;
-    for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
-      if(iter->GetBeingGCed()) {
+    for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {
+      if(blob_file->GetBeingGCed()) {
         // this blob file is already being GCed
         continue;
       } 
-      uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
-      uint64_t now_sec = env_->NowMicros() / micros_to_sec;
-      assert(now_sec >= blob_file_creation_time_sec);
 
-      uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
-      if(elapsed_sec >= lifetime_ttl) {
-        // iter->SetBeingGCed();
-        blob_files_marked_for_gc_.emplace_back(iter);
-
-
-        // this blob file is supposed to be GCed
-        // files_marked_for_forced_blob_gc_.emplace_back(lifetime_idx, iter);
+      bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
+      if(should_gc) {
+        blob_files_marked_for_gc_.emplace_back(blob_file );
       } else {
         // this blob file is not supposed to be GCed
         break;
       }
-
     }
   }
 }
@@ -3634,10 +3723,6 @@ void VersionStorageInfo::ComputeFilesMarkedForForcedBlobGCWithLifetime(
       uint64_t lifetime_ttl = lifetime_label_iter->second;
       // uint64_t micros_to_sec = 1000000;
       for(const auto &iter: lifetime_blob_files_[lifetime_idx]) {
-        // uint64_t blob_file_creation_time_sec = iter->GetCreationTimestamp() / micros_to_sec;
-        // uint64_t now_sec = env_->NowMicros() / micros_to_sec;
-        // assert(now_sec >= blob_file_creation_time_sec);
-
         // uint64_t elapsed_sec = now_sec - blob_file_creation_time_sec; 
         bool should_gc = ShouldGC(iter->GetCreationTimestamp(), lifetime_ttl);
         // elapsed_sec >= lifetime_ttl

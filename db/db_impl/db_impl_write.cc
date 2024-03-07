@@ -766,7 +766,7 @@ Status DBImpl::AddTrainingSample(const std::vector<uint64_t>& past_distance,
 
   std::lock_guard<std::mutex> lock(key_meta_mutex_);
   Status s = training_data_->AddTrainingSample(past_distance, blob_size, n_within, edcs, future_distance);
-  if(training_data_->GetNumTrainingSamples() >= 500000) {
+  if(training_data_->GetNumTrainingSamples() >= 100000) {
     // for(auto &key_meta : key_metas_) {
     //   training_data_->AddTrainingSample(key_meta.second, versions_->LastSequence(), 0);
     // }

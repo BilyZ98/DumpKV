@@ -93,6 +93,8 @@ void VersionEdit::Clear() {
   is_in_atomic_group_ = false;
   remaining_entries_ = 0;
   full_history_ts_low_.clear();
+  blob_file_map_.clear();
+  blob_offset_map_.clear();
 }
 
 bool VersionEdit::EncodeTo(std::string* dst) const {

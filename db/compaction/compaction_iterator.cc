@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include <algorithm>
+#include <string>
 #include "db/dbformat.h"
 #include "rocksdb/env.h"
 #include "rocksdb/key_meta.h"
@@ -89,7 +90,8 @@ CompactionIterator::CompactionIterator(
     lifetime_keys_count_[i] = 0;
   }
   const EnvOptions soptions;
-  Status s= env_->NewWritableFile("/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/compaction_infer_data.txt", &train_data_file_, soptions);
+  std::string infer_data_file_path = "/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
+  Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
   assert(s.ok());
 
   // is this ok?
@@ -412,6 +414,7 @@ bool CompactionIterator::InvokeFilterIfNeeded(bool* need_skip,
 
     return true;
   }
+  assert(false);
   // fprintf(stderr, "Error: InvokeFilterIfNeeded\n");
   bool error = false;
   // If the user has specified a compaction filter and the sequence
@@ -1321,8 +1324,10 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     }
     int maxIndex = 1;
     uint32_t past_distances_count = 0;
-    std::vector<uint64_t> past_distances(max_n_past_timestamps);
-    std::vector<float> edcs(n_edc_feature);
+    std::vector<uint64_t> past_distances;
+    past_distances.reserve(max_n_past_timestamps);
+    std::vector<float> edcs;
+    edcs.reserve(n_edc_feature);
     uint64_t past_seq;
     uint64_t distance;
     if(is_iter_valid && db_internal_iter_->user_key().compare(user_key()) == 0) {
@@ -1346,11 +1351,14 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       uint32_t this_past_distance = 0;
       uint8_t n_within = 0;
       uint32_t i = 0;
-      for(i=0; i < past_distances_count && i < max_n_past_timestamps; i++) {
-        ok = GetVarint64(&prev_value, &past_distances[i]);
-        this_past_distance +=  past_distances[i];  
+      assert(past_distances_count <= max_n_past_timestamps);
+      for(i=0; i < past_distances_count ; i++) {
+        uint64_t past_distance;
+        ok = GetVarint64(&prev_value, &past_distance);
+        past_distances.emplace_back(past_distance);
+        this_past_distance +=  past_distance;  
         indices.emplace_back(i);
-        data.emplace_back(static_cast<double>(past_distances[i]));
+        data.emplace_back(static_cast<double>(past_distance));
         if (this_past_distance < memory_window) {
           ++n_within;
         }
@@ -1367,7 +1375,11 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
 
       if(past_distances_count> 0) {
         for(i=0; i < n_edc_feature; i++) {
-          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edcs[i]));
+          float edc;
+          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+          edcs.emplace_back(edc);
+          // indices.emplace_back(max_n_past_timestamps+2+i);
+          // data.emplace_back(edcs[i]);
           assert(ok);
         }
       }
@@ -1376,6 +1388,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
       past_seq = past_key.sequence;
       distance = ikey().sequence - past_seq;
+      assert(distance > 0);
 
       // Need to set up edcs if past_distances_count = 0
       if(past_distances_count > 0) {
@@ -1387,6 +1400,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         assert(s.ok()); 
       }
       if(past_distances_count > 0) {
+        assert(edcs.size() == n_edc_feature);
         for(size_t k=0; k < n_edc_feature; k++) {
           uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
           edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
@@ -1395,20 +1409,23 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         }
 
       } else {
+        assert(edcs.size() == 0);
         for(size_t k=0; k < n_edc_feature; k++) {
           uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-          edcs[k] = hash_edc[_distance_idx]  + 1;
-          // edcs[k] = 1;
+          float new_edc = hash_edc[_distance_idx]  + 1;
+          edcs.emplace_back(new_edc);
           indices.emplace_back(max_n_past_timestamps+2+k);
-          data.emplace_back(edcs[k]);
+          data.emplace_back(new_edc);
         }
       }
 
-      if(fast_config_handle_) {
+      if(fast_config_handle_ && past_distances_count > 0) {
 
         std::string inference_params = "num_threads=1 verbosity=0";
         std::vector<double> out_result(1, 0.0);
         int64_t out_len ;
+        assert(data.size() <= num_features_);
+        indptr[1] = data.size();
         int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
                                   static_cast<void *>(indptr.data()),
                                   C_API_DTYPE_INT32,
@@ -1427,6 +1444,8 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         assert(predict_res == 0);
         maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
+        s = WriteTrainDataToFile(data,out_result[0]);
+        assert(s.ok());
       }
       lifetime_keys_count_[maxIndex] += 1;
 
@@ -1628,13 +1647,11 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       assert(past_distances_count == 0);
     }
    
-     // s = lifetime_blob_file_builders_[maxIndex]->Add(user_key(), value_, &blob_index_);
-    // s = lifetime_blob_file_builders_[maxIndex]->AddWithSeq(user_key(), value_, ikey().sequence, &blob_index_);
     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
 
+    past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
     PutVarint32(&blob_index_, past_distances_count);
     if(past_distances_count > 0) {
-      past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
       PutVarint64(&blob_index_, distance ); 
       // write past_distances to value
       for(size_t i = 0; i < past_distances_count-1; i++) {
@@ -1643,7 +1660,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // write edcs to value
       // Need to update edcs
       for(int i = 0; i < n_edc_feature; i++) {
-        PutFixed32(&blob_index_, edcs[i]);
+        PutFixed32(&blob_index_, *reinterpret_cast<uint32_t*>(&edcs[i]));
       }
     }
     // Add training example. We can all db_->AddtrainingExample() here

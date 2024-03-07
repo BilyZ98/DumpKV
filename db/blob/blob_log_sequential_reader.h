@@ -62,6 +62,7 @@ class BlobLogSequentialReader {
 
   uint64_t GetNextByte() const { return next_byte_; }
 
+  uint64_t GetCurOffset() const { return cur_offset_; } 
  private:
   Status ReadSlice(uint64_t size, Slice* slice, char* buf);
 
@@ -76,6 +77,8 @@ class BlobLogSequentialReader {
 
   // which byte to read next
   uint64_t next_byte_;
+
+  uint64_t cur_offset_;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

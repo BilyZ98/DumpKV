@@ -18,7 +18,8 @@ BlobLogSequentialReader::BlobLogSequentialReader(
     : file_(std::move(file_reader)),
       clock_(clock),
       statistics_(statistics),
-      next_byte_(0) {}
+      next_byte_(0),
+      cur_offset_(0){}
 
 BlobLogSequentialReader::~BlobLogSequentialReader() = default;
 
@@ -59,6 +60,7 @@ Status BlobLogSequentialReader::ReadHeader(BlobLogHeader* header) {
     return Status::Corruption("EOF reached before file header");
   }
 
+  cur_offset_ += buffer_.size();
   return header->DecodeFrom(buffer_);
 }
 
@@ -111,6 +113,8 @@ Status BlobLogSequentialReader::ReadRecord(BlobLogRecord* record,
       }
       break;
   }
+
+  cur_offset_ += record->record_size();
   return s;
 }
 
@@ -127,6 +131,7 @@ Status BlobLogSequentialReader::ReadFooter(BlobLogFooter* footer) {
   if (buffer_.size() != BlobLogFooter::kSize) {
     return Status::Corruption("EOF reached before file footer");
   }
+  cur_offset_ += BlobLogFooter::kSize;
 
   return footer->DecodeFrom(buffer_);
 }

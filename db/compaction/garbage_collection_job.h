@@ -55,6 +55,18 @@ class VersionSet;
 
 class SubcompactionState;
 
+class GarbageCollectionOutput{
+public:
+  GarbageCollectionOutput(GarbageCollection* gc);
+
+  std::vector<BlobFileAddition>* blob_file_additions() {
+    return &blob_file_additions_;
+  }
+private:
+  GarbageCollection* gc_;
+  std::vector<BlobFileAddition> blob_file_additions_;
+
+};
 
 class GarbageCollectionJob {
 public:
@@ -96,6 +108,8 @@ public:
 
 protected:
   Status ProcessGarbageCollection(InternalIterator* iter);
+
+  void UpdateBlobStats(); 
   void UpdateGarbageCollectionStats();
   void LogGarbageCollection();
 
@@ -134,6 +148,7 @@ protected:
   const std::string db_session_id_;
   const FileOptions file_options_;
 
+  // std::vector<BlobFileAddition> blob_file_additions_;
   Env* env_;
   std::shared_ptr<IOTracer> io_tracer_;
   FileSystemPtr fs_;
@@ -154,6 +169,12 @@ protected:
   Env::Priority thread_pri_;
   DBImpl* db_;
 
+  Env::WriteLifeTimeHint write_hint_;
+  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+
+  GarbageCollectionOutput gc_output_;
+
+  std::unordered_map<uint64_t, uint64_t> blob_file_map_;
 
 };
 

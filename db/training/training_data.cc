@@ -1,6 +1,7 @@
 
 #include "db/training/training_data.h"
 #include <cstdint>
+#include "rocksdb/key_meta.h"
 #include "rocksdb/status.h"
 #include "LightGBM/c_api.h"
 #include "options/db_options.h"
@@ -33,15 +34,18 @@ Status TrainingData::AddTrainingSample(const std::vector<uint64_t>& past_distanc
                          const std::vector<float>& edcs,
                          const uint64_t& future_distance) {
   int32_t counter = indptr_.back();
+  assert(edcs.size() > 0);
+  assert(!past_distances.empty());
+  assert(past_distances.size() <= max_n_past_timestamps);
   size_t j = 0;
   // max_n_past_timestamps or max_n_past_distances ?
   for(; j < past_distances.size() && j < max_n_past_timestamps; ++j) {
     indices_.emplace_back(j);
-    data_.emplace_back(past_distances[j]);
+    data_.emplace_back(static_cast<double>(past_distances[j]));
     counter++;
   }
   indices_.emplace_back(max_n_past_timestamps);
-  data_.push_back(blob_size);
+  data_.push_back(static_cast<double>(blob_size));
   ++counter;
 
   indices_.emplace_back(max_n_past_timestamps+1);
@@ -49,7 +53,7 @@ Status TrainingData::AddTrainingSample(const std::vector<uint64_t>& past_distanc
   ++counter;
   for (int k = 0; k < n_edc_feature; ++k) {
     indices_.push_back(max_n_past_timestamps  + 2 + k);
-    data_.push_back(edcs[k]);
+    data_.push_back(static_cast<double>(edcs[k]));
   }
   counter += n_edc_feature;
 

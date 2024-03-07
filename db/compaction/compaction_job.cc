@@ -1083,10 +1083,11 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   // Create compaction filter and fail the compaction if
   // IgnoreSnapshots() = false because it is not supported anymore
-  // const CompactionFilter* compaction_filter =
-  //     cfd->ioptions()->compaction_filter;
-  auto uniq_compaction_filter = sub_compact->compaction->CreateGCCompactionFilter(GetGCIter());
-  const CompactionFilter* compaction_filter = uniq_compaction_filter.get();
+  const CompactionFilter* compaction_filter =
+      cfd->ioptions()->compaction_filter;
+  // auto uniq_compaction_filter = sub_compact->compaction->CreateGCCompactionFilter(GetGCIter());
+  // const CompactionFilter* compaction_filter = uniq_compaction_filter.get();
+  // const CompactionFilter* compaction_filter = compaction_filter;
 
 
 
