@@ -380,7 +380,7 @@ Status CompactionOutputs::AddToOutput(
   current_output_file_size_ = builder_->EstimatedFileSize();
 
   if (blob_garbage_meter_) {
-    s = blob_garbage_meter_->ProcessOutFlow(key, value);
+    // s = blob_garbage_meter_->ProcessOutFlow(key, value);
   }
 
   if (!s.ok()) {

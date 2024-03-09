@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cstdint>
 #include <deque>
 #include <string>
 #include <unordered_set>
@@ -369,6 +370,8 @@ CompactionIterator(
   // algorithm is also called from here.
   void GarbageCollectBlobIfNeeded();
 
+  void UpdateValueBlobIndexIfNeeded();
+
   // Invoke compaction filter if needed.
   // Return true on success, false on failures (e.g.: kIOError).
   bool InvokeFilterIfNeeded(bool* need_skip, Slice* skip_until);
@@ -589,6 +592,7 @@ CompactionIterator(
   // than this, it will be output to penultimate level
   const SequenceNumber preclude_last_level_min_seqno_ = kMaxSequenceNumber;
 
+  uint64_t num_blob_nidex_updated_ = 0;
 
   void AdvanceInputIter() { input_.Next(); }
 

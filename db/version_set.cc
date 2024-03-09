@@ -2100,8 +2100,8 @@ VersionStorageInfo::VersionStorageInfo(
     oldest_snapshot_seqnum_ = ref_vstorage->oldest_snapshot_seqnum_;
     compact_cursor_ = ref_vstorage->compact_cursor_;
     compact_cursor_.resize(num_levels_);
-    blob_file_map_ = ref_vstorage->blob_file_map_;
-    blob_offset_map_ = ref_vstorage->blob_offset_map_; 
+    // blob_file_map_ = ref_vstorage->blob_file_map_;
+    // blob_offset_map_ = ref_vstorage->blob_offset_map_; 
   }
   lifetime_blob_files_.resize(version_storage_lifetime_info.lifetime_bucket_num);
 }
@@ -2167,13 +2167,21 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
                 prefetch_buffer, value,
                  bytes_read);
 }
-const std::string& Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+const Slice Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+                                      const Slice& orig_blob_index_slice) const  {
+  return GetLatestBlobIndex(orig_blob_file_number, orig_blob_index_slice,
+                   storage_info_.GetBlobFileMap(), 
+                  storage_info_.GetBlobOffsetMap()); 
+}
+
+
+const Slice Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
                                       const Slice& orig_blob_index_str,
                                       const UnorderedMap<uint64_t, uint64_t>& blob_file_map,
-                                      const UnorderedMap<uint64_t,UnorderedMap<std::string, std::string>*>& blob_offset_map) const  {
+                                      const UnorderedMap<uint64_t,std::shared_ptr<UnorderedMap<std::string, std::string>>>& blob_offset_map) const  {
   uint64_t latest_blob_file_number = orig_blob_file_number;
-  const std::string cur_blob_index_str(orig_blob_index_str.ToStringView());
-  const std::string* cur_blob_index_str_ptr = &cur_blob_index_str;
+  Slice cur_blob_index_slice(orig_blob_index_str);
+  // const std::string* cur_blob_index_str_ptr = &cur_blob_index_str;
   while (true) {
     auto cur_blob_file_it = blob_file_map.find(latest_blob_file_number);
     if (cur_blob_file_it != blob_file_map.end()) {
@@ -2181,17 +2189,19 @@ const std::string& Version::GetLatestBlobIndex(const uint64_t orig_blob_file_num
       auto cur_blob_offset_it = blob_offset_map.find(cur_blob_file_number);
       if (cur_blob_offset_it != blob_offset_map.end()) {
         auto cur_blob_offset_map = cur_blob_offset_it->second;
-        auto cur_blob_index_it = cur_blob_offset_map->find(*cur_blob_index_str_ptr);
+        auto cur_blob_index_it = cur_blob_offset_map->find(cur_blob_index_slice.ToString());
         if (cur_blob_index_it != cur_blob_offset_map->end()) {
-          cur_blob_index_str_ptr = &cur_blob_index_it->second;
+          cur_blob_index_slice = Slice(cur_blob_index_it->second);
+          // cur_blob_index_str_ptr = &cur_blob_index_it->second;
         } else {
-          assert(false);
+          return Slice();
+          // assert(false);
         }
       } else {
         assert(false);
       }
     } else {
-      return *cur_blob_index_str_ptr;
+      return cur_blob_index_slice;
     }
 
     latest_blob_file_number = cur_blob_file_it->second;
@@ -2231,11 +2241,10 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
   auto blob_file_meta = storage_info_.GetBlobFileMetaData(blob_file_number);
   Status s;
   if (!blob_file_meta) {
-    const std::string& latest_blob_index_str = GetLatestBlobIndex(blob_file_number, 
-                                                                  orig_blob_index_slice, 
-                                                                  storage_info_.GetBlobFileMap(), 
-                                                                  storage_info_.GetBlobOffsetMap());
-    s = new_blob_index.DecodeFrom(Slice(latest_blob_index_str));
+    const Slice latest_blob_index_slice  = GetLatestBlobIndex(blob_file_number, 
+                                                                  orig_blob_index_slice);
+    assert(!latest_blob_index_slice.empty());
+    s = new_blob_index.DecodeFrom(latest_blob_index_slice);
     const uint64_t latest_blob_file_number = new_blob_index.file_number();
     assert(s.ok());
     blob_file_meta = storage_info_.GetBlobFileMetaData(latest_blob_file_number);

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cinttypes>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -24,6 +25,7 @@
 #include <vector>
 
 #include "cache/cache_reservation_manager.h"
+#include "db/blob/blob_constants.h"
 #include "db/blob/blob_file_meta.h"
 #include "db/dbformat.h"
 #include "db/internal_stats.h"
@@ -32,6 +34,7 @@
 #include "db/version_set.h"
 #include "port/port.h"
 #include "table/table_reader.h"
+#include "util/hash_containers.h"
 #include "util/string_util.h"
 #include "logging/logging.h"
 
@@ -261,7 +264,7 @@ class VersionBuilder::Rep {
   int num_levels_;
   LevelState* levels_;
   std::unordered_set<uint64_t> deleted_blob_files_;
-  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+  UnorderedMap<uint64_t, std::shared_ptr<UnorderedMap<std::string, std::string>>> blob_offset_map_;
   UnorderedMap<uint64_t, uint64_t> blob_file_map_;
   // Store sizes of levels larger than num_levels_. We do this instead of
   // storing them in levels_ to avoid regression in case there are no files
@@ -724,9 +727,39 @@ class VersionBuilder::Rep {
     blob_file_map_ = blob_file_map;
     return Status::OK();
   }
+
+  template <typename Deleter>
+  static std::shared_ptr<UnorderedMap<std::string, std::string>> CreateBlobFileOffsetMapping(
+      UnorderedMap<std::string, std::string>* blob_offset_map,
+      Deleter deleter) {
+
+    // return std::make_shared<UnorderedMap<std::string, std::string>>(blob_offset_map, deleter);
+    return std::shared_ptr<UnorderedMap<std::string, std::string>>(blob_offset_map,
+                                                                    deleter);
+  }
   
   Status ApplyBlobFileOffsetMapping(const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& blob_offset_map) {
-    blob_offset_map_ = blob_offset_map;
+
+    for(const auto&[blob_file_number, offset_map] : blob_offset_map) {
+      auto it = blob_offset_map_.find(blob_file_number);
+      if(it != blob_offset_map_.end()) {
+        assert(false);
+        // it->second = offset_map;
+      } else {
+
+        VersionSet* const vs = version_set_;
+        auto deleter = [vs, blob_file_number](UnorderedMap<std::string, std::string>* shared_meta) {
+          ROCKS_LOG_INFO(vs->db_options()->info_log, 
+                  "blob offset map deletion: %lu",
+                         blob_file_number);
+
+
+          delete shared_meta;
+        };
+        auto shared_blob_offset_map = CreateBlobFileOffsetMapping(offset_map, deleter);
+        blob_offset_map_.emplace(blob_file_number, shared_blob_offset_map);
+      }
+    }
     return Status::OK();
 
   }
@@ -908,12 +941,9 @@ class VersionBuilder::Rep {
         if(meta->linked_blob_files.find(blob_file_number) == meta->linked_blob_files.end()) {
           assert(false);
         }
-
       }
 
-
     }
-
 
 
     // const uint64_t blob_file_number =
@@ -1433,6 +1463,69 @@ class VersionBuilder::Rep {
     vstorage->AddBlobFileWithLifetimeBucket(std::forward<Meta>(meta));
   }
 
+  uint64_t GetOldestBlobFileNumber() const{
+    uint64_t oldest_blob_file_number = kInvalidBlobFileNumber;
+    const int num_levels = base_vstorage_->num_levels();
+    for(int level = 0; level < num_levels; level++) {
+      const auto& base_files = base_vstorage_->LevelFiles(level);
+      for(const auto& file: base_files) {
+        uint64_t cur_oldest_blob_file_num = file->oldest_blob_file_number;
+        if(oldest_blob_file_number == kInvalidBlobFileNumber||
+            oldest_blob_file_number > cur_oldest_blob_file_num) {
+          oldest_blob_file_number = cur_oldest_blob_file_num;
+        }
+      }
+    }
+    return oldest_blob_file_number;
+
+  }
+  void SaveBlobFileMapTo(VersionStorageInfo* vstorage) const {
+    assert(vstorage);
+    const auto& base_vstorage_blob_file_map = base_vstorage_->GetBlobFileMap();
+    uint64_t oldest_blob_file_number = GetOldestBlobFileNumber();
+    for(const auto&[blob_file_num, new_blob_file_num]: base_vstorage_blob_file_map) {
+      if(blob_file_num < oldest_blob_file_number) {
+        continue;
+      } else {
+        vstorage->AddBlobFileMap(blob_file_num, new_blob_file_num);
+      }
+    }
+
+    for(const auto&[blob_file_num, new_blob_file_num]: blob_file_map_) {
+      vstorage->AddBlobFileMap(blob_file_num, new_blob_file_num);
+    }
+
+  }
+
+  void SaveBlobOffsetMapTo(VersionStorageInfo* vstorage) const {
+    assert(vstorage);
+    std::vector<uint64_t> deleted_blob_file_nums;
+    const auto& base_vstorage_blob_offset_map = base_vstorage_->GetBlobOffsetMap();
+    uint64_t oldest_blob_file_number = GetOldestBlobFileNumber();
+    for(const auto&[blob_file_num, offset_map]: base_vstorage_blob_offset_map) {
+      if(blob_file_num < oldest_blob_file_number) {
+        deleted_blob_file_nums.emplace_back(blob_file_num);
+        continue;
+      } else {
+        vstorage->AddBlobOffsetMap(blob_file_num, offset_map);
+      }
+    }
+
+    for(const auto&[blob_file_num, offset_map]: blob_offset_map_) {
+      vstorage->AddBlobOffsetMap(blob_file_num, offset_map);
+    }
+    std::string deleted_blob_file_nums_str;
+    for(auto num: deleted_blob_file_nums) {
+      deleted_blob_file_nums_str += std::to_string(num) + " ";
+    }
+    if(!deleted_blob_file_nums_str.empty()) {
+    ROCKS_LOG_INFO(version_set_->db_options()->info_log, 
+                   " deleted blob file numbers: %s", deleted_blob_file_nums_str.c_str());
+
+    }
+
+  }
+
   // Merge the blob file metadata from the base version with the changes (edits)
   // applied, and save the result into *vstorage.
   void SaveBlobFilesTo(VersionStorageInfo* vstorage) const {
@@ -1483,7 +1576,7 @@ class VersionBuilder::Rep {
 
 
    // const uint64_t oldest_blob_file_with_linked_ssts =    GetMinOldestBlobFileNumber();
-   const uint64_t oldest_blob_file_with_linked_ssts =    0;
+   const uint64_t oldest_blob_file_with_linked_ssts =    GetOldestBlobFileNumber();
 
    // const uint64_t oldest_blob_file_with_linked_ssts = GetMinOldestBlobFileNumber();
 
@@ -1633,8 +1726,9 @@ class VersionBuilder::Rep {
 
     SaveBlobFilesTo(vstorage);
 
-    vstorage->AddBlobFileMap(blob_file_map_);
-    vstorage->AddBlobOffsetMap(blob_offset_map_);
+    SaveBlobFileMapTo(vstorage);
+
+    SaveBlobOffsetMapTo(vstorage);
 
     vstorage->SortBlobFiles();
 

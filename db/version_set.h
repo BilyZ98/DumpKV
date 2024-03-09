@@ -207,6 +207,10 @@ class VersionStorageInfo {
     return blob_file_map_;
   }
 
+  void AddBlobFileMap(uint64_t src, uint64_t dest) {
+    assert(blob_file_map_.find(src) == blob_file_map_.end());
+    blob_file_map_[src] = dest;
+  }
   void AddBlobFileMap(const UnorderedMap<uint64_t, uint64_t>& blob_file_map) {
     for(auto& [orig_blob_file_number, new_blob_file_num]: blob_file_map) {
       assert(blob_file_map_.find(orig_blob_file_number) == blob_file_map_.end());
@@ -214,16 +218,21 @@ class VersionStorageInfo {
     }
   }
 
-  const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& GetBlobOffsetMap() const {
+  const UnorderedMap<uint64_t, std::shared_ptr<UnorderedMap<std::string, std::string>>>& GetBlobOffsetMap() const {
     return blob_offset_map_;
+  }
+
+  void AddBlobOffsetMap(uint64_t blob_file_num, std::shared_ptr<UnorderedMap<std::string, std::string>> offset_map) {
+    assert(blob_offset_map_.find(blob_file_num) == blob_offset_map_.end());
+    blob_offset_map_[blob_file_num] = offset_map;
   }
   // UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
   void AddBlobOffsetMap(const UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*>& blob_offset_map) {
     // blob_offset_map_ = blob_offset_map;
-    for(auto& [blob_file_number, offset_map]: blob_offset_map) {
-      assert(blob_offset_map_.find(blob_file_number) == blob_offset_map_.end());
-      blob_offset_map_[blob_file_number] = offset_map;
-    }
+    // for(auto& [blob_file_number, offset_map]: blob_offset_map) {
+    //   assert(blob_offset_map_.find(blob_file_number) == blob_offset_map_.end());
+    //   blob_offset_map_[blob_file_number] = offset_map;
+    // }
   };
 
 
@@ -782,7 +791,7 @@ class VersionStorageInfo {
   // Maybe we can just copy blob_offset_map from previous version 
   // and then insert new blob offset map into current one.
   // UnorderedMap<std::tring, uint64_t>* is built during gc process.
-  UnorderedMap<uint64_t, UnorderedMap<std::string, std::string>*> blob_offset_map_;
+  UnorderedMap<uint64_t, std::shared_ptr<UnorderedMap<std::string, std::string>>> blob_offset_map_;
 
   UnorderedMap<uint64_t, uint64_t> blob_file_map_;
 
@@ -1044,10 +1053,13 @@ class Version {
 
   uint64_t GetLatestBlobFileNum(const uint64_t orig_blob_file_number, const std::unordered_map<uint64_t, uint64_t>& blob_file_map) const ;
 
-  const std::string& GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+  const Slice GetLatestBlobIndex(const uint64_t orig_blob_file_number,
                                         const Slice& orgi_blob_index_slice,
                                         const UnorderedMap<uint64_t, uint64_t>& blob_file_map,
-                                        const UnorderedMap<uint64_t,UnorderedMap<std::string, std::string>*>& blob_offset_map) const ;
+                                        const UnorderedMap<uint64_t,std::shared_ptr<UnorderedMap<std::string, std::string>>>& blob_offset_map) const ;
+
+  const Slice GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+                                        const Slice& orgi_blob_index_slice) const ;
 
   using BlobReadContext =
       std::pair<BlobIndex, std::reference_wrapper<const KeyContext>>;

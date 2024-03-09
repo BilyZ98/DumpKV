@@ -7584,18 +7584,18 @@ High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3     
 
 Blob file count: 246, total size: 4.1 GB, garbage size: 0.8 GB, space amp: 1.2
 ```
-standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime -> online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet -> online model, dedicated gc job, write count is counted, model is not good -> fix model prediction bug, 100k number of samples triggers model train, default-1
+standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime -> online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet -> online model, dedicated gc job, write count is counted, model is not good -> fix model prediction bug, 100k number of samples triggers model train, default-1 -> fix model , 100k trigger model training, default-1, blob index update during compaction, blob file map and blob offset map deletion after gc.
 ```
-w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5 -> 1.2 -> 1.7 -> 1.8
-space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2 -> 1.0 -> 1.0 -> 1.0
-blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2 -> 4.1 -> 4.1 -> 3.8
-Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB -> 4.8 GB -> 6.8GB -> 7.8 GB
-Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB -> 4.4 GB -> 1.9 GB -> 1.9 GB
-Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB -> 3.2 GB -> 5.2 GB -> 6.1GB
-Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB -> 6.1 GB -> 9.3 GB -> 9.9 GB
-garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB
+w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5 -> 1.2 -> 1.7 -> 1.8 -> 1.8
+space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2 -> 1.0 -> 1.0 -> 1.0 -> 1.0
+blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2 -> 4.1 -> 4.1 -> 3.8 -> 3.8 
+Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB -> 4.8 GB -> 6.8GB -> 7.8 GB -> 7.8GB
+Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB -> 4.4 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB
+Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB -> 3.2 GB -> 5.2 GB -> 6.1GB -> 6.1 GB
+Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB -> 6.1 GB -> 9.3 GB -> 9.9 GB 9.9 GB
+garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB
 
-Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s
+Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s
 Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1891.7 total, 8.0 interval
  -> Uptime(secs): 2094.8 total, 1.0 interval
@@ -7605,6 +7605,7 @@ Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1773.8 total, 1.0 interval
  -> Uptime(secs): 1777.0 total, 1.0 interval
+ -> Uptime(secs): 1778.1 total, 1.0 interval
 ```
  std rocksdb gc: Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
  ->
@@ -7625,6 +7626,8 @@ online model feature in lsm-tree value, default 1 lifetime with dedicated gc job
 online model, dedicated gc job, write count is counted, model is not good:  Cumulative compaction: 7.96 GB write, 4.59 MB/s write, 1.63 GB read, 0.94 MB/s read, 1497.9 seconds
 ->
 fix model prediction bug, default-1: Cumulative compaction: 8.01 GB write, 4.62 MB/s write, 1.69 GB read, 0.97 MB/s read, 1161.6 seconds
+->
+fix model , 100k trigger model training, default-1, blob index update during compaction, blob file map and blob offset map deletion after gc:  Cumulative compaction: 8.01 GB write, 4.62 MB/s write, 1.69 GB read, 0.97 MB/s read, 1195.7 seconds
 
 with_model_wisckey_style_gc:
 ```
@@ -9779,11 +9782,7 @@ There are some blob_file_deletion.
 Not all blob are deleted.
 
 
-[Status: Ongoing]
-
-[Todo]
-figure out why blob files are not deleted and fix it..
-[Status: Not started]
+[Status: Done]
 
 
 [Todo]
@@ -9850,7 +9849,7 @@ blob files in deleted_blob_files are not inserted to new version.
 [Todo]
 Need to mention that we create indirect blob offset map in our paper 
 to solve one:one value offset binding between sst and blob file.
-[Status: Ongoing]
+[Status: Not started]
 
 [Todo]
 Consider move lifetime of blob to longer lifetime classification 
@@ -10067,10 +10066,152 @@ How cumulated compaction and writes is counted?
 
 [Todo]
 Write blob offset map to file.
+Low priority for now.
 [Status: Not started]
 
 [Todo]
+figure out why blob files are not deleted and fix it..
+```cpp
+  Status ApplyFileDeletion(int level, uint64_t file_number) {
+    const FileMetaData* const meta =
+        base_vstorage_->GetFileMetaDataByNumber(file_number);
+    for(auto blob_file_num: meta->linked_blob_files) {
+      if(blob_file_num != kInvalidBlobFileNumber) {
+        MutableBlobFileMetaData* const mutable_meta =
+            GetOrCreateMutableBlobFileMetaData(blob_file_num);
+        if (mutable_meta) {
+          mutable_meta->UnlinkSst(file_number);
+        }
+
+      }
+
+    const uint64_t blob_file_number=
+        GetOldestBlobFileNumberForTableFile(level, file_number);
+      if(blob_file_number != kInvalidBlobFileNumber) {
+        if(meta->linked_blob_files.find(blob_file_number) == meta->linked_blob_files.end()) {
+          assert(false);
+        }
+
+      }
+```
+Should not create mutable blob file meta if it's outdated.
+blob_file_meta files are still in blob_files_.
+Need to remove obsolte blob files from blob_files_
+[Status: Ongoing]
+
+[Todo]
 Delete obsolete map items.
+Need to do this during compaction.
+What kind of data should we track?
+Just delete blob map item by checking min_oldes blob.
+Those blob file whose number is below min_oldest_blob are deleted.
+Where is min_oldest_blob_file_numer updaet?
+It's in UpdateBoundaries();
+Need to do blob file map addition and blob offset map addition 
+in Apply();
+And then we do deletion at SaveTo() ?
+Finally understand How SaveSSTFilesTo() works.
+There are two vstorage. The first one is base_vstorage
+and the second one is new vstorage.
+So first get sst files from base vstorage 
+and then copy that files to new vstorage.
+I can do the same to blob files.
+Need to work fast.
+Need to get min oldest blob file from all sst's linked blob
+files.
+
+Get blob index decode error during run.
+```
+2024/03/08-12:10:58.676739 4088090 [ERROR] [db/db_impl/db_impl_compaction_flush.cc:3255] Waiting after background compaction error: Corruption: Error while decoding blob index: Unknown blob index type: -80, Accumulated background error counts: 1
+```
+I see, I didn't allocate heap memory for offset. map. 
+But there is no garbage collection job yet.
+Is this because of update boundaries? I think so.
+I have already  allocate memory for offset map.
+I think this is because of blob index update issue..
+Need to do debug and find out hte root case and then fix it..
+
+Maybe this is problematic.
+Need to make sure blob type is correct.
+
+const Slice Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
+returns a reference to a string that is not valid after the next call to GetLatestBlobIndex.
+because that string allocated inside the function.
+```
+  if(orig_blob_without_key_meta.compare(latest_blob_index_str) == 0) {
+```
+
+Got another seg fault during compaction.
+Want to print blob index file nunmber but failed to do that.
+blob:129 offset is newly generated and it should not be deleted.
+```
+2024/03/08-15:42:03.378221 476979 [db/blob/blob_file_builder.cc:489] [default] [JOB 37] Generated blob file #129: 2869 total blobs, 2491621 total bytes, lifetime label: 0 creation timestamp: 2963778
+2024/03/08-15:42:03.378742 476979 [db/version_builder.cc:751] blob offset map deletion: 129
+```
+
+gpt4 helps me find the bug.
+I should emplace created shared_ptr instead to original raw pointer.
+
+Need to log how many blob index is updated during compaction iterator.
+I need to do this collborately with blob file meta deletion from blob_files_
+Achieve this goal by set oldest blob file number.
+
+Got assertino false error when doing compaction.
+No offset item in new offset map.
+I don't know what's wrong.
+It might happen that the key in sst file is discarded during gc.
+So it's normal that value offset is not found during compaction job.
+[Status: Done]
+
+[Todo]
+Figure out how total blob size is calculated and fix it if there is issue. 
+It count blob size by iterating all blob files of version storage info..
+I think current blob size counting is correct.
+But it's weird that previous version has similar blob size as this version.
+[Status: Done]
+
+[Todo]
+Need to remove blob_file_map and blob_offset_map copy from copy constructor.
+[Status: Done]
+
+[Todo]
+Need to update unodered_map<>* to shared_ptr<unodered_map>   
+I think I need to create shared_ptr in version builder code. 
+[Status: Done]
+
+How blob->linkssts() works?;
+
+[Todo]
+Get read kops 
+[Status: Not started]
+
+[Todo]
+Make sure obosolete blob files ared deleted after gc.
+Currently not all blob files are deleted.
+```bash
+(base) ➜  with_model_gc_1.0_0.8 du -ch *.blob | grep total
+8.3G    total
+```
+
+```
+2024/03/08-19:30:47.999480 1095411 EVENT_LOG_v1 {"time_micros": 1709897447999475, "job": 142, "event": "blob_file_deletion", "file_number": 127}
+```
+
+```
+"blob_file_head": 587, "blob_file_tail": 982, "blob_files": [587, 591, 595, 596, 599, 602, 603, 617, 627, 634, 651, 654, 655, 660, 663, 666, 668, 686, 693, 714, 717, 718, 723, 726, 730, 732, 735, 741, 773, 775, 784, 787, 789, 792, 813, 820, 837, 844, 848, 851, 852, 853, 854, 857, 858, 859, 860, 863, 864, 865, 866, 869, 870, 871, 873, 906, 907, 910, 913, 920, 921, 924, 925, 928, 929, 930, 931, 954, 955, 963, 967, 981, 982]
+```
+Low priority for now.
+Oldest blob file is 587 but there are still blob files whose number is below 587.
+Low priority for now. 
+
+sst files are not deleted as well.
+```bash
+(base) ➜  with_model_gc_1.0_0.8 du -ch *.sst | grep total
+1.7G    total
+
+(base) ➜  with_model_gc_1.0_0.8 ll | grep sst | wc -l
+540
+```
 [Status: Not started]
 
 [Todo]
@@ -10084,9 +10225,22 @@ Reduce flush time.
 [Todo]
 Save lots of time after removing training data logging and start
 thread training model.
+
 [Status: Not started]
 
 [Todo]
 Use model to do regression prediction of lifetime of key and 
 then put value to lifetime bucket that is close the predicted lifetime value. 
+[Status: Ongoing]
+
+[Todo]
+Count how many value is updated during compaction.
+Do sse blob index update count.
+```
+2024/03/09-12:34:00.402023 3824740 [db/compaction/compaction_iterator.cc:265] Num value blob index update: 49308
+```
+[Status: Done]
+
+[Todo]
+Need to create new branch when switch to regression model prediction.
 [Status: Not started]

@@ -9,6 +9,7 @@
 
 #pragma once
 #include <algorithm>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -544,7 +545,6 @@ class VersionEdit {
     for(const auto& blob_offset: *blob_offset_map) {
       blob_offset_map_.emplace(blob_offset.first, blob_offset.second);
     }
-    // blob_offset_map_ = blob_offset_map;
   }
 
   const UnorderedMap<uint64_t, uint64_t>& GetBlobFileMap() const {

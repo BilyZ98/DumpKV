@@ -261,6 +261,9 @@ CompactionIterator::~CompactionIterator() {
 
     train_data_file_->Close();
   }
+
+  ROCKS_LOG_INFO(info_log_, "Num value blob index update: %lu",
+                 num_blob_nidex_updated_);
 }
 
 void CompactionIterator::ResetRecordCounts() {
@@ -1726,6 +1729,33 @@ uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_labe
   return new_lifetime_label; 
 }
 
+void CompactionIterator::UpdateValueBlobIndexIfNeeded() {
+
+  assert(ikey_.type == kTypeBlobIndex);
+  Slice orig_blob_index_slice = value_;
+  assert(compaction_);
+  const Version* const version = compaction_.get()->input_version();
+  BlobIndex orig_blob_index;
+  uint64_t orig_blob_index_len;
+  Status s= orig_blob_index.DecodeFromWithKeyMeta(orig_blob_index_slice, &orig_blob_index_len);
+  assert(s.ok());
+  Slice orig_blob_without_key_meta(orig_blob_index_slice.data() ,  orig_blob_index_len);
+  Slice orig_blob_key_meta(orig_blob_index_slice.data() + orig_blob_index_len, orig_blob_index_slice.size() - orig_blob_index_len);
+  const Slice latest_blob_index_slice = version->GetLatestBlobIndex(orig_blob_index.file_number(),
+                                                                       orig_blob_without_key_meta);
+
+  if(latest_blob_index_slice.empty() || orig_blob_without_key_meta.compare(latest_blob_index_slice) == 0) {
+    return;
+  } else {
+    num_blob_nidex_updated_++;  
+    blob_index_.clear();
+    blob_index_.append(latest_blob_index_slice.data(), latest_blob_index_slice.size());
+    blob_index_.append(orig_blob_key_meta.data(), orig_blob_key_meta.size());
+    value_ = blob_index_;
+  }
+
+}
+
 void CompactionIterator::GarbageCollectBlobIfNeeded() {
   assert(ikey_.type == kTypeBlobIndex);
 
@@ -1943,7 +1973,8 @@ void CompactionIterator::PrepareOutput() {
     if (ikey_.type == kTypeValue) {
       ExtractLargeValueIfNeeded();
     } else if (ikey_.type == kTypeBlobIndex) {
-      GarbageCollectBlobIfNeeded();
+       UpdateValueBlobIndexIfNeeded();
+      // GarbageCollectBlobIfNeeded();
     }
 
     if (compaction_ != nullptr && compaction_->SupportsPerKeyPlacement()) {
