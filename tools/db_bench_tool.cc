@@ -6538,9 +6538,12 @@ class Benchmark {
     Status s;
     RandomGenerator gen;
     // read the file
+    // std::vector<std::string> files = {
+    //     "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-load-10000000-10000000.log.formated"
+    //     ,"/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
+    // };
     std::vector<std::string> files = {
-        "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-load-10000000-10000000.log.formated"
-        ,"/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
+        "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
     };
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);
