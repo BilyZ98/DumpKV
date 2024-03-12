@@ -126,6 +126,7 @@ DEFINE_string(
     "compact1,"
     "waitforcompaction,"
     "multireadrandom,"
+    "ycsb_a,"
     "mixgraph,"
     "readseq,"
     "readtorowcache,"
@@ -3516,7 +3517,10 @@ class Benchmark {
         method = &Benchmark::ApproximateSizeRandom;
       } else if (name == "mixgraph") {
         method = &Benchmark::MixGraph;
-      } else if (name == "readmissing") {
+      } else if (name == "ycsb_a") {
+        method = &Benchmark::ycsb_a;
+      }
+      else if (name == "readmissing") {
         ++key_size_;
         method = &Benchmark::ReadRandom;
       } else if (name == "newiterator") {
@@ -6479,6 +6483,149 @@ class Benchmark {
     }
   };
 
+  void read_ycsb_a(const std::vector<std::string>& files,
+                 std::vector<std::vector<std::string>>* datas) {
+    int num = 0;
+    for (std::string file_name : files) {
+      // if (num >= 1000000) {
+      //     break;
+      //   }
+      std::ifstream file;
+      file.open(file_name, std::ios::in);
+      if (!file.is_open()) {
+        std::cout << "read file failed" << std::endl;
+        return;
+      }
+      std::string line;
+      // read by row
+      while (std::getline(file, line)) {
+        // if (num >= 1000000) {
+        //   break;
+        // }
+        // split by space
+        std::istringstream ss(line);
+        std::vector<std::string> words;
+        std::string word;
+        while (ss >> word) {
+          words.push_back(word);
+        }
+        datas->push_back(words);
+        num++;
+        // if (num%1000==0){
+        //   std::cout<<words[0]<<" "<<words[1]<<" "<<words[2]<<"
+        //   "<<words[3]<<std::endl;
+        // }
+      }
+    }
+  }
+
+  void ycsb_a(ThreadState* thread){
+    int64_t puts = 0;
+    int64_t gets = 0;
+    int64_t get_found = 0;
+    int64_t seek = 0;
+    int64_t seek_found = 0;
+    int64_t bytes = 0;
+    double total_scan_length = 0;
+    double total_val_size = 0;
+    const int64_t default_value_max = 1 * 1024 * 1024;
+    int64_t value_max = default_value_max;
+    int64_t scan_len_max = FLAGS_mix_max_scan_len;
+    double write_rate = 1000000.0;
+    double read_rate = 1000000.0;
+    bool use_prefix_modeling = false;
+    bool use_random_modeling = false;
+    Status s;
+    RandomGenerator gen;
+    // read the file
+    std::vector<std::string> files = {
+        "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-load-10000000-10000000.log.formated"
+        ,"/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
+    };
+    std::vector<std::vector<std::string>> datas;
+    read_ycsb_a(files, &datas);
+    int64_t val_size = 1000;
+    std::string query_type;
+    std::cout << "datas.size(): " << datas.size() << std::endl;
+    int i = 0;
+    for (std::vector<std::string> data : datas) {
+      
+      DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
+      query_type = data[0];
+      std::string key = data[1];
+
+      // key填充为256位
+      if (key.length() < 256) {
+        int paddingSize = 256 - key.length();
+        key.append(paddingSize, ' ');
+      }
+
+      PinnableSlice pinnable_val;
+      // Start the query
+      if (query_type == "READ") {
+        // the Get query
+        gets++;
+
+        if (FLAGS_num_column_families > 1) {
+          s = db_with_cfh->db->Get(read_options_,
+                                   db_with_cfh->GetCfh(key.size()), key,
+                                   &pinnable_val);
+        } else {
+          pinnable_val.Reset();
+          s = db_with_cfh->db->Get(read_options_,
+                                   db_with_cfh->db->DefaultColumnFamily(), key,
+                                   &pinnable_val);
+        }
+
+        if (s.ok()) {
+          get_found++;
+          bytes += key.size() + pinnable_val.size();
+        } else if (!s.IsNotFound()) {
+          fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
+          abort();
+        }
+
+        if (thread->shared->read_rate_limiter && (gets + seek) % 100 == 0) {
+          thread->shared->read_rate_limiter->Request(100, Env::IO_HIGH,
+                                                     nullptr /*stats*/);
+        }
+        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kRead);
+      } else if (query_type == "INSERT" || query_type == "UPDATE") {
+        // the Put query
+        puts++;
+        // if(FLAGS_)
+        // std::string write_str = gen.Generate(static_cast<unsigned
+        // int>(val_size));
+
+        total_val_size += val_size;
+
+        s = db_with_cfh->db->Put(
+            write_options_, key,
+            gen.Generate(static_cast<unsigned int>(val_size)));
+        if (!s.ok()) {
+          fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+          ErrorExit();
+        }
+
+        if (thread->shared->write_rate_limiter && puts % 100 == 0) {
+          thread->shared->write_rate_limiter->Request(100, Env::IO_HIGH,
+                                                      nullptr /*stats*/);
+        }
+        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite);
+      }
+    }
+    char msg[256];
+    snprintf(msg, sizeof(msg),
+             "( Gets:%" PRIu64 " Puts:%" PRIu64 " Seek:%" PRIu64
+             ", reads %" PRIu64 " in %" PRIu64
+             " found, "
+             "avg size: %.1f value, %.1f scan)\n",
+             gets, puts, seek, get_found + seek_found, gets + seek,
+             total_val_size / puts, total_scan_length / seek);
+
+    thread->stats.AddBytes(bytes);
+    thread->stats.AddMessage(msg);
+  }
   // The social graph workload mixed with Get, Put, Iterator queries.
   // The value size and iterator length follow Pareto distribution.
   // The overall key access follow power distribution. If user models the

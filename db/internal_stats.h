@@ -204,6 +204,12 @@ class InternalStats {
     // Number of compactions done
     int count;
 
+    uint64_t gc_input_blobs = 0;
+
+    uint64_t gc_output_blobs = 0;
+
+    uint64_t gc_dropped_blobs = 0;
+
     // Number of compactions done per CompactionReason
     int counts[static_cast<int>(CompactionReason::kNumOfReasons)]{};
 
@@ -351,6 +357,9 @@ class InternalStats {
       this->num_dropped_records += c.num_dropped_records;
       this->num_output_records += c.num_output_records;
       this->count += c.count;
+      this->gc_input_blobs += c.gc_input_blobs;
+      this->gc_output_blobs += c.gc_output_blobs;
+      this->gc_dropped_blobs += c.gc_dropped_blobs;
       int num_of_reasons = static_cast<int>(CompactionReason::kNumOfReasons);
       for (int i = 0; i < num_of_reasons; i++) {
         counts[i] += c.counts[i];
@@ -507,6 +516,8 @@ class InternalStats {
     started_at_ = clock_->NowMicros();
     has_cf_change_since_dump_ = true;
   }
+
+  const CompactionStats& GetGCStats() const { return gc_stats_; }
 
   void AddGCStats(Env::Priority thread_pri,
                   const CompactionStatsFull& gc_stats) {

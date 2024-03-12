@@ -3143,7 +3143,7 @@ void DBImpl::BackgroundCallGarbageCollection(PrepickedCompaction* compaction,
       mutex_.Unlock();
       log_buffer.FlushBufferToLog();
       ROCKS_LOG_ERROR(immutable_db_options_.info_log,
-                      "Waiting after background compaction error: %s, "
+                      "Waiting after background garbage collection error: %s, "
                       "Accumulated background error counts: %" PRIu64,
                       s.ToString().c_str(), error_cnt);
       LogFlush(immutable_db_options_.info_log);
@@ -3151,6 +3151,7 @@ void DBImpl::BackgroundCallGarbageCollection(PrepickedCompaction* compaction,
       mutex_.Lock();
     }
 
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
     // If compaction failed, we want to delete all temporary files that we
     // might have created (they might not be all recorded in job_context in
     // case of a failure). Thus, we force full scan in FindObsoleteFiles()
@@ -3933,13 +3934,13 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                             compaction_job_stats, job_context->job_id);
     mutex_.Unlock();
     {
-      Arena arena;
-      auto cfd = c->column_family_data();
-      SuperVersion* sv = cfd->GetSuperVersion();
-      ReadOptions read_options;
-      ScopedArenaIterator iter;
-      iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
-      compaction_job.SetGCIter(iter.get());
+      // Arena arena;
+      // auto cfd = c->column_family_data();
+      // SuperVersion* sv = cfd->GetSuperVersion();
+      // ReadOptions read_options;
+      // ScopedArenaIterator iter;
+      // iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
+      // compaction_job.SetGCIter(iter.get());
 
     
       TEST_SYNC_POINT_CALLBACK(
@@ -3947,11 +3948,11 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       // Should handle erorr?
       compaction_job.Run().PermitUncheckedError();
     }
-    TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
 
     status = compaction_job.Install(*c->mutable_cf_options());
     io_s = compaction_job.io_status();
+    TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     if (status.ok()) {
       InstallSuperVersionAndScheduleWork(c->column_family_data(),
                                          &job_context->superversion_contexts[0],

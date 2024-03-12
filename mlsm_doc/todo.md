@@ -3014,7 +3014,7 @@ the read and write rate of rocksdb.
 It would be better if we can show that for these two implementation we all achieve
 better performance than baseline method then we are good.
 
-[Status: Ongoing ]
+[Status: Done ]
 
 
 [Todo] Get relationship between key range and their key lifetime
@@ -3184,7 +3184,7 @@ key_id_group count:  790048
 overwrite ratio is only 1.2%
 
 Need to check other write heavy workload.
-[Satus: Ongoing]
+[Satus: Done]
 
 
 [Todo] Get overwrite ratio for wiki dataset.
@@ -3351,7 +3351,7 @@ Each trace is from each unique bucket.
 So we cannot combine all traces together to analyze the overwrite rate.
 Two key ids share same id don't mean they are the same object because they 
 are in different buckets.
-[Status: Ongoing]
+[Status: Done]
 
 
 
@@ -3514,7 +3514,7 @@ exactly
 
 read write relationship for each offset. cdf? 
 
-[Status: Ongoing]
+[Status: Abandoned]
 
 
 [Todo]
@@ -3557,7 +3557,7 @@ number of keys whose write count is greater than 2
 (428537, 2)
 ```
 ratio: 19%
-[Status: Ongoing]
+[Status: Done]
 
 [Todo] Analyze ssd trace from ycsb_a workload running on rocksdb 
 
@@ -3577,7 +3577,7 @@ ratio: 19%
 3406151 WS
 ```
 Need to process large amount of data
-[Status: Ongoing]
+[Status: Done]
 read write relationship . how many read for a key before it is rewritten?
 
 
@@ -4813,7 +4813,7 @@ void HypotheticalModel::train(const CSRMatrix& data) {
 }
 
 ```
-[Status: Ongoing]
+[Status: Done]
 
 
 [Todo]
@@ -4869,7 +4869,7 @@ $6 = 1704288768
 (gdb) p blob_file_creation_time_sec
 $7 = 0
 ```
-[Status: Ongoing]
+[Status: Abandoned]
 
 
 
@@ -5285,7 +5285,7 @@ CompactionFilter::BlobDecision BlobIndexCompactionFilterGC::PrepareBlobOutput(
 ```
 It's basicaly the same as blobDB garbage collection process.
 
-[Status: Ongoing]
+[Status: Done]
 
 
 HashKV avoids validity checks which means avoid read during GC which is good
@@ -7160,7 +7160,7 @@ No such issue after I replace PutGC() with Put()
 
 Test WriteBatch PutGC()
 
-[Status: Ongoing]
+[Status: Abandoned]
 
 [Todo]
 Subtract write bytes during flush for keys written in gc.
@@ -7224,7 +7224,7 @@ Set GC job thread priority to low
         sequence number. If there n
     Write back valid keys.
     Delete old blob files.
-[Status: Ongoing in another branch]
+[Status: Done]
 
 
 [Todo]
@@ -7584,18 +7584,18 @@ High      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.3      0.3     
 
 Blob file count: 246, total size: 4.1 GB, garbage size: 0.8 GB, space amp: 1.2
 ```
-standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime -> online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet -> online model, dedicated gc job, write count is counted, model is not good -> fix model prediction bug, 100k number of samples triggers model train, default-1 -> fix model , 100k trigger model training, default-1, blob index update during compaction, blob file map and blob offset map deletion after gc.
+standard rocksdb -> full feature lifetime gc -> online model lifetime gc(not good) -> normal model(sample not good ) -> online model feature in lsm-tree value, default 0 lifetime -> online model feature in lsm-tree value, default 1 lifetime -> online model feature in lsm-tree value, default 1 lifetime with dedicated gc job for blob files(too many sst), write count during gc is not counted yet -> online model, dedicated gc job, write count is counted, model is not good -> fix model prediction bug, 100k number of samples triggers model train, default-1 -> fix model , 100k trigger model training, default-1, blob index update during compaction, blob file map and blob offset map deletion after gc -> regression model[1M, 2M, 4M, 8M] -> regression model[1M,2M,4M,8M] with value moving to longer lifetime bucket during gc -> regression model with inverse proportional of past distances count training data add -> no model
 ```
-w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5 -> 1.2 -> 1.7 -> 1.8 -> 1.8
-space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2 -> 1.0 -> 1.0 -> 1.0 -> 1.0
-blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2 -> 4.1 -> 4.1 -> 3.8 -> 3.8 
-Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB -> 4.8 GB -> 6.8GB -> 7.8 GB -> 7.8GB
-Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB -> 4.4 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB
-Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB -> 3.2 GB -> 5.2 GB -> 6.1GB -> 6.1 GB
-Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB -> 6.1 GB -> 9.3 GB -> 9.9 GB 9.9 GB
-garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB
+w-amp: 4.4 -> 2.1 -> 3.3 -> 2.9 ->  3.1 -> 2.5 -> 1.2 -> 1.7 -> 1.8 -> 1.8 -> 2.3 -> 1.9 ->  1.9 -> 1.9
+space-amp: 1.2 -> 1.2 -> 1.3 -> 1.2 -> 1.3 -> 1.2 -> 1.0 -> 1.0 -> 1.0 -> 1.0 -> 1.0 -> 1.0 -> 1.0 -> 1.0
+blob total size:  4.3 -> 4.1 -> 4.0 -> 4.0 -> 4.4 -> 4.2 -> 4.1 -> 4.1 -> 3.8 -> 3.8 -> 3.6 -> 3.9 -> 3.8 GB -> 3.9GB
+Read: 21.8GB -> 7.2 GB -> 14.9 GB -> 10.2GB -> 11.4 GB -> 7.1 GB -> 4.8 GB -> 6.8GB -> 7.8 GB -> 7.8GB -> 10.9 GB -> 8.3 GB -> 8.3 GB -> 8.0GB
+Write: 1.1 GB -> 3.7 GB ->  2.0 GB -> 1.9GB -> 2.7 GB -> 4.1 GB -> 4.4 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB -> 1.9 GB
+Read blob: 20.8 GB -> 3.7 GB -> 12.8 GB -> 8.4 GB -> 8.9 GB -> 3.3 GB -> 3.2 GB -> 5.2 GB -> 6.1GB -> 6.1 GB -> 9.2 GB -> 6.6 GB -> 6.7 GB -> 6.3 GB
+Write blob: 27 GB  -> 9.7 GB -> 12.8 GB -> 14.4 GB -> 15.0 GB -> 9.3 GB -> 6.1 GB -> 9.3 GB -> 9.9 GB -> 9.9 GB -> 12.8 GB -> 10.5 GB -> 10.5 GB -> 10.2 GB
+garbage size: 0.6 GB -> x GB ->  x GB -> x GB -> 1.0 GB ->  0.8 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB -> 0.0 GB
 
-Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s
+Cumulative write rate: 4.54 MB/s -> 4.26 MB/s -> 3.85 MB/s -> 4.08 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s -> 4.54 MB/s
 Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1891.7 total, 8.0 interval
  -> Uptime(secs): 2094.8 total, 1.0 interval
@@ -7606,6 +7606,10 @@ Uptime(secs): 1777.9 total, 1.0 interval
  -> Uptime(secs): 1773.8 total, 1.0 interval
  -> Uptime(secs): 1777.0 total, 1.0 interval
  -> Uptime(secs): 1778.1 total, 1.0 interval
+ -> Uptime(secs): 1773.1 total, 1.0 interval
+ -> Uptime(secs): 1773.1 total, 1.0 interval
+ -> Uptime(secs): 1772.1 total, 1.0 interval
+ -> Uptime(secs): 1755.2 total, 1.0 interval
 ```
  std rocksdb gc: Cumulative compaction: 28.10 GB write, 16.20 MB/s write, 21.84 GB read, 12.59 MB/s read, 804.2 seconds
  ->
@@ -7628,6 +7632,18 @@ online model, dedicated gc job, write count is counted, model is not good:  Cumu
 fix model prediction bug, default-1: Cumulative compaction: 8.01 GB write, 4.62 MB/s write, 1.69 GB read, 0.97 MB/s read, 1161.6 seconds
 ->
 fix model , 100k trigger model training, default-1, blob index update during compaction, blob file map and blob offset map deletion after gc:  Cumulative compaction: 8.01 GB write, 4.62 MB/s write, 1.69 GB read, 0.97 MB/s read, 1195.7 seconds
+->
+ regression model: Cumulative compaction: 8.00 GB write, 4.62 MB/s write, 1.68 GB read, 0.97 MB/s read, 980.1 seconds
+->
+regression model[1M,2M,4M,8M] with value moving to longer lifetime bucket during gc: Cumulative compaction: 7.99 GB write, 4.62 MB/s write, 1.66 GB read, 0.96 MB/s read, 970.1 seconds
+-> 
+regression model with inverse proportional of past distances count training data add: Cumulative compaction: 8.00 GB write, 4.62 MB/s write, 1.67 GB read, 0.97 MB/s read, 872.3 seconds
+->
+no model: Cumulative compaction: 7.93 GB write, 4.63 MB/s write, 1.68 GB read, 0.98 MB/s read, 613.4 seconds
+
+
+
+
 
 with_model_wisckey_style_gc:
 ```
@@ -8971,16 +8987,7 @@ Adjust log reporting time to 1min.
 low priority.
 [Status: Not started]
 
-[Todo]
-adaptive model training .
-No need to set label category.
-Can just use regression task.
-What kind of lifetime category should we have?
-1M, 2M , 4M, 8M , 16 M ? For now.
-But this is still classification problem.
-Dont' know which one performs better when training model.
-Let's try.
-[Status: Ongoing]
+
 
 [Todo]
 Set lifetime category based on distribution .
@@ -9147,7 +9154,7 @@ But what we need during read and compaction is that we need inheritance
 map to give which blob has value.
 Don't want to read terakdb code now.
 What I need to do is to implement our own gc process.
-[Status: Ongoing]
+[Status: Onhold]
 
 [Todo]
 Figure out how blob_gc_ratio or score is calculated in terakdb. 
@@ -9228,7 +9235,7 @@ version_builder.cc
 ```
 What does entry_depended mean?
 Does it mean that number of keys in sst file pointing to vsst?
-[Status: Ongoing]
+[Status: Onhold]
 
 [Todo]
 Store blob offset map in hash map during gc.
@@ -9478,7 +9485,7 @@ to allow binary search.
 
 Currently blob value offset is stored in blob index 
 instead of  key offset.
-[Status: Ongoing]
+[Status: Done]
 
 
 [Todo]
@@ -9851,10 +9858,7 @@ Need to mention that we create indirect blob offset map in our paper
 to solve one:one value offset binding between sst and blob file.
 [Status: Not started]
 
-[Todo]
-Consider move lifetime of blob to longer lifetime classification 
-during gc.
-[Status: Not started]
+
 
 
 What if one sst points to too many blob files?
@@ -10216,7 +10220,7 @@ sst files are not deleted as well.
 
 [Todo]
 Multiple lifetime bucket.
-[Status: Not started]
+[Status: Duplicate]
 
 [Todo]
 Reduce flush time.
@@ -10231,11 +10235,35 @@ thread training model.
 [Todo]
 Use model to do regression prediction of lifetime of key and 
 then put value to lifetime bucket that is close the predicted lifetime value. 
+
 [Status: Ongoing]
 
 [Todo]
+adaptive model training .
+No need to set label category.
+Can just use regression task.
+What kind of lifetime category should we have?
+1M, 2M , 4M, 8M , 16 M ? For now.
+But this is still classification problem.
+Dont' know which one performs better when training model.
+Let's try.
+Add lifetime sequence vector storing lifetime of keys.
+Update object from binary to regression.
+Update ComputeBlobsMarkedForForcedGC() to get lifetime ttl from 
+vector directly.
+Update compaction iterator code to get lifetime prediction.
+Need to bind number of lifetime bucket to size if lifetime sequence.
+Not very high invalid_key_ratio after chaing model from binary classification
+to regression.
+Most of invalid_key_ratio values are around 0.2.
+
+w-amp increases because of more gc jobs . 1.8 -> 2.3 Increases by 27%
+blob size : 3.8 -> 3.6 . Drops 5%
+
+[Status: Ongoing]
+[Todo]
 Count how many value is updated during compaction.
-Do sse blob index update count.
+Do see blob index update count.
 ```
 2024/03/09-12:34:00.402023 3824740 [db/compaction/compaction_iterator.cc:265] Num value blob index update: 49308
 ```
@@ -10243,4 +10271,1064 @@ Do sse blob index update count.
 
 [Todo]
 Need to create new branch when switch to regression model prediction.
+Still do developmetno on main branch and create another branch for 
+future comparison.
+[Status: Done]
+
+
+[Todo]
+Adjust training params such as 
+training threshold for number for sample.
+
+Lifetime category range from [1M, 2M, 4M]
+
+[Status: Not started]
+
+[Todo]
+Should we mention what's the size of db that just have valid keys and values?
+[Status: Not started]
+
+[Todo]
+Consider move lifetime of blob to longer lifetime classification 
+during gc.
+Both w-amp and blob size are increased after this change.
+Need to adjust creation time.
+This idea is not good.
+[Status: Done]
+
+
+[Todo]
+We can push key which are prediction wrong to data set and then train model.
+Pay more attention to these keys.
+[Status: Not started]
+
+
+[Todo]
+Model is bound the number of samples.
+It would be better if we have more data to train model.
+[Status: Not started]
+
+
+[Todo]
+When moving key from one lifetime bucket to another lifetime bucket,    
+need to take creation time in to account.
+Inherit the original creeation time of previous blob file 
+when moveing lifetime bucket.
+Tried it but not good..
+wamp increases to 2.3
+blob size does not change .
+[Status: Done]
+
+[Todo]
+Don't recreate new model each time we train.
+Use previous model and add more data to it.
+[Status: Not started]
+
+[Todo]
+Would be good to do statistics about lifetime distribution
+Andthen we can set up lifetime categories based on this distribution.
+[Status: Not started]
+
+
+[Todo]
+Add training sample with probability that is inversely proportional to
+the number of samples of that key.
+```cpp
+      if(past_distances_count > 0) {
+        double inverse_distance = 1.0 / double(distance);
+        // add training sample with inverse_distance probability
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0, 1);
+        double prob = dis(gen);
+        if(prob < inverse_distance) {
+          s = db_->AddTrainingSample(past_distances,
+                                 blob_size,
+
+```
+BTW, this is not a good way to add training sample.
+No wamp decrease or blob size decrease. 
+Change to use edcs[0] as inverse probability to 
+decide whether to add training sample.
+
+Need to try no model one for comparison to show that modle improve
+in terms of reducing wamp and space size of blob.
+Oh fuck, no wamp increase or blob size increase after removing model. 
+However, invalid_key_ratio is all 0.3 which is different to what we get from with model code.
+
+Need to add total invalid count.
+overall invalid key ratio during gc is 0.33 without model.
+no model, 100k num ber sample triggering model training.
+```
+2024/03/10-15:08:03.608177 4033712 [db/compaction/garbage_collection_job.cc:146] gc input blob: 7970001, gc output blobs: 5272099, gc dropped blobs: 2697902, gc invalid key ratio: 0.339
+```
+
+with model
+```
+2024/03/10-15:44:11.177736 4135140 [db/compaction/garbage_collection_job.cc:146] gc input blob: 8440551, gc output blobs: 5613301, gc dropped blobs: 2827250, gc invalid key ratio: 0.335
+```
+Drop 100k more keys byt invalid key ratio is lower.
+This is not good news.
+What should we do? 
+Switch to ycsb ?
+Accumulate more training samples before we train model?
+Tried 200k  but no improvement..
+[Status: Ongoing]
+
+[Todo]
+Need to start testting read perf asap.
+Let's run ycsb a b c d e for std rocksdb and mlsm.
+[Status: Not started]
+
+
+[Todo]
+Add statistics for lifetime of keys whose past distance_count <= 1
+And then we put future keys to lifetime bucket based on this statistics.
+[Status: Not started]
+
+[Todo]
+Do another prediction during gc?
+So now we don't need to do prediction during flush. 
+This is a good idea.
+Let's do it.
+But this doesn't make sense. 
+model has already given prediction for this value.
+If this value is not invalidated, then it does 
+not make sense to do another prediction.
+[Status: Not started]
+
+
+[Todo]
+Test ycsb a
+[Status: Not started]
+
+[Todo]
+Need to close sst files and blob files.
+Is this because of internal iterator?
+```cpp
+    status = compaction_job.Install(*c->mutable_cf_options());
+    c->ReleaseCompactionFiles(status);
+```
+
+```cpp
+      result->reset(new PosixRandomAccessFile(
+          fname, fd, GetLogicalBlockSizeForReadIfNeeded(options, fname, fd),
+          options
+#if defined(ROCKSDB_IOURING_PRESENT)
+          ,
+          !IsIOUringEnabled() ? nullptr : thread_local_io_urings_.get()
+#endif
+ 
+PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
+```
+
+
+```
+1134.sst
+2024/03/10-21:34:53.301925 975830 [db/compaction/compaction_job.cc:2091] [default] [JOB 328] Compacting 1@1 + 2@2 files to L2, score 1.49
+2024/03/10-21:34:53.301933 975830 [db/compaction/compaction_job.cc:2097] [default]: Compaction start summary: Base version 323 Base level 1, inputs: [1097(2938KB)], [845(4152KB) 1041(3129KB)]
+2024/03/10-21:34:53.301949 975830 EVENT_LOG_v1 {"time_micros": 1710077693301939, "job": 328, "event": "compaction_started", "compaction_reason": "LevelMaxLevelSize", "files_L1": [1097], "files_L2": [845, 1041], "gc_blob_files": [], "score": 1.4931, "input_data_size": 10465712, "oldest_snapshot_seqno": -1}
+2024/03/10-21:34:53.302036 975830 [db/compaction/compaction_iterator.cc:252] blob_age_cutoff_file_number (18446744073709551615) enable_blob_garbage_collection (0) 
+2024/03/10-21:34:53.535341 975830 [db/compaction/compaction_job.cc:1689] [default] [JOB 328] Generated table #1133: 22018 keys, 6082789 bytes, temperature: kUnknown
+2024/03/10-21:34:53.535387 975830 EVENT_LOG_v1 {"time_micros": 1710077693535362, "cf_name": "default", "job": 328, "event": "table_file_creation", "file_number": 1133, "file_size": 6082789, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 1139625, "largest_seqno": 2767474, "table_properties": {"data_size": 6040247, "index_size": 13888, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 27589, "raw_key_size": 5812752, "raw_average_key_size": 264, "raw_value_size": 242198, "raw_average_value_size": 11, "num_data_blocks": 760, "num_entries": 22018, "num_filter_entries": 22018, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1710077457, "oldest_key_time": 0, "file_creation_time": 1710077693, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3e390d9c-d547-4513-80a5-2e23e3802471", "db_session_id": "G2JDQIDYPPYU3U8Q499A", "orig_file_number": 1133, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 356}
+2024/03/10-21:34:53.669593 975830 [db/compaction/compaction_job.cc:1689] [default] [JOB 328] Generated table #1134: 12846 keys, 3549159 bytes, temperature: kUnknown
+2024/03/10-21:34:53.669638 975830 EVENT_LOG_v1 {"time_micros": 1710077693669614, "cf_name": "default", "job": 328, "event": "table_file_creation", "file_number": 1134, "file_size": 3549159, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 1139700, "largest_seqno": 2766760, "table_properties": {"data_size": 3524030, "index_size": 7999, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 16069, "raw_key_size": 3391344, "raw_average_key_size": 264, "raw_value_size": 141306, "raw_average_value_size": 11, "num_data_blocks": 443, "num_entries": 12846, "num_filter_entries": 12846, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1710077457, "oldest_key_time": 0, "file_creation_time": 1710077693, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3e390d9c-d547-4513-80a5-2e23e3802471", "db_session_id": "G2JDQIDYPPYU3U8Q499A", "orig_file_number": 1134, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 356}
+2024/03/10-21:34:53.703249 975830 [db/compaction/compaction_job.cc:1689] [default] [JOB 328] Generated table #1135: 2979 keys, 826766 bytes, temperature: kUnknown
+2024/03/10-21:34:53.703287 975830 EVENT_LOG_v1 {"time_micros": 1710077693703264, "cf_name": "default", "job": 328, "event": "table_file_creation", "file_number": 1135, "file_size": 826766, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 2604767, "largest_seqno": 2767505, "table_properties": {"data_size": 820226, "index_size": 1703, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 3781, "raw_key_size": 786456, "raw_average_key_size": 264, "raw_value_size": 32769, "raw_average_value_size": 11, "num_data_blocks": 103, "num_entries": 2979, "num_filter_entries": 2979, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1710077457, "oldest_key_time": 0, "file_creation_time": 1710077693, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3e390d9c-d547-4513-80a5-2e23e3802471", "db_session_id": "G2JDQIDYPPYU3U8Q499A", "orig_file_number": 1135, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 1040}
+2024/03/10-21:34:53.703336 975830 [db/compaction/compaction_iterator.cc:268] Num value blob index update: 0
+
+
+
+
+2024/03/10-21:34:54.736895 975830 EVENT_LOG_v1 {"time_micros": 1710077694736885, "job": 332, "event": "compaction_started", "compaction_reason": "LevelMaxLevelSize", "files_L2": [1134], "files_L3": [323], "gc_blob_files": [], "score": 1.18362, "input_data_size": 6030493, "oldest_snapshot_seqno": -1}
+2024/03/10-21:34:54.736982 975830 [db/compaction/compaction_iterator.cc:252] blob_age_cutoff_file_number (18446744073709551615) enable_blob_garbage_collection (0) 
+2024/03/10-21:34:54.871139 975830 [db/compaction/compaction_job.cc:1689] [default] [JOB 332] Generated table #1145: 11978 keys, 3306919 bytes, temperature: kUnknown
+2024/03/10-21:34:54.871182 975830 EVENT_LOG_v1 {"time_micros": 1710077694871158, "cf_name": "default", "job": 332, "event": "table_file_creation", "file_number": 1145, "file_size": 3306919, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 1992, "largest_seqno": 2766760, "table_properties": {"data_size": 3283324, "index_size": 7553, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 14981, "raw_key_size": 3162192, "raw_average_key_size": 264, "raw_value_size": 131758, "raw_average_value_size": 11, "num_data_blocks": 414, "num_entries": 11978, "num_filter_entries": 11978, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1710077299, "oldest_key_time": 0, "file_creation_time": 1710077694, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3e390d9c-d547-4513-80a5-2e23e3802471", "db_session_id": "G2JDQIDYPPYU3U8Q499A", "orig_file_number": 1145, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 156}
+2024/03/10-21:34:54.980698 975830 [db/compaction/compaction_job.cc:1689] [default] [JOB 332] Generated table #1146: 9860 keys, 2722328 bytes, temperature: kUnknown
+2024/03/10-21:34:54.980745 975830 EVENT_LOG_v1 {"time_micros": 1710077694980720, "cf_name": "default", "job": 332, "event": "table_file_creation", "file_number": 1146, "file_size": 2722328, "file_checksum": "", "file_checksum_func_name": "Unknown", "smallest_seqno": 887, "largest_seqno": 2766104, "table_properties": {"data_size": 2702749, "index_size": 6161, "index_partitions": 0, "top_level_index_size": 0, "index_key_is_user_key": 1, "index_value_is_delta_encoded": 1, "filter_size": 12357, "raw_key_size": 2603040, "raw_average_key_size": 264, "raw_value_size": 108460, "raw_average_value_size": 11, "num_data_blocks": 340, "num_entries": 9860, "num_filter_entries": 9860, "num_deletions": 0, "num_merge_operands": 0, "num_range_deletions": 0, "format_version": 0, "fixed_key_len": 0, "filter_policy": "bloomfilter", "column_family_name": "default", "column_family_id": 0, "comparator": "leveldb.BytewiseComparator", "merge_operator": "PutOperator", "prefix_extractor_name": "nullptr", "property_collectors": "[]", "compression": "NoCompression", "compression_options": "window_bits=-14; level=32767; strategy=0; max_dict_bytes=0; zstd_max_train_bytes=0; enabled=0; max_dict_buffer_bytes=0; use_zstd_dict_trainer=1; ", "creation_time": 1710077299, "oldest_key_time": 0, "file_creation_time": 1710077694, "slow_compression_estimated_data_size": 0, "fast_compression_estimated_data_size": 0, "db_id": "3e390d9c-d547-4513-80a5-2e23e3802471", "db_session_id": "G2JDQIDYPPYU3U8Q499A", "orig_file_number": 1146, "seqno_to_time_mapping": "N/A"}, "oldest_blob_file_number": 156}
+2024/03/10-21:34:54.980799 975830 [db/compaction/compaction_iterator.cc:268] Num value blob index update: 5755
+2024/03/10-21:34:54.999595 975830 (Original Log Time 2024/03/10-21:34:54.981224) [db/compaction/compaction_job.cc:1762] [default] [JOB 332] Compacted 1@2 + 1@3 files to L3 => 6029247 bytes
+2024/03/10-21:34:54.999602 975830 (Original Log Time 2024/03/10-21:34:54.998996) [db/compaction/compaction_job.cc:867] [default] compacted to: files[0 9 73 169 0 0 0 0] max score 1.17, MB/sec: 24.7 rd, 24.7 wr, level 3, files in(1, 1) out(2 +0 blob) MB in(3.4, 2.4 +0.0 blob) out(5.7 +0.0 blob), read-write-amplify(3.4) write-amplify(1.7) OK, records in: 21838, records dropped: 0 output_compression: NoCompression
+2024/03/10-21:34:54.999605 975830 (Original Log Time 2024/03/10-21:34:54.999001) [db/compaction/compaction_job.cc:893] [default] Blob file summary: head=156, tail=1126
+2024/03/10-21:34:54.999614 975830 (Original Log Time 2024/03/10-21:34:54.999122) EVENT_LOG_v1 {"time_micros": 1710077694999008, "job": 332, "event": "compaction_finished", "compaction_time_micros": 243915, "compaction_time_cpu_micros": 241159, "output_level": 3, "num_output_files": 2, "total_output_size": 6029247, "num_input_records": 21838, "num_output_records": 21838, "num_subcompactions": 1, "output_compression": "NoCompression", "num_single_delete_mismatches": 0, "num_single_delete_fallthrough": 0, "lsm_state": [0, 9, 73, 169, 0, 0, 0, 0], "blob_file_head": 156, "blob_file_tail": 1126, "blob_files": [156, 157, 224, 225, 228, 229, 295, 296, 299, 300, 356, 357, 360, 361, 426, 427, 430, 431, 495, 496, 499, 500, 565, 566, 569, 570, 624, 625, 628, 629, 689, 691, 694, 695, 696, 743, 745, 759, 771, 772, 775, 776, 778, 825, 827, 842, 871, 874, 879, 880, 881, 926, 927, 943, 967, 974, 977, 978, 980, 1027, 1029, 1040, 1070, 1072, 1080, 1081, 1083, 1126], "garbage_count": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "total_blob_count": [80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 490, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 489, 80909, 488, 80909, 489, 80909, 489, 80909, 80909, 489, 488, 80909, 489, 80909, 489, 80909, 80909, 488, 489, 80909, 489, 80909, 489, 80909, 80909, 489, 488, 80909, 489, 80909, 489, 80909, 80909, 489, 489, 80909, 486, 80909, 488], "lifetime_blob_0": [], "lifetime_blob_1": [156, 157, 224, 225, 228, 229, 295, 296, 299, 300, 356, 357, 360, 361, 426, 427, 430, 431, 495, 496, 499, 500, 565, 566, 569, 570, 624, 625, 628, 629, 689, 691, 694, 695, 759, 772, 775, 776, 842, 874, 879, 880, 943, 974, 977, 978, 1040, 1070, 1080, 1081], "lifetime_blob_2": [696, 743, 745, 771, 778, 825, 827, 871, 881, 926, 927, 967, 980, 1027, 1029, 1072, 1083, 1126], "lifetime_blob_3": []}
+```
+
+1134.sst is not deleted
+
+
+```
+2024/03/10-21:34:55.324849 975830 EVENT_LOG_v1 {"time_micros": 1710077695324839, "job": 334, "event": "compaction_started", "compaction_reason": "LevelMaxLevelSize", "files_L2": [1133], "files_L3": [353, 322], "gc_blob_files": [], "score": 1.14424, "input_data_size": 10363723, "oldest_snapshot_seqno": -1}
+
+2024/03/10-21:34:57.760581 975831 EVENT_LOG_v1 {"time_micros": 1710077697760579, "job": 330, "event": "table_file_deletion", "file_number": 353}
+```
+
+
+Number of version is ok
+```
+(gdb) p default_cf_handle_->cfd()->GetSuperVersion()->current
+$5 = (rocksdb::Version *) 0x1552f55d8840
+(gdb) p default_cf_handle_->cfd()->GetSuperVersion()->current->prev_
+$6 = (rocksdb::Version *) 0x555556a47090
+(gdb) p default_cf_handle_->cfd()->GetSuperVersion()->current->prev_->prev_
+$7 = (rocksdb::Version *) 0x15532b38bdd0
+```
+Maybe there is problem with refs of file.
+
+When are sst files deleted?
+sst files are not in version but they are not deleted either.
+```
+(gdb)  p default_cf_handle_->cfd()->GetSuperVersion()->current->refs_
+$10 = 4
+```
+Where are sst files deleted?
+```cpp
+  void ReleaseCompactionFiles(const Status& status) {
+    for (auto& f : compaction_files_) {
+      if (f.file) {
+        f.file->file()->Close();
+        f.file->Unref();
+      }
+    }
+    compaction_files_.clear();
+    compaction_files_.reserve(2);
+  }
+```
+
+When fd is closed? 
+```
+FileMetaData{
+  FileDescriptor fd;
+}
+```
+
+```
+
+          file_meta->fd.table_reader = table_cache_->get_cache().Value(handle);
+```
+
+Should check this code and see when table file is deleted.
+```cpp
+
+Status BlockBasedTable::Open(
+    const ReadOptions& read_options, const ImmutableOptions& ioptions,
+    const EnvOptions& env_options, const BlockBasedTableOptions& table_options,
+    const InternalKeyComparator& internal_comparator,
+    std::unique_ptr<RandomAccessFileReader>&& file, uint64_t file_size,
+    std::unique_ptr<TableReader>* table_reader,
+    std::shared_ptr<CacheReservationManager> table_reader_cache_res_mgr,
+    const std::shared_ptr<const SliceTransform>& prefix_extractor,
+    const bool prefetch_index_and_filter_in_cache, const bool skip_filters,
+    const int level, const bool immortal_table,
+    const SequenceNumber largest_seqno, const bool force_direct_prefetch,
+    TailPrefetchStats* tail_prefetch_stats,
+    BlockCacheTracer* const block_cache_tracer,
+    size_t max_file_size_for_l0_meta_pin, const std::string& cur_db_session_id,
+    uint64_t cur_file_num, UniqueId64x2 expected_unique_id) {
+  table_reader->reset();
+
+  Status s;
+  Footer footer;
+  std::unique_ptr<FilePrefetchBuffer> prefetch_buffer;
+
+  // From read_options, retain deadline, io_timeout, rate_limiter_priority, and
+  // verify_checksums. In future, we may retain more options.
+  ReadOptions ro;
+  ro.deadline = read_options.deadline;
+  ro.io_timeout = read_options.io_timeout;
+  ro.rate_limiter_priority = read_options.rate_limiter_priority;
+  ro.verify_checksums = read_options.verify_checksums;
+
+  // prefetch both index and filters, down to all partitions
+  const bool prefetch_all = prefetch_index_and_filter_in_cache || level == 0;
+  const bool preload_all = !table_options.cache_index_and_filter_blocks;
+
+  if (!ioptions.allow_mmap_reads) {
+    s = PrefetchTail(ro, file.get(), file_size, force_direct_prefetch,
+                     tail_prefetch_stats, prefetch_all, preload_all,
+                     &prefetch_buffer);
+    // Return error in prefetch path to users.
+    if (!s.ok()) {
+      return s;
+    }
+  } else {
+    // Should not prefetch for mmap mode.
+    prefetch_buffer.reset(new FilePrefetchBuffer(
+        0 /* readahead_size */, 0 /* max_readahead_size */, false /* enable */,
+        true /* track_min_offset */));
+  }
+
+  // Read in the following order:
+  //    1. Footer
+  //    2. [metaindex block]
+  //    3. [meta block: properties]
+  //    4. [meta block: range deletion tombstone]
+  //    5. [meta block: compression dictionary]
+  //    6. [meta block: index]
+  //    7. [meta block: filter]
+  IOOptions opts;
+  s = file->PrepareIOOptions(ro, opts);
+  if (s.ok()) {
+    s = ReadFooterFromFile(opts, file.get(), *ioptions.fs,
+                           prefetch_buffer.get(), file_size, &footer,
+                           kBlockBasedTableMagicNumber);
+  }
+  if (!s.ok()) {
+    return s;
+  }
+  if (!IsSupportedFormatVersion(footer.format_version())) {
+    return Status::Corruption(
+        "Unknown Footer version. Maybe this file was created with newer "
+        "version of RocksDB?");
+  }
+
+  BlockCacheLookupContext lookup_context{TableReaderCaller::kPrefetch};
+  Rep* rep = new BlockBasedTable::Rep(ioptions, env_options, table_options,
+                                      internal_comparator, skip_filters,
+                                      file_size, level, immortal_table);
+  rep->file = std::move(file);
+  rep->footer = footer;
+
+  // For fully portable/stable cache keys, we need to read the properties
+  // block before setting up cache keys. TODO: consider setting up a bootstrap
+  // cache key for PersistentCache to use for metaindex and properties blocks.
+  rep->persistent_cache_options = PersistentCacheOptions();
+
+  // Meta-blocks are not dictionary compressed. Explicitly set the dictionary
+  // handle to null, otherwise it may be seen as uninitialized during the below
+  // meta-block reads.
+  rep->compression_dict_handle = BlockHandle::NullBlockHandle();
+
+  // Read metaindex
+  std::unique_ptr<BlockBasedTable> new_table(
+      new BlockBasedTable(rep, block_cache_tracer));
+  std::unique_ptr<Block> metaindex;
+  std::unique_ptr<InternalIterator> metaindex_iter;
+  s = new_table->ReadMetaIndexBlock(ro, prefetch_buffer.get(), &metaindex,
+                                    &metaindex_iter);
+  if (!s.ok()) {
+    return s;
+  }
+
+  // Populates table_properties and some fields that depend on it,
+  // such as index_type.
+  s = new_table->ReadPropertiesBlock(ro, prefetch_buffer.get(),
+                                     metaindex_iter.get(), largest_seqno);
+  if (!s.ok()) {
+    return s;
+  }
+
+  // Populate BlockCreateContext
+  bool blocks_definitely_zstd_compressed =
+      rep->table_properties &&
+      (rep->table_properties->compression_name ==
+           CompressionTypeToString(kZSTD) ||
+       rep->table_properties->compression_name ==
+           CompressionTypeToString(kZSTDNotFinalCompression));
+  rep->create_context =
+      BlockCreateContext(&rep->table_options, rep->ioptions.stats,
+                         blocks_definitely_zstd_compressed);
+
+  // Check expected unique id if provided
+  if (expected_unique_id != kNullUniqueId64x2) {
+    auto props = rep->table_properties;
+    if (!props) {
+      return Status::Corruption("Missing table properties on file " +
+                                std::to_string(cur_file_num) +
+                                " with known unique ID");
+    }
+    UniqueId64x2 actual_unique_id{};
+    s = GetSstInternalUniqueId(props->db_id, props->db_session_id,
+                               props->orig_file_number, &actual_unique_id,
+                               /*force*/ true);
+    assert(s.ok());  // because force=true
+    if (expected_unique_id != actual_unique_id) {
+      return Status::Corruption(
+          "Mismatch in unique ID on table file " +
+          std::to_string(cur_file_num) +
+          ". Expected: " + InternalUniqueIdToHumanString(&expected_unique_id) +
+          " Actual: " + InternalUniqueIdToHumanString(&actual_unique_id));
+    }
+    TEST_SYNC_POINT_CALLBACK("BlockBasedTable::Open::PassedVerifyUniqueId",
+                             &actual_unique_id);
+  } else {
+    TEST_SYNC_POINT_CALLBACK("BlockBasedTable::Open::SkippedVerifyUniqueId",
+                             nullptr);
+    if (ioptions.verify_sst_unique_id_in_manifest && ioptions.logger) {
+      // A crude but isolated way of reporting unverified files. This should not
+      // be an ongoing concern so doesn't deserve a place in Statistics IMHO.
+      static std::atomic<uint64_t> unverified_count{0};
+      auto prev_count =
+          unverified_count.fetch_add(1, std::memory_order_relaxed);
+      if (prev_count == 0) {
+        ROCKS_LOG_WARN(
+            ioptions.logger,
+            "At least one SST file opened without unique ID to verify: %" PRIu64
+            ".sst",
+            cur_file_num);
+      } else if (prev_count % 1000 == 0) {
+        ROCKS_LOG_WARN(
+            ioptions.logger,
+            "Another ~1000 SST files opened without unique ID to verify");
+      }
+    }
+  }
+
+  // Set up prefix extracto as needed
+  bool force_null_table_prefix_extractor = false;
+  TEST_SYNC_POINT_CALLBACK(
+      "BlockBasedTable::Open::ForceNullTablePrefixExtractor",
+      &force_null_table_prefix_extractor);
+  if (force_null_table_prefix_extractor) {
+    assert(!rep->table_prefix_extractor);
+  } else if (!PrefixExtractorChangedHelper(rep->table_properties.get(),
+                                           prefix_extractor.get())) {
+    // Establish fast path for unchanged prefix_extractor
+    rep->table_prefix_extractor = prefix_extractor;
+  } else {
+    // Current prefix_extractor doesn't match table
+    if (rep->table_properties) {
+      //**TODO: If/When the DBOptions has a registry in it, the ConfigOptions
+      // will need to use it
+      ConfigOptions config_options;
+      Status st = SliceTransform::CreateFromString(
+          config_options, rep->table_properties->prefix_extractor_name,
+          &(rep->table_prefix_extractor));
+      if (!st.ok()) {
+        //**TODO: Should this be error be returned or swallowed?
+        ROCKS_LOG_ERROR(rep->ioptions.logger,
+                        "Failed to create prefix extractor[%s]: %s",
+                        rep->table_properties->prefix_extractor_name.c_str(),
+                        st.ToString().c_str());
+      }
+    }
+  }
+
+  // With properties loaded, we can set up portable/stable cache keys
+  SetupBaseCacheKey(rep->table_properties.get(), cur_db_session_id,
+                    cur_file_num, &rep->base_cache_key);
+
+  rep->persistent_cache_options =
+      PersistentCacheOptions(rep->table_options.persistent_cache,
+                             rep->base_cache_key, rep->ioptions.stats);
+
+  s = new_table->ReadRangeDelBlock(ro, prefetch_buffer.get(),
+                                   metaindex_iter.get(), internal_comparator,
+                                   &lookup_context);
+  if (!s.ok()) {
+    return s;
+  }
+  s = new_table->PrefetchIndexAndFilterBlocks(
+      ro, prefetch_buffer.get(), metaindex_iter.get(), new_table.get(),
+      prefetch_all, table_options, level, file_size,
+      max_file_size_for_l0_meta_pin, &lookup_context);
+
+  if (s.ok()) {
+    // Update tail prefetch stats
+    assert(prefetch_buffer.get() != nullptr);
+    if (tail_prefetch_stats != nullptr) {
+      assert(prefetch_buffer->min_offset_read() < file_size);
+      tail_prefetch_stats->RecordEffectiveSize(
+          static_cast<size_t>(file_size) - prefetch_buffer->min_offset_read());
+    }
+  }
+
+  if (s.ok() && table_reader_cache_res_mgr) {
+    std::size_t mem_usage = new_table->ApproximateMemoryUsage();
+    s = table_reader_cache_res_mgr->MakeCacheReservation(
+        mem_usage, &(rep->table_reader_cache_res_handle));
+    if (s.IsMemoryLimit()) {
+      s = Status::MemoryLimit(
+          "Can't allocate " +
+          kCacheEntryRoleToCamelString[static_cast<std::uint32_t>(
+              CacheEntryRole::kBlockBasedTableReader)] +
+          " due to memory limit based on "
+          "cache capacity for memory allocation");
+    }
+  }
+
+  if (s.ok()) {
+    *table_reader = std::move(new_table);
+  }
+  return s;
+}
+```
+
+```cpp
+
+void DBImpl::PurgeObsoleteFiles(JobContext& state, bool schedule_only) {
+or 
+
+void DBImpl::SchedulePurge() {
+  mutex_.AssertHeld();
+  assert(opened_successfully_);
+
+  // Purge operations are put into High priority queue
+  bg_purge_scheduled_++;
+  env_->Schedule(&DBImpl::BGWorkPurge, this, Env::Priority::HIGH, nullptr);
+}
+void DBImpl::BackgroundCallPurge() {
+
+// Delete obsolete files and log status and information of file deletion
+void DBImpl::DeleteObsoleteFileImpl(int job_id, const std::string& fname,
+                                    const std::string& path_to_sync,
+                                    FileType type, uint64_t number) {
+  TEST_SYNC_POINT_CALLBACK("DBImpl::DeleteObsoleteFileImpl::BeforeDeletion",
+                           const_cast<std::string*>(&fname));
+
+  Status file_deletion_status;
+  if (type == kTableFile || type == kBlobFile || type == kWalFile) {
+    // Rate limit WAL deletion only if its in the DB dir
+    file_deletion_status = DeleteDBFile(
+        &immutable_db_options_, fname, path_to_sync,
+        /*force_bg=*/false,
+        /*force_fg=*/(type == kWalFile) ? !wal_in_db_path_ : false);
+  } else {
+    file_deletion_status = env_->DeleteFile(fname);
+  }
+  TEST_SYNC_POINT_CALLBACK("DBImpl::DeleteObsoleteFileImpl:AfterDeletion",
+                           &file_deletion_status);
+  TEST_SYNC_POINT_CALLBACK("DBImpl::DeleteObsoleteFileImpl:AfterDeletion2",
+                           const_cast<std::string*>(&fname));
+  if (file_deletion_status.ok()) {
+    ROCKS_LOG_DEBUG(immutable_db_options_.info_log,
+                    "[JOB %d] Delete %s type=%d #%" PRIu64 " -- %s\n", job_id,
+                    fname.c_str(), type, number,
+                    file_deletion_status.ToString().c_str());
+  } else if (env_->FileExists(fname).IsNotFound()) {
+    ROCKS_LOG_INFO(
+        immutable_db_options_.info_log,
+        "[JOB %d] Tried to delete a non-existing file %s type=%d #%" PRIu64
+        " -- %s\n",
+        job_id, fname.c_str(), type, number,
+        file_deletion_status.ToString().c_str());
+  } else {
+    ROCKS_LOG_ERROR(immutable_db_options_.info_log,
+                    "[JOB %d] Failed to delete %s type=%d #%" PRIu64 " -- %s\n",
+                    job_id, fname.c_str(), type, number,
+                    file_deletion_status.ToString().c_str());
+  }
+  if (type == kTableFile) {
+    EventHelpers::LogAndNotifyTableFileDeletion(
+        &event_logger_, job_id, number, fname, file_deletion_status, GetName(),
+        immutable_db_options_.listeners);
+  }
+  if (type == kBlobFile) {
+    EventHelpers::LogAndNotifyBlobFileDeletion(
+        &event_logger_, immutable_db_options_.listeners, job_id, number, fname,
+        file_deletion_status, GetName());
+  }
+}
+
+void EventHelpers::LogAndNotifyTableFileDeletion(
+    EventLogger* event_logger, int job_id, uint64_t file_number,
+    const std::string& file_path, const Status& status,
+    const std::string& dbname,
+    const std::vector<std::shared_ptr<EventListener>>& listeners) {
+  JSONWriter jwriter;
+  AppendCurrentTime(&jwriter);
+
+  jwriter << "job" << job_id << "event"
+          << "table_file_deletion"
+          << "file_number" << file_number;
+  if (!status.ok()) {
+    jwriter << "status" << status.ToString();
+  }
+
+  jwriter.EndObject();
+
+  event_logger->Log(jwriter);
+
+  if (listeners.empty()) {
+    return;
+  }
+  TableFileDeletionInfo info;
+  info.db_name = dbname;
+  info.job_id = job_id;
+  info.file_path = file_path;
+  info.status = status;
+  for (auto& listener : listeners) {
+    listener->OnTableFileDeleted(info);
+  }
+  info.status.PermitUncheckedError();
+}
+```
+
+
+Need to make sure obsolete file are deleted during gc job as well.
+I think that once gc job skip obsolete file deletion, it will not be deleted again.
+```cpp
+void DBImpl::BackgroundCallGarbageCollection(PrepickedCompaction* compaction,
+                                             Env::Priority thread_pri) {
+ // If compaction failed, we want to delete all temporary files that we
+    // might have created (they might not be all recorded in job_context in
+    // case of a failure). Thus, we force full scan in FindObsoleteFiles()
+    FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress() &&
+                                        !s.IsManualCompactionPaused() &&
+                                        !s.IsColumnFamilyDropped() &&
+                                        !s.IsBusy());
+    TEST_SYNC_POINT("DBImpl::BackgroundGarbageCollection:FoundObsoleteFiles");
+
+    // delete unnecessary files if any, this is done outside the mutex
+    if (job_context.HaveSomethingToClean() ||
+        job_context.HaveSomethingToDelete() || !log_buffer.IsEmpty()) {
+
+          inline bool HaveSomethingToDelete() const {
+            return !(full_scan_candidate_files.empty() && sst_delete_files.empty() &&
+                     blob_delete_files.empty() && log_delete_files.empty() &&
+                     manifest_delete_files.empty());
+          }
+
+
+      mutex_.Unlock();
+      // Have to flush the info logs before bg_compaction_scheduled_--
+      // because if bg_flush_scheduled_ becomes 0 and the lock is
+      // released, the deconstructor of DB can kick in and destroy all the
+      // states of DB so info_log might not be available after that point.
+      // It also applies to access other states that DB owns.
+      log_buffer.FlushBufferToLog();
+      if (job_context.HaveSomethingToDelete()) {
+        PurgeObsoleteFiles(job_context);
+        TEST_SYNC_POINT("DBImpl::BackgroundCallCompaction:PurgedObsoleteFiles");
+      }
+      job_context.Clean();
+      mutex_.Lock();
+    }
+```
+comment iter crreatino part of compaction job . Because compaction doesn't 
+use iter in this version.
+
+
+FindObsoleteFiles() is called after each compaction job.
+Did I do this in garbagecollection job?
+First FindObsoleteFiles(), and then PurgeObsoleteFiles()
+When and where pending_outputs_ is updated in compaction jobs?
+I don't rememeber I did any of these steps in my gc job .
+Need to check and make sure I copy these functions to my gc job function.
+Fuck, it's not easy to do system coding.
+It's just complicated.
+```cpp
+void DBImpl::FindObsoleteFiles(JobContext* job_context, bool force,
+                               bool no_full_scan) {
+  mutex_.AssertHeld();
+
+  // don't delete files that might be currently written to from compaction
+  // threads
+  // Since job_context->min_pending_output is set, until file scan finishes,
+  // mutex_ cannot be released. Otherwise, we might see no min_pending_output
+  // here but later find newer generated unfinalized files while scanning.
+  job_context->min_pending_output = MinObsoleteSstNumberToKeep();
+
+  // Get obsolete files.  This function will also update the list of
+  // pending files in VersionSet().
+  versions_->GetObsoleteFiles(
+      &job_context->sst_delete_files, &job_context->blob_delete_files,
+      &job_context->manifest_delete_files, job_context->min_pending_output);
+
+
+
+    uint64_t DBImpl::MinObsoleteSstNumberToKeep() {
+      mutex_.AssertHeld();
+      if (!pending_outputs_.empty()) {
+        return *pending_outputs_.begin();
+      }
+      return std::numeric_limits<uint64_t>::max();
+    }
+```
+
+Do I miss add new blob file number to pending_outputs_ during gc?
+Is this the root cause?
+```cpp
+
+void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
+
+    std::unique_ptr<std::list<uint64_t>::iterator>
+        pending_outputs_inserted_elem(new std::list<uint64_t>::iterator(
+            CaptureCurrentFileNumberInPendingOutputs()));
+
+
+            DBImpl::CaptureCurrentFileNumberInPendingOutputs() {
+              // We need to remember the iterator of our insert, because after the
+              // background job is done, we need to remove that element from
+              // pending_outputs_.
+              pending_outputs_.push_back(versions_->current_next_file_number());
+              auto pending_outputs_inserted_elem = pending_outputs_.end();
+              --pending_outputs_inserted_elem;
+              return pending_outputs_inserted_elem;
+            }
+
+
+    Status s = BackgroundCompaction(&made_progress, &job_context, &log_buffer,
+
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+        void DBImpl::ReleaseFileNumberFromPendingOutputs(
+            std::unique_ptr<std::list<uint64_t>::iterator>& v) {
+          if (v.get() != nullptr) {
+            pending_outputs_.erase(*v.get());
+            v.reset();
+          }
+        }
+
+    // If compaction failed, we want to delete all temporary files that we
+    // might have created (they might not be all recorded in job_context in
+    // case of a failure). Thus, we force full scan in FindObsoleteFiles()
+    FindObsoleteFiles(&job_context, !s.ok() && !s.IsShutdownInProgress() &&
+                                        !s.IsManualCompactionPaused() &&
+                                        !s.IsColumnFamilyDropped() &&
+                                        !s.IsBusy());
+          job_context->min_pending_output = MinObsoleteSstNumberToKeep();
+
+          // Get obsolete files.  This function will also update the list of
+          // pending files in VersionSet().
+          versions_->GetObsoleteFiles(
+              &job_context->sst_delete_files, &job_context->blob_delete_files,
+              &job_context->manifest_delete_files, job_context->min_pending_output);
+
+                void VersionSet::GetObsoleteFiles(std::vector<ObsoleteFileInfo>* files,
+                  std::vector<ObsoleteFileInfo> pending_files;
+                  for (auto& f : obsolete_files_) {
+                    if (f.metadata->fd.GetNumber() < min_pending_output) {
+                      files->emplace_back(std::move(f));
+                    } else {
+                      pending_files.emplace_back(std::move(f));
+                    }
+                  }
+                  obsolete_files_.swap(pending_files);
+
+
+
+ 
+    if (job_context.HaveSomethingToClean() ||
+        job_context.HaveSomethingToDelete() || !log_buffer.IsEmpty()) {
+      mutex_.Unlock();
+     
+        PurgeObsoleteFiles(job_context);
+```
+
+
+obsolete_files_ are updated in destructor of Version.
+Still don't understand why sst files are not deleted.
+It should be deleted after destructor of version.
+version builder can unref file and make f->refs <=0 .
+But it does not put f to verions_set_ obsoleted_files_ .
+```cpp
+Version::~Version() {
+  assert(refs_ == 0);
+
+  // Remove from linked list
+  prev_->next_ = next_;
+  next_->prev_ = prev_;
+
+  // Drop references to files
+  for (int level = 0; level < storage_info_.num_levels_; level++) {
+    for (size_t i = 0; i < storage_info_.files_[level].size(); i++) {
+      FileMetaData* f = storage_info_.files_[level][i];
+      assert(f->refs > 0);
+      f->refs--;
+      if (f->refs <= 0) {
+        assert(cfd_ != nullptr);
+        uint32_t path_id = f->fd.GetPathId();
+        assert(path_id < cfd_->ioptions()->cf_paths.size());
+        vset_->obsolete_files_.push_back(
+            ObsoleteFileInfo(f, cfd_->ioptions()->cf_paths[path_id].path,
+                             cfd_->GetFileMetadataCacheReservationManager()));
+      }
+    }
+  }
+}
+```
+
+
+
+obsolete_blob_files_ are updated in AddObsolteBlobFileWithLifetime()    
+```cpp
+    auto deleter = [vs, ioptions](SharedBlobFileMetaData* shared_meta) {
+      if (vs) {
+        assert(ioptions);
+        assert(!ioptions->cf_paths.empty());
+        assert(shared_meta);
+
+        vs->AddObsoleteBlobFileWithLifetime(shared_meta->GetBlobFileNumber(),
+                                            ioptions->cf_paths.front().path,
+                                            shared_meta->GetLifetimeLabel());
+        // vs->AddObsoleteBlobFile(shared_meta->GetBlobFileNumber(),
+        //                         ioptions->cf_paths.front().path);
+      }
+
+      delete shared_meta;
+    };
+
+
+  void AddObsoleteBlobFileWithLifetime(uint64_t blob_file_number, std::string path,
+                                      uint64_t lifetime) {
+    assert(table_cache_);
+
+    table_cache_->Erase(GetSliceForKey(&blob_file_number));
+
+    obsolete_blob_files_.emplace_back(blob_file_number, std::move(path));
+  }
+
+
+```
+
+There are no full scan to delete obsolete files in gc job.
+And there are problems with our current gc job that causes
+obsolete files are not deleted.
+I guess we can solve current problem by force full scan.
+
+Let's just change gc job code and make sure we do full scan to delete obsolete files.
+
+Add 
+```cpp
+    ReleaseFileNumberFromPendingOutputs(pending_outputs_inserted_elem);
+```
+to BackgroundCallGarbageCollection()
+Hope this can work.
+Otherwise , I will do full scan to delete oboslte files.
+I think we fix this issue after  adding ReleaseFileNumberFromPendingOutputs()
+Still got too many open files error after 9783k writes.
+Total number of sst: 896
+Total sst file: 
+```
+(base) ➜  with_gc_1.0_0.8 ll | grep sst | wc -l
+935
+```
+
+
+Total blob file: 231
+```
+(base) ➜  with_gc_1.0_0.8 ll | grep blob | wc -l
+238
+```
+
+When close(fd) is called?
+```cpp
+IOStatus NewRandomAccessFile(const std::string& fname,
+                           const FileOptions& options,
+                           std::unique_ptr<FSRandomAccessFile>* result,
+                           IODebugContext* /*dbg*/) override {
+
+    class PosixRandomAccessFile : public FSRandomAccessFile {
+
+        PosixRandomAccessFile::~PosixRandomAccessFile() { close(fd_); }
+```
+
+NewRandomAccessFile is called in too many functions.
+blob_file_reader.cc
+```
+
+Status BlobFileReader::OpenFile(
+  std::unique_ptr<FSRandomAccessFile> file;
+        fs->NewRandomAccessFile(blob_file_path, file_opts, &file, dbg);
+```
+
+
+table_cache.cc
+```cpp
+Status TableCache::GetTableReader(
+  std::string fname = TableFileName(
+      ioptions_.cf_paths, file_meta.fd.GetNumber(), file_meta.fd.GetPathId());
+  std::unique_ptr<FSRandomAccessFile> file;
+
+    s = ioptions_.fs->NewRandomAccessFile(fname, fopts, &file, nullptr);
+```
+
+version_set.cc
+```cpp
+Status Version::GetTableProperties(std::shared_ptr<const TableProperties>* tp,
+                                   const FileMetaData* file_meta,
+                                   const std::string* fname) const {
+  std::unique_ptr<FSRandomAccessFile> file;
+  s = ioptions->fs->NewRandomAccessFile(file_name, file_options_, &file,
+```
+
+
+random_access_file_reader.cc
+```cpp
+Status BlobFile::ReadMetadata(const std::shared_ptr<FileSystem>& fs,
+                              const FileOptions& file_options) {
+ 
+  // Create file reader.
+  std::unique_ptr<RandomAccessFileReader> file_reader;
+  s = RandomAccessFileReader::Create(fs, PathName(), file_options, &file_reader,
+                                     nullptr);
+        IOStatus RandomAccessFileReader::Create(
+            const std::shared_ptr<FileSystem>& fs, const std::string& fname,
+            const FileOptions& file_opts,
+            std::unique_ptr<RandomAccessFileReader>* reader, IODebugContext* dbg) {
+          std::unique_ptr<FSRandomAccessFile> file;
+          IOStatus io_s = fs->NewRandomAccessFile(fname, file_opts, &file, dbg);
+          if (io_s.ok()) {
+            reader->reset(new RandomAccessFileReader(std::move(file), fname));
+          }
+          return io_s;
+        }
+```
+
+blob_file.cc
+```cpp
+Status BlobFile::GetReader(Env* env, const FileOptions& file_options,
+                           std::shared_ptr<RandomAccessFileReader>* reader,
+                           bool* fresh_open) {
+  s = env->GetFileSystem()->NewRandomAccessFile(PathName(), file_options,
+        std::string BlobFile::PathName() const {
+          return BlobFileName(path_to_dir_, file_number_);
+
+```
+
+I will first disable gc job to see if this issue can go away..
+STill got too many open files error even I disable gc job.
+Checking max_open_files
+Saw other issues in rocksdb  which is similar to what I faced.
+
+I now try to fix this issue by setting max_open_files to 4096
+
+Still got this error after setting it to 8192. But log show that only 1024 is allowed to 
+be opened.
+
+Tried starting another process to verify that 
+it's not a system issue.
+No problem with another process.
+
+maximum open files limit is 1024 .
+Now I am trying to increase it.
+1036 files opened by db_bench.
+Is this the root cause?
+I update nofile limit according to what gpt4 says.
+But I don't think it works.
+Set it to 512 to solve this issue for now.
+```bash
+ lsof -p 4027143 | head -n100
+db_bench 4027143   zt   83r      REG  259,2     3300866  90569382 /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_gc_1.0_0.8/006739.sst
+db_bench 4027143   zt   84r      REG  259,2     3752693  87530196 /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_gc_1.0_0.8/006830.sst
+db_bench 4027143   zt   85r      REG  259,2     4147120  87532938 /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_gc_1.0_0.8/006636.sst
+db_bench 4027143   zt   86r      REG  259,2     1705275  56256617 /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_gc_1.0_0.8/005383.sst
+db_bench 4027143   zt   87r      REG  259,2     3301938  59986187 /mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/with_gc_1.0_0.8/004713.sst
+```
+Hope this can work.
+
+
+
+Certainly! To increase the maximum number of open files (file descriptors) in Linux, you can follow these steps:
+
+1. **Check Current Limits**:
+   First, let's find out your current limit for open files. Open a terminal and run the following command:
+   ```
+   $ ulimit -n
+   ```
+   The output will show the current soft limit (maximum number of open files allowed per session).
+
+2. **View System-Wide File Descriptor Limit**:
+   To see the system-wide maximum number of opened file descriptors, use this command:
+   ```
+   $ cat /proc/sys/fs/file-max
+   ```
+   The value displayed represents the total number of files that a user can have opened per login session. It may vary depending on your system.
+
+3. **Set a New Global Limit**:
+   To increase the limit, you can edit the kernel directive `fs.file-max`. Use the `sysctl` utility as the root user:
+   ```
+   # sysctl -w fs.file-max=500000
+   ```
+   This command sets the open file limit to 500,000. Note that this change will only remain active until the next reboot.
+
+4. **Make the Change Permanent**:
+   To make the change permanent, edit the `/etc/sysctl.conf` file:
+   ```
+   # vi /etc/sysctl.conf
+   ```
+   Add the following line:
+   ```
+   fs.file-max=500000
+   ```
+   Adjust the number as needed. Save the file and exit.
+
+5. **Verify the Change**:
+   Confirm the updated value with:
+   ```
+   $ cat /proc/sys/fs/file-max
+   ```
+
+6. **User-Level File Limits**:
+   If you want to set limits per user basis, edit the `/etc/security/limits.conf` file. This allows you to manage system resources by limiting users/groups at different levels.
+
+Remember that users will need to **log out and log in again** for the changes to take effect. If you want to apply the limit immediately, use:
+```
+# sysctl -p
+```
+
+
+Looks like it works after setting max_open_files to 512.
+[STatus: Done]
+
+[Todo]
+Why creating dataset res is not 0?
+num_features_ is zero
+It's because that I don't pass num_features to db.
+[Status: Done]
+
+
+[Todo]
+Do statistics about lifetime of keys whose write count <= 1 
+And then we can put keys that are initially inserted to that lifetime.
+I don't think I have time to do that .
+[Status: Not started]
+
+I need to tell a good story.
+I will say that my lsm is lifetime aware..
+
+I need to get experiment results before I start writing paper.
+Otherwise it's non sense to write a paper without any good results.
+
+My point to do get for each flush is that lsm-tree is realatively small.
+So doing get is relatively cheap.
+
+
+[Todo]
+ycsb top 5% keys take 50% write count.
+```bash
+➜  ycsb_a git:(main) ✗ python3 write_access_count.py
+95% write count: 2451824
+top 5% write count: 2548231 
+```
+
+[]
+
+[Todo]
+Put initial keys to long lifetime bucket.
+Waster limited amount of space but get much better wamp.
+If we assume 95% of keys are written less than twice.
+[Status: Ongoing]
+
+
+[Todo]
+Adjust level size to aligh to xinqi's test.
+There seems no difference int terms of compaction trigger size of for each level.
+Is this because of we had too much data in value part ? 
+Previous run is too slow.
+Too many files are accumulated at L0 and L1
+
+std rocksdb
+```
+➜  with_gc_0.2_0.4 grep LevelMaxLevelSize LOG | wc -l
+200
+```
+
+mlsm:
+```
+(base) ➜  with_gc_1.0_0.8 grep LevelMaxLevelSize LOG | wc -l
+2102
+```
+No need to adjust anything because we use the same config for all levels.
+[Status: Abandoned]
+
+
+[Todo]
+Generate run worklaod with 50M of update in ycsb.
+[Status: Not started]
+
+[Todo]
+Create a new branch without model prediction 
+Need to verify that model works.
+Actaully we can not put all keys to long lifetime without model. 
+Then we don't know where to put keys during gc.
 [Status: Not started]

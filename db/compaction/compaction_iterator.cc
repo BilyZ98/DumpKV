@@ -34,6 +34,9 @@ const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
   {0, 1000000},
   {1, 3000000}
 };
+
+#define M 1000000
+const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M};
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
 //   {1, 10},
@@ -1325,7 +1328,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       db_internal_iter_->Seek(key());
       is_iter_valid = db_internal_iter_->Valid(); 
     }
-    int maxIndex = 1;
+    int maxIndex = LifetimeSequence.size() -1 ;
     uint32_t past_distances_count = 0;
     std::vector<uint64_t> past_distances;
     past_distances.reserve(max_n_past_timestamps);
@@ -1395,12 +1398,21 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
 
       // Need to set up edcs if past_distances_count = 0
       if(past_distances_count > 0) {
-        s = db_->AddTrainingSample(past_distances,
-                               blob_size,
-                               n_within,
-                               edcs,
-                               distance);
-        assert(s.ok()); 
+        // This is not good as well. Any better solution ?
+        double inverse_distance = 1.0 / double(edcs[0]);
+        // add training sample with inverse_distance probability
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0, 1);
+        double prob = dis(gen);
+        if(prob < inverse_distance) {
+          s = db_->AddTrainingSample(past_distances,
+                                 blob_size,
+                                 n_within,
+                                 edcs,
+                                 distance);
+          assert(s.ok()); 
+        }
       }
       if(past_distances_count > 0) {
         assert(edcs.size() == n_edc_feature);
@@ -1445,9 +1457,16 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
                                   &out_len,
                                   out_result.data());
         assert(predict_res == 0);
-        maxIndex = out_result[0] > 0.5 ? 1 : 0;
+        double orig_value = std::expm1(out_result[0]);
+        auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
+        if(lower_bound_iter == std::end(LifetimeSequence)) {
+          maxIndex = LifetimeSequence.size() - 1;
+        } else {
+          maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+        }
+        // maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
-        s = WriteTrainDataToFile(data,out_result[0]);
+        s = WriteTrainDataToFile(data,orig_value);
         assert(s.ok());
       }
       lifetime_keys_count_[maxIndex] += 1;

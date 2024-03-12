@@ -1,4 +1,5 @@
 
+#include <cmath>
 #include "db/training/training_data.h"
 #include <cstdint>
 #include "rocksdb/key_meta.h"
@@ -57,12 +58,13 @@ Status TrainingData::AddTrainingSample(const std::vector<uint64_t>& past_distanc
   }
   counter += n_edc_feature;
 
-  const uint64_t seq_delta_threshold = 500000; 
-  if(future_distance > seq_delta_threshold) {
-    labels_.push_back(1.0);
-  } else {
-    labels_.push_back(0.0);
-  }
+  labels_.push_back(log1p(future_distance));
+  // const uint64_t seq_delta_threshold = 500000; 
+  // if(future_distance > seq_delta_threshold) {
+  //   labels_.push_back(1.0);
+  // } else {
+  //   labels_.push_back(0.0);
+  // }
   indptr_.push_back(counter);
 
 
@@ -208,7 +210,8 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   }
 
   int64_t len;
-  std::vector<double> result(indptr_.size() - 1);
+  // std::vector<double> result(indptr_.size() - 1);
+  result_.resize(indptr_.size() - 1);
   res = LGBM_BoosterPredictForCSR(new_model,
                             static_cast<void *>(indptr_.data()),
                             C_API_DTYPE_INT32,
@@ -223,19 +226,19 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                             std::stoi(training_params.at("num_iterations")) - 1,
                             params,
                             &len,
-                            result.data());
+                            result_.data());
 
   assert(res == 0);
-  for(size_t i = 0; i < result.size(); ++i) {
-    if(result[i] > 0.5) {
-      res_long_count_++;
-    } else {
-      res_short_count_++;
-    }
-    // fprintf(stdout, "%f\n", result[i]);
-    // std::cout << result[i] << std::endl;
-  }
-  fprintf(stdout, "short_count: %lu, long_count: %lu\n", res_short_count_, res_long_count_);
+  // for(size_t i = 0; i < result.size(); ++i) {
+  //   if(result[i] > 0.5) {
+  //     res_long_count_++;
+  //   } else {
+  //     res_short_count_++;
+  //   }
+  //   // fprintf(stdout, "%f\n", result[i]);
+  //   // std::cout << result[i] << std::endl;
+  // }
+  // fprintf(stdout, "short_count: %lu, long_count: %lu\n", res_short_count_, res_long_count_);
 
   if(res != 0) {
     assert(false);
@@ -257,6 +260,7 @@ void TrainingData::ClearTrainingData() {
   indptr_.clear();
   indices_.clear();
   data_.clear();  
+  result_.clear();
   indptr_.emplace_back(0);
   res_short_count_ = 0;
   res_long_count_ = 0;
@@ -283,7 +287,7 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
       }
     }
 
-    std::string label_str = std::to_string(labels_[i]) + "\n";
+    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(result_[i]) + "\n";
     s = file->Append(label_str);
     if (!s.ok()) {
       return s;

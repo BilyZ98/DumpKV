@@ -2117,7 +2117,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     // std::string model_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_model.txt";
     // s = impl->LoadModel(db_options.model_path);
   } else {
-    assert(false);
+    // assert(false);
   }
   if(s.ok() && db_options.data_file_path != "") {
     // std::string data_path = "/mnt/nvme0n1/mlsm/test_blob_no_model/with_gc_1.0_0.8/op_keys_binary_lifetime_lightgbm_classification_key_range_data.txt";

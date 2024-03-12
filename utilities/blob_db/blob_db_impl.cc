@@ -132,6 +132,7 @@ BlobDBOptions BlobDBImpl::GetBlobDBOptions() const { return bdb_options_; }
 Status BlobDBImpl::Open(std::vector<ColumnFamilyHandle*>* handles) {
   assert(handles != nullptr);
   assert(db_ == nullptr);
+  assert(false);
 
   if (blob_dir_.empty()) {
     return Status::NotSupported("No blob directory in options");

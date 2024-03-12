@@ -8,7 +8,7 @@ import sys
 import multiprocessing as mp
 
 
-data_path = "/home/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
+data_path = "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
 
 
 def GetWriteCDFForEachKey():
@@ -28,9 +28,13 @@ plt.legend()
 plt.savefig('ycsb_a_write_cdf.png')
 plt.close()
 plt.figure()
-
+sum_of_all_write = df_count_sort['counts'].sum()
 # first 95% of rows
 df_count_sort_95 = df_count_sort.iloc[:int(count_row * 0.95)]
+sum_of_first_95_write = df_count_sort_95['counts'].sum()
+print('95% write count:', sum_of_first_95_write)
+delta = sum_of_all_write - sum_of_first_95_write
+print('top 5% write count:', delta)
 cdf_x = np.array(df_count_sort_95['counts'])
 cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
 plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df), len(df_count)))

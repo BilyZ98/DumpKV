@@ -1069,6 +1069,49 @@ function run_change_with_trace_monitor {
 }
 
 
+function run_ycsb_a {
+  output_name=$1
+  grep_name=$2
+  benchmarks=$3
+  op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  if [ ! -z $op_trace_file ]; then
+    op_trace_file_name=$op_trace_file
+  fi
+  echo "Do $num_keys random $output_name"
+  log_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.log"
+  time_cmd=$( get_cmd $log_file_name.time )
+  local num_features=44
+  # gdb --args
+  # cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
+       --use_existing_db=0 \
+       --sync=$syncval \
+       $params_w \
+       --threads=$num_threads \
+       --merge_operator=\"put\" \
+       --seed=$( date +%s ) \
+       --report_file=${log_file_name}.r.csv \
+       --trace_file=${op_trace_file_name} \
+       --mix_get_ratio=0.5 \
+       --mix_put_ratio=0.5 \
+       --compaction_trace_file=${compaction_trace_file} \
+       --num_features=${num_features} \
+       --open_files=512 \
+       2>&1 | tee -a $log_file_name"
+  if [[ "$job_id" != "" ]]; then
+    echo "Job ID: ${job_id}" > $log_file_name
+    echo $cmd | tee -a $log_file_name
+  else
+    echo $cmd | tee $log_file_name
+  fi
+  start_stats $log_file_name.stats
+  space_monitor_file_name="$output_dir/dir_size.log"
+  monitor_kv_storage $space_monitor_file_name 
+  eval $cmd
+  stop_monitor $space_monitor_file_name
+  stop_stats $log_file_name.stats
+  summarize_result $log_file_name ${output_name}.t${num_threads}.s${syncval} $grep_name
+}
 
 function run_change_with_replay {
   output_name=$1
@@ -1306,6 +1349,8 @@ for job in ${jobs[@]}; do
     run_bulkload
   elif [ $job = replay ]; then
     run_change_with_replay replay replay replay
+  elif [ $job = ycsb_a ]; then
+    run_ycsb_a ycsb_a ycsb_a ycsb_a
   elif [ $job = mixgraph ]; then
     run_change_with_trace_monitor mixgraph mixgraph mixgraph
   elif [ $job = flush_mt_l0 ]; then

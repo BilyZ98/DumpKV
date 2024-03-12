@@ -54,6 +54,7 @@ private:
   std::vector<int32_t> indptr_;
   std::vector<int32_t> indices_;
   std::vector<double> data_;
+  std::vector<double> result_;
   size_t num_features_;
   size_t num_labels_;
   uint64_t batch_size_;

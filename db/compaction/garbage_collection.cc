@@ -50,8 +50,8 @@ void GarbageCollection::SetInputVersion(Version* input_version) {
   input_version_ = input_version;
   cfd_ = input_version_->cfd();
 
-  input_version_->Ref();
   cfd_->Ref();
+  input_version_->Ref();
   edit_.SetColumnFamily(cfd_->GetID());
 }
 

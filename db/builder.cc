@@ -10,6 +10,7 @@
 #include "db/builder.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <deque>
 #include <vector>
 
@@ -190,8 +191,9 @@ Status BuildTable(
         ioptions.logger, true /* internal key corruption is not ok */,
         snapshots.empty() ? 0 : snapshots.back(), snapshot_checker);
 
-    std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(tboptions.lifetime_bucket_num );
-    std::vector<BlobFileBuilder*> blob_file_builders_raw( tboptions.lifetime_bucket_num, nullptr);
+    const size_t lifetime_bucket_size = LifetimeSequence.size();
+    std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(lifetime_bucket_size);
+    std::vector<BlobFileBuilder*> blob_file_builders_raw( lifetime_bucket_size, nullptr);
     bool enable_blob_file_builder = mutable_cf_options.enable_blob_files &&
          tboptions.level_at_creation >=
              mutable_cf_options.blob_file_starting_level && blob_file_additions;
@@ -285,11 +287,13 @@ Status BuildTable(
       }
     }
 
+    std::string flush_key_count = "flush key count ";
+    const auto& c_iter_key_count = c_iter.GetLifetimeKeysCount();
+    for(size_t i = 0; i < c_iter_key_count.size(); i++){
+      flush_key_count += std::to_string(i) + ":" + std::to_string(c_iter_key_count[i]) + " ";
+    }
     ROCKS_LOG_INFO(
-        tboptions.ioptions.info_log,
-        "flush key count 0: %ld, 1: %ld",
-        c_iter.GetLifetimeKeysCount()[0], c_iter.GetLifetimeKeysCount()[1]
-      );
+        tboptions.ioptions.info_log, "%s",flush_key_count.c_str());
     if (!s.ok()) {
       c_iter.status().PermitUncheckedError();
     } else if (!c_iter.status().ok()) {

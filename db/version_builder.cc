@@ -40,6 +40,7 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+extern const std::vector<uint64_t> LifetimeSequence; 
 class VersionBuilder::Rep {
   class NewestFirstByEpochNumber {
    private:
@@ -308,7 +309,7 @@ class VersionBuilder::Rep {
         level_nonzero_cmp_(base_vstorage_->InternalComparator()),
         file_metadata_cache_res_mgr_(file_metadata_cache_res_mgr) {
     assert(ioptions_);
-    lifetime_mutable_blob_file_metas_.resize(version_set_->db_options()->num_classification);
+    lifetime_mutable_blob_file_metas_.resize(LifetimeSequence.size());
 
     levels_ = new LevelState[num_levels_];
   }

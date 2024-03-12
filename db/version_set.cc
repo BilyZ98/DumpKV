@@ -28,6 +28,7 @@
 #include "db/blob/blob_log_format.h"
 #include "db/blob/blob_source.h"
 #include "db/compaction/compaction.h"
+#include "db/compaction/compaction_iterator.h"
 #include "db/compaction/file_pri.h"
 #include "db/dbformat.h"
 #include "db/internal_stats.h"
@@ -2103,7 +2104,7 @@ VersionStorageInfo::VersionStorageInfo(
     // blob_file_map_ = ref_vstorage->blob_file_map_;
     // blob_offset_map_ = ref_vstorage->blob_offset_map_; 
   }
-  lifetime_blob_files_.resize(version_storage_lifetime_info.lifetime_bucket_num);
+  lifetime_blob_files_.resize(LifetimeSequence.size());
 }
 
 Version::Version(ColumnFamilyData* column_family_data, VersionSet* vset,
@@ -3682,13 +3683,15 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       continue;
     }
 
-    const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
-    // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
-    if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
-      fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
-      assert(false);
-    }
-    uint64_t lifetime_ttl = lifetime_label_iter->second;
+    // const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
+    // // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
+    // if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
+    //   fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
+    //   assert(false);
+    // }
+    // uint64_t lifetime_ttl = lifetime_label_iter->second;
+    assert(lifetime_idx < LifetimeSequence.size());
+    uint64_t lifetime_ttl = LifetimeSequence[lifetime_idx];
     for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {
       if(blob_file->GetBeingGCed()) {
         // this blob file is already being GCed
@@ -3700,7 +3703,7 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
         blob_files_marked_for_gc_.emplace_back(blob_file );
       } else {
         // this blob file is not supposed to be GCed
-        break;
+        // break;
       }
     }
   }

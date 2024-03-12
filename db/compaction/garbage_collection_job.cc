@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <set>
@@ -141,6 +142,12 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
   assert(cfd);
  
   cfd->internal_stats()->AddGCStats(thread_pri_, gc_stats_);
+  double invalid_key_ratio = double(cfd->internal_stats()->GetGCStats().gc_dropped_blobs) / double(cfd->internal_stats()->GetGCStats().gc_input_blobs);
+  ROCKS_LOG_INFO(db_options_.info_log, "gc input blob: %lu, gc output blobs: %lu, gc dropped blobs: %lu, gc invalid key ratio: %.3f", 
+                 cfd->internal_stats()->GetGCStats().gc_input_blobs,
+                 cfd->internal_stats()->GetGCStats().gc_output_blobs,
+                 cfd->internal_stats()->GetGCStats().gc_dropped_blobs,
+                 invalid_key_ratio);
   status = InstallGarbageCollectionResults(mutable_cf_options);
   assert(status.ok());
 
@@ -228,8 +235,8 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   WriteBatch wb;
 
   std::vector<std::string> blob_file_paths;
-  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(db_options_.num_classification  );
-  std::vector<BlobFileBuilder*> blob_file_builders_raw( db_options_.num_classification, nullptr);
+  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(LifetimeSequence.size() );
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( LifetimeSequence.size(), nullptr);
     // auto vstorage = cfd_->current()->storage_info();
 
     // auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
@@ -254,12 +261,16 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   std::string blob_index_str;
   std::string prev_blob_index_str;
 
+  std::vector<uint64_t> oldest_blob_file_creation_time(LifetimeSequence.size(), std::numeric_limits<uint64_t>::max());
+
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
 
     uint64_t blob_file_num = blob_file->GetBlobFileNumber();
     std::string blob_file_path = BlobFileName(dbname_, blob_file->GetBlobFileNumber());;
     uint64_t lifetime_label = blob_file->GetLifetimeLabel();
+    uint64_t next_lifetime_label = std::min(lifetime_label + 1, LifetimeSequence.size() - 1);
+    oldest_blob_file_creation_time[next_lifetime_label] = std::min(oldest_blob_file_creation_time[next_lifetime_label], blob_file->GetCreationTimestamp());
 
     std::unique_ptr<FSRandomAccessFile> file;
     constexpr IODebugContext* dbg = nullptr;
@@ -338,11 +349,11 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
           prev_blob_index_str.clear();
           BlobIndex::EncodeBlob(&prev_blob_index_str, blob_file_num, blob_offset, record.value_size,
                                CompressionType::kNoCompression);
-          s = blob_file_builders[lifetime_label]->AddWithoutBlobFileClose(record.key, record.value, &blob_index_str);
+          s = blob_file_builders[next_lifetime_label]->AddWithoutBlobFileClose(record.key, record.value, &blob_index_str);
           assert(s.ok());
           BlobIndex new_blob_index;
           new_blob_index.DecodeFrom(blob_index_str);
-          uint64_t new_blob_file_num = blob_file_builders[lifetime_label]->GetCurBlobFileNum();
+          uint64_t new_blob_file_num = blob_file_builders[next_lifetime_label]->GetCurBlobFileNum();
           if(blob_offset_map_.find(new_blob_file_num) == blob_offset_map_.end()) {
             blob_offset_map_[new_blob_file_num] = new UnorderedMap<std::string, std::string>();
           }
@@ -372,30 +383,21 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       total_blob_size+=record.record_size();
     }
    
-    // if (isout){
-    //   fout<<"job_id: "<<job_id_<<std::endl;
-    //   isout=false;
-    // }
-    // fout << "BlobFileNumber: "      << blob_file->GetBlobFileNumber() << " ";
-    // fout << "valid_key_num: "       << valid_key_num << " ";
-    // fout << "invalid_key_num: "     << invalid_key_num << " ";
-    // fout << "ratio: "               << float(invalid_key_num)/(valid_key_num+invalid_key_num) << " ";
-    // fout << "valid_value_size: "    << valid_value_size << " ";
-    // fout << "invalid_value_size: "  << invalid_value_size << " ";
-    // fout << "ratio: "               << float(invalid_value_size)/(valid_value_size+invalid_value_size) << " ";
-    // fout << "GarbageBlobCount: "    << blob_file->GetGarbageBlobCount() << " ";
-    // fout << "GarbageBlobBytes: "    << blob_file->GetGarbageBlobBytes() << " ";
-    // fout << std::endl;
-  
 
       
     BlobLogFooter footer;
     blob_log_reader.ReadFooter(&footer);
 
-    uint64_t cur_new_blob_file = blob_file_builders[lifetime_label]->GetCurBlobFileNum();
+    uint64_t cur_new_blob_file = blob_file_builders[next_lifetime_label]->GetCurBlobFileNum();
     auto res = blob_file_map_.emplace(blob_file_num, cur_new_blob_file);
     assert(res.second);
-    s = blob_file_builders[lifetime_label]->CloseBlobFileIfNeeded() ;
+    s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded() ;
+    //
+    // s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded(oldest_blob_file_creation_time[next_lifetime_label]) ;
+    // if(!blob_file_builders[next_lifetime_label]->IsBlobFileOpen()) {
+    //   oldest_blob_file_creation_time[next_lifetime_label] = std::numeric_limits<uint64_t>::max();
+    // }
+
     assert(s.ok());
     
   }
@@ -414,6 +416,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   gc_stats_.stats.num_input_records = valid_key_num + invalid_key_num;
   gc_stats_.stats.num_dropped_records = invalid_key_num;
   gc_stats_.stats.num_output_records = valid_key_num;
+  gc_stats_.stats.gc_input_blobs = valid_key_num + invalid_key_num;
+  gc_stats_.stats.gc_output_blobs = valid_key_num;
+  gc_stats_.stats.gc_dropped_blobs = invalid_key_num;
 
  gc_stats_.stats.cpu_micros =
       db_options_.clock->CPUMicros() - prev_cpu_micros;

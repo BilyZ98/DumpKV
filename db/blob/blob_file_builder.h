@@ -77,16 +77,18 @@ class BlobFileBuilder {
   Status Add(const Slice& key, const Slice& value, std::string* blob_index, uint64_t blob_lifetime_bucket);
   Status AddWithoutBlobFileClose(const Slice& key, const Slice& value, std::string* blob_index);
   Status Finish();
+  Status Finish(uint64_t creation_timestamp);
   uint64_t GetLifetimeLabel() const { return lifetime_label_; }
   uint64_t GetCreationTimestamp() const { return creation_timestamp_; }
   void Abandon(const Status& s);
 
   Status CloseBlobFileIfNeeded();
+  Status CloseBlobFileIfNeeded(uint64_t creation_timestamp);
 
   uint64_t GetCurBlobFileNum() const { return cur_blob_file_num_; }
 
- private:
   bool IsBlobFileOpen() const;
+ private:
   Status OpenBlobFileIfNeeded();
   Status CompressBlobIfNeeded(Slice* blob, std::string* compressed_blob) const;
   Status WriteBlobToFile(const Slice& key, const Slice& blob,
@@ -121,7 +123,7 @@ class BlobFileBuilder {
   uint64_t blob_count_;
   uint64_t blob_bytes_;
   uint64_t lifetime_label_;  
-  const uint64_t creation_timestamp_;
+  uint64_t creation_timestamp_;
   uint64_t lifetime_bucket_num_;
   uint64_t min_seq_;
   uint64_t max_seq_;

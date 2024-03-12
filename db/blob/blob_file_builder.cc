@@ -293,6 +293,14 @@ Status BlobFileBuilder::Add(const Slice& key, const Slice& value,
   return Status::OK();
 }
 
+Status BlobFileBuilder::Finish(uint64_t creation_timestamp) {
+if (!IsBlobFileOpen()) {
+    return Status::OK();
+  }
+  creation_timestamp_ =creation_timestamp;
+  return CloseBlobFile();
+}
+
 Status BlobFileBuilder::Finish() {
   if (!IsBlobFileOpen()) {
     return Status::OK();
@@ -499,6 +507,12 @@ Status BlobFileBuilder::CloseBlobFile() {
   blob_bytes_ = 0;
 
   return s;
+}
+
+Status BlobFileBuilder::CloseBlobFileIfNeeded(uint64_t creation_timestamp) {
+  creation_timestamp_ = creation_timestamp;
+  return CloseBlobFileIfNeeded();
+
 }
 
 Status BlobFileBuilder::CloseBlobFileIfNeeded() {

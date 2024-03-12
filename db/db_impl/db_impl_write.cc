@@ -766,7 +766,7 @@ Status DBImpl::AddTrainingSample(const std::vector<uint64_t>& past_distance,
 
   std::lock_guard<std::mutex> lock(key_meta_mutex_);
   Status s = training_data_->AddTrainingSample(past_distance, blob_size, n_within, edcs, future_distance);
-  if(training_data_->GetNumTrainingSamples() >= 100000) {
+  if(training_data_->GetNumTrainingSamples() >= 200000) {
     // for(auto &key_meta : key_metas_) {
     //   training_data_->AddTrainingSample(key_meta.second, versions_->LastSequence(), 0);
     // }
@@ -777,8 +777,8 @@ Status DBImpl::AddTrainingSample(const std::vector<uint64_t>& past_distance,
     uint64_t end_time = env_->NowMicros();
     uint64_t duration_sec = (end_time - start_time) / 1000000;
     assert(s.ok());
-    training_data_->LogKeyRatio(immutable_db_options_);
-    s= training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_);
+    // training_data_->LogKeyRatio(immutable_db_options_);
+    // s= training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_);
     assert(s.ok());
 
 
@@ -974,7 +974,7 @@ void DBImpl::InitTrainingParams() {
     training_params_ = {
             //don't use alias here. C api may not recongize
             {"boosting",         "gbdt"},
-            {"objective",        "binary"},
+            {"objective",        "regression"},
             {"num_iterations",   "32"},
             {"num_leaves",       "32"},
             {"num_threads",      "4"},

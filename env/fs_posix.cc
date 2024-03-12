@@ -231,6 +231,7 @@ class PosixFileSystem : public FileSystem {
     } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
       s = IOError("While open a file for random read", fname, errno);
+      assert(false);
       return s;
     }
     SetFD_CLOEXEC(fd, &options);
@@ -313,6 +314,7 @@ class PosixFileSystem : public FileSystem {
 
     if (fd < 0) {
       s = IOError("While open a file for appending", fname, errno);
+      assert(false);
       return s;
     }
     SetFD_CLOEXEC(fd, &options);
