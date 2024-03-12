@@ -1,4 +1,5 @@
 
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -8,8 +9,9 @@ import sys
 import multiprocessing as mp
 
 
-data_path = "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
-
+data_path = "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
+output_fig_name = "ycsb_a_write_cdf_10M_50M.png"
+output_fig_95_name = "ycsb_a_write_cdf_10M_50M_95.png"
 
 def GetWriteCDFForEachKey():
     # nothing to do
@@ -25,7 +27,7 @@ plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df), len(df_c
 plt.xlabel('write count')
 plt.ylabel('cdf')
 plt.legend()
-plt.savefig('ycsb_a_write_cdf.png')
+plt.savefig(output_fig_name)
 plt.close()
 plt.figure()
 sum_of_all_write = df_count_sort['counts'].sum()
@@ -41,7 +43,7 @@ plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df), len(df_c
 plt.xlabel('write count')
 plt.ylabel('cdf')
 plt.legend()
-plt.savefig('ycsb_a_write_cdf_95.png')
+plt.savefig(output_fig_95_name)
 plt.close()
 
 # selected_rows = df_count_sort.loc[df_count_sort['counts'] >=2 ]
@@ -51,5 +53,4 @@ GetWriteCDFForEachKey()
 
 
 
-    
 
