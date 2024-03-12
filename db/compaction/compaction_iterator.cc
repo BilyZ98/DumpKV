@@ -36,7 +36,7 @@ const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 };
 
 #define M 1000000
-const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M};
+const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M, 16 * M, 32 * M };
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
 //   {1, 10},

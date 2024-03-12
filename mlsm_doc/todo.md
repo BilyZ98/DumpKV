@@ -11332,3 +11332,12 @@ Need to verify that model works.
 Actaully we can not put all keys to long lifetime without model. 
 Then we don't know where to put keys during gc.
 [Status: Not started]
+
+
+
+[Todo]
+Test stratagy
+First load, set enable_gc_to false.
+And then we enable gc and start write workoad from run worklaod data.
+Or we could just start just writing run workload data.
+[Status: Not started]
