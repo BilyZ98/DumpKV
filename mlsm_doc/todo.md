@@ -11331,7 +11331,7 @@ Create a new branch without model prediction
 Need to verify that model works.
 Actaully we can not put all keys to long lifetime without model. 
 Then we don't know where to put keys during gc.
-[Status: Not started]
+[Status: Ongoing]
 
 
 
@@ -11340,4 +11340,57 @@ Test stratagy
 First load, set enable_gc_to false.
 And then we enable gc and start write workoad from run worklaod data.
 Or we could just start just writing run workload data.
+
+dedicated gc with model default max
+```bash
+ Sum    779/0    2.11 GB   0.0     42.7    11.9     22.3      36.3     14.0       0.4   2.4      9.5     13.3   4579.23           4465.49      2945    1.555    126M    13M       8.5      23.2
+(base) ➜  with_gc_1.0_0.8 grep 'start gc' LOG | wc -l
+951
+
+(base) ➜  test_blob_with_model_with_dedicated_gc grep 'Deleted file.*blob.*blob' 2024-03-12-15-55-
+34-LOG-with-model-default-max-lifetime-bucket| wc -l
+1404
+```
+
+
+dedicated gc with model default 0
+```bash
+
+ Sum    742/3    2.06 GB   0.0     76.8    12.1     23.1      37.3     14.1       0.7   3.5     11.2     12.9   7013.37           6883.84      3007    2.332    158M    17M      41.6      51.3
+
+(base) ➜  test_blob_with_model_with_dedicated_gc grep 'start gc' 2024-03-12-15-55-34-LOG-with-model-default-max-lifetime-bucket  | wc -l
+951
+
+➜  test_blob_without_model_dedicated_gc grep 'Deleted file.*blob.*blob' 2024-03-12-15-54-57-LOG-with-model-default-0 | wc -l
+1448
+```
+dedicated gcwithout model
+Actaully I am currently running bench with model even though I set 
+default lifetime bucket to 0.
+Need to modify this.
+I will first let this run finish and copy the log.
+And then I will start another run without model.
+
+Run another bench without model with default lifetime as max.
+[Status: Ongoing]
+
+
+[Todo]
+Problem: wamp in report.tst is lower than that in LOG 
+when running with 0 default lifetime.
+Need to figure out why.
+```bash
+    wamp=$( echo "( $sum_wgb + $flush_wgb ) / $cum_writes_gb" | bc -l | awk '{ printf "%.1f", $1 }' )
+```
+sum_wgb does not include write_blob_gb. So it's not correct. 
+Need to check LOG to get true wamp.
+[Status: Done]
+
+[Todo]
+Problem: blob offset map items are not deleted in the run. Becaseu 
+we set default lifetime bucket index to high.
+How can we solve this problem?
 [Status: Not started]
+
+
+

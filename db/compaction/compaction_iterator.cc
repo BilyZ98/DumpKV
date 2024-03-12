@@ -1328,7 +1328,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       db_internal_iter_->Seek(key());
       is_iter_valid = db_internal_iter_->Valid(); 
     }
-    int maxIndex = LifetimeSequence.size() -1 ;
+    int maxIndex = std::max(LifetimeSequence.size() -2 , 0ul);
     uint32_t past_distances_count = 0;
     std::vector<uint64_t> past_distances;
     past_distances.reserve(max_n_past_timestamps);

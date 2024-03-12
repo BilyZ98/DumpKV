@@ -30,7 +30,7 @@ function call_run_blob() {
 
 
 # with_gc and without_gc
-db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc
+db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
@@ -54,8 +54,10 @@ function run_with_gc_dbbench {
 
 
     with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${force_gc_threshold}
-    with_gc_compaction_trace_file=${with_gc_dir}/compaction_trace.txt
-    with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
+    # with_gc_compaction_trace_file=${with_gc_dir}/compaction_trace.txt
+    with_gc_compaction_trace_file=""
+    # with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
+    with_gc_op_trace_file=""
     output_text=with_gc_${age_cutoff}_${force_gc_threshold}.txt
 
     call_run_blob  $with_gc_dir $num_keys $with_gc_dir $with_gc_dir $enable_blob_file \
@@ -66,24 +68,24 @@ function run_with_gc_dbbench {
     if [ ! -d $trace_analye_output_dir ]; then
       mkdir -p $trace_analye_output_dir
     fi
-    op_trace_cmd="$op_trace_analyzer_exe --trace_path=$with_gc_op_trace_file  --output_dir=$with_gc_dir --convert_to_human_readable_trace=true"
-    echo "op_trace_cmd: ${op_trace_cmd}"
-    eval $op_trace_cmd
-    $compaction_trace_analyzer_exe  --compaction_trace_path=$with_gc_compaction_trace_file --compaction_output_dir=$with_gc_dir  
-    op_human_trace="${with_gc_dir}/trace-human_readable_trace.txt"
-    compaction_human_trace="${with_gc_dir}/compaction_human_readable_trace.txt" 
+    # op_trace_cmd="$op_trace_analyzer_exe --trace_path=$with_gc_op_trace_file  --output_dir=$with_gc_dir --convert_to_human_readable_trace=true"
+    # echo "op_trace_cmd: ${op_trace_cmd}"
+    # eval $op_trace_cmd
+    # $compaction_trace_analyzer_exe  --compaction_trace_path=$with_gc_compaction_trace_file --compaction_output_dir=$with_gc_dir  
+    # op_human_trace="${with_gc_dir}/trace-human_readable_trace.txt"
+    # compaction_human_trace="${with_gc_dir}/compaction_human_readable_trace.txt" 
 
     # lifetime calculation
-    cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
-    echo " internal key lifetime python command: $cmd"
+    # cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
+    # echo " internal key lifetime python command: $cmd"
     # eval $cmd
 
     # calculate space amplification
     # space_amp_ouput_path="${with_gc_dir}/.txt"
-    dir_space_path="${with_gc_dir}/dir_size.log"
-    dir_space_fig_path="${with_gc_dir}/space_amp_chg.png"
-    cmd="python3 $space_amp_script_path  $op_human_trace  $dir_space_path $dir_space_fig_path"
-    echo "space amp change cmd is ${cmd}"
+    # dir_space_path="${with_gc_dir}/dir_size.log"
+    # dir_space_fig_path="${with_gc_dir}/space_amp_chg.png"
+    # cmd="python3 $space_amp_script_path  $op_human_trace  $dir_space_path $dir_space_fig_path"
+    # echo "space amp change cmd is ${cmd}"
     # eval $cmd
 
     # calculate space amplification
