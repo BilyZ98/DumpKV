@@ -758,6 +758,15 @@ void DBImpl::SampleKeyMeta() {
 
 
 }
+Status DBImpl::AddTrainingSample(const std::vector<double>& data) {
+  bool res  =   training_data_queue_.enqueue(data);
+  if(!res) {
+    assert(false);
+    return Status::IOError("Failed to enqueue data");
+  }
+
+  return Status::OK();
+}
 Status DBImpl::AddTrainingSample(const std::vector<uint64_t>& past_distance,
                          const uint64_t& blob_size,
                          const uint8_t& n_within,

@@ -516,7 +516,10 @@ Status BlobFileBuilder::CloseBlobFileIfNeeded(uint64_t creation_timestamp) {
 }
 
 Status BlobFileBuilder::CloseBlobFileIfNeeded() {
-  assert(IsBlobFileOpen());
+  // assert(IsBlobFileOpen());
+  if(!IsBlobFileOpen()) {
+    return Status::OK();
+  }
 
   const WritableFileWriter* const file_writer = writer_->file();
   assert(file_writer);

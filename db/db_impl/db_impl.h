@@ -37,6 +37,8 @@
 #include "db/periodic_task_scheduler.h"
 #include "db/post_memtable_callback.h"
 #include "db/pre_release_callback.h"
+#include "db/concurrentqueue.h"
+#include "db/blockingconcurrentqueue.h"
 #include "db/range_del_aggregator.h"
 #include "db/read_callback.h"
 #include "db/seqno_to_time_mapping.h"
@@ -217,6 +219,7 @@ class DBImpl : public DB {
                            const std::vector<float>& edcs,
                            const uint64_t& future_distance);
 
+  Status AddTrainingSample(const std::vector<double>& data);
 
   void SampleKeyMeta();
   // { return Status::OK();}
@@ -1312,6 +1315,8 @@ class DBImpl : public DB {
   std::shared_ptr<BoosterHandle> lightgbm_handle_;
   std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ ;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
+  moodycamel::BlockingConcurrentQueue<std::vector<double>> training_data_queue_;
+
   // Need to allocate memory for keys 
   // Call AllocateKey?
   std::vector<Slice> key_ranges_;
@@ -1758,7 +1763,12 @@ class DBImpl : public DB {
     SuperVersionContext* superversion_context_;
     FlushReason flush_reason_;
   };
+  struct DataCollectionThreadArg {
+    DBImpl* db_;
 
+    Env::Priority thread_pri_;
+
+  };
   // Argument passed to flush thread.
   struct FlushThreadArg {
     DBImpl* db_;
@@ -2123,6 +2133,7 @@ class DBImpl : public DB {
   static void BGWorkBottomCompaction(void* arg);
   static void BGWorkFlush(void* arg);
   static void BGWorkPurge(void* arg);
+  static void BGWorkDataCollection(void* arg);
   static void UnscheduleCompactionCallback(void* arg);
   static void UnscheduleFlushCallback(void* arg);
   void BackgroundCallGarbageCollection(PrepickedCompaction* prepicked_compaction,
@@ -2131,6 +2142,7 @@ class DBImpl : public DB {
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority thread_pri);
   void BackgroundCallFlush(Env::Priority thread_pri);
+  void BackgroundCallDataCollection();
   void BackgroundCallPurge();
   Status BackgroundGarbageCollection(bool* madeProgress, JobContext* job_context,
                               LogBuffer* log_buffer,
@@ -2158,6 +2170,8 @@ class DBImpl : public DB {
   Status StartPeriodicTaskScheduler();
 
   Status RegisterRecordSeqnoTimeWorker();
+
+  Status StartCollectingTrainingData();
 
   void PrintStatistics();
 

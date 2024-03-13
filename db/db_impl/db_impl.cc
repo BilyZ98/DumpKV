@@ -847,6 +847,10 @@ Status DBImpl::StartPeriodicTaskScheduler() {
   return s;
 }
 
+Status DBImpl::StartCollectingTrainingData() {
+  return Status::OK();
+
+}
 Status DBImpl::RegisterRecordSeqnoTimeWorker() {
   uint64_t min_time_duration = std::numeric_limits<uint64_t>::max();
   uint64_t max_time_duration = std::numeric_limits<uint64_t>::min();

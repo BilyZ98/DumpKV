@@ -1073,7 +1073,8 @@ function run_ycsb_a {
   output_name=$1
   grep_name=$2
   benchmarks=$3
-  op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
+  op_trace_file_name=""
+  # op_trace_file_name="$output_dir/benchmark_${output_name}.t${num_threads}.s${syncval}.op_trace"
   if [ ! -z $op_trace_file ]; then
     op_trace_file_name=$op_trace_file
   fi

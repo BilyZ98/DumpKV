@@ -23,6 +23,7 @@ df_count_sort = df_count.sort_values(by=['counts'], ascending=True)
 count_row, count_col = df_count_sort.shape
 cdf_x = np.array(df_count_sort['counts'])
 cdf_y = 1. * np.arange(len(cdf_x)) / (len(cdf_x) - 1)
+# key_count = 
 plt.plot(cdf_x, cdf_y, label='overall write:{}, key:{}'.format(len(df), len(df_count)))
 plt.xlabel('write count')
 plt.ylabel('cdf')

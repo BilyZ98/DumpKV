@@ -2109,6 +2109,14 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->StartPeriodicTaskScheduler();
   }
 
+  if(s.ok()) {
+    DataCollectionThreadArg* dta = new DataCollectionThreadArg;
+    dta->db_ = impl;
+    impl->env_->StartThread(&impl->BGWorkDataCollection, dta);
+    // s = impl->env_->StartThread(&impl->StartCollectingTrainingData, impl); 
+
+  }
+
   if (s.ok()) {
     s = impl->RegisterRecordSeqnoTimeWorker();
   }
