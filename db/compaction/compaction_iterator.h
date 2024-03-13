@@ -250,6 +250,7 @@ CompactionIterator(
       const VersionSet* version_set,
       uint64_t num_classification = 0,
       uint64_t num_features = 0, 
+      uint64_t default_lifetime_idx = 0,
       const Compaction* compaction = nullptr,
       const CompactionFilter* compaction_filter = nullptr,
       const std::atomic<bool>* shutting_down = nullptr,
@@ -429,6 +430,7 @@ CompactionIterator(
   const VersionSet* version_set_ = nullptr;
   uint64_t num_classification_ =0;
   uint64_t num_features_ = 0 ;
+  uint64_t default_lifetime_idx_ = 0;
   std::unique_ptr<WritableFile> train_data_file_ = nullptr;;
   InternalIterator* db_internal_iter_ = nullptr;
 

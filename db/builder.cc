@@ -242,6 +242,7 @@ Status BuildTable(
         versions,
         db_options.num_classification,
         db_options.num_features,
+        db_options.default_lifetime_idx,
         /*compaction=*/nullptr, compaction_filter.get(),
         /*shutting_down=*/nullptr, db_options.info_log, full_history_ts_low);
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);

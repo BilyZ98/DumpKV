@@ -292,6 +292,8 @@ static int64_t seed_base;
 
 DEFINE_int32(threads, 1, "Number of concurrent threads to run.");
 
+DEFINE_int32(default_lifetime_idx, 0, "Default lifetime indx for mlsm");
+
 DEFINE_int32(duration, 0,
              "Time in seconds for the random-ops tests to run."
              " When 0 then num & reads determine the test duration");
@@ -4163,6 +4165,8 @@ class Benchmark {
 
     assert(db_.db == nullptr);
 
+    options.default_lifetime_idx = FLAGS_default_lifetime_idx;
+
     options.env = FLAGS_env;
     options.model_path = FLAGS_model_path;
     options.num_features = FLAGS_num_features;
@@ -6543,7 +6547,7 @@ class Benchmark {
     //     ,"/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
     // };
     std::vector<std::string> files = {
-        "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
+        "/mnt/nvme/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
     };
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);

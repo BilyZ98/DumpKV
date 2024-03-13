@@ -358,7 +358,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
             blob_offset_map_[new_blob_file_num] = new UnorderedMap<std::string, std::string>();
           }
           auto res = blob_offset_map_[new_blob_file_num]->emplace(prev_blob_index_str, blob_index_str);
-          assert(res.second);
+          if(!res.second) {
+            assert(false);
+          }
 
           if(!s.ok()) {
             if(!s.IsShutdownInProgress()){
@@ -390,7 +392,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
     uint64_t cur_new_blob_file = blob_file_builders[next_lifetime_label]->GetCurBlobFileNum();
     auto res = blob_file_map_.emplace(blob_file_num, cur_new_blob_file);
-    assert(res.second);
+    if(!res.second) {
+      assert(false);
+    }
     s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded() ;
     //
     // s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded(oldest_blob_file_creation_time[next_lifetime_label]) ;

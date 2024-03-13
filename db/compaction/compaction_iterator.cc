@@ -65,6 +65,7 @@ CompactionIterator::CompactionIterator(
     const VersionSet* version_set,
     uint64_t num_classification,
     uint64_t num_features,
+    uint64_t default_lifetime_idx,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const std::shared_ptr<Logger> info_log,
@@ -87,6 +88,7 @@ CompactionIterator::CompactionIterator(
   booster_handle_ = booster_handle;
   num_classification_ = num_classification;
   num_features_ = num_features;
+  default_lifetime_idx_ = default_lifetime_idx;
   version_set_ = version_set;
   lifetime_keys_count_.resize(blob_file_builders.size());
   for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
@@ -1328,7 +1330,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       db_internal_iter_->Seek(key());
       is_iter_valid = db_internal_iter_->Valid(); 
     }
-    int maxIndex = LifetimeSequence.size() -1 ;
+    int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
     uint32_t past_distances_count = 0;
     std::vector<uint64_t> past_distances;
     past_distances.reserve(max_n_past_timestamps);
@@ -1347,7 +1349,9 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       bool ok = GetVarint32(&prev_value, &past_distances_count);
       // int32_t counter = past_distances_count;
 
-      assert(ok);
+      if(!ok) {
+        assert(false);
+      }
       std::vector<int32_t> indptr(2);
       indptr[0] = 0;
       std::vector<int32_t> indices;
