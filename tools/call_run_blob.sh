@@ -29,6 +29,12 @@ function call_run_blob() {
 }
 
 
+run_name=${1:-""}
+if [ "$run_name" == "" ]; then
+  echo "run_name is empty"
+  exit 1
+fi
+
 # with_gc and without_gc
 db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
@@ -54,6 +60,11 @@ function run_with_gc_dbbench {
 
 
     with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${force_gc_threshold}
+    date_log_path=$(date +"%Y-%m-%d-%H-%M-%S")-${run_name} 
+    db_log_dir=${date_log_path}
+    if [ ! -d $db_log_dir ]; then
+      mkdir -p $db_log_dir
+    fi
     # with_gc_compaction_trace_file=${with_gc_dir}/compaction_trace.txt
     with_gc_compaction_trace_file=""
     # with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
@@ -64,6 +75,8 @@ function run_with_gc_dbbench {
       $enable_blob_gc $age_cutoff $with_gc_compaction_trace_file \
       $with_gc_op_trace_file $force_gc_threshold | tee $output_text
 
+    cp $output_text $db_log_dir
+    cp ${with_gc_dir}/LOG $db_log_dir
     trace_analye_output_dir=${with_gc_dir}/trace_analyzer
     if [ ! -d $trace_analye_output_dir ]; then
       mkdir -p $trace_analye_output_dir

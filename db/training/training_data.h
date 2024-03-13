@@ -31,6 +31,7 @@ public:
   Status TrainModel(BoosterHandle* new_model,  const std::unordered_map<std::string, std::string>& training_params ); 
   // Status AddTrainingSample()
 
+Status AddTrainingSample(const std::vector<double>& data, const double& label ) ;
   Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
                            const uint64_t& blob_size,
                            const uint8_t& n_within,

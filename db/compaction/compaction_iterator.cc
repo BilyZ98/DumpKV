@@ -1348,6 +1348,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // int32_t counter = past_distances_count;
 
       assert(ok);
+      std::vector<double> data_to_train;
       std::vector<int32_t> indptr(2);
       indptr[0] = 0;
       std::vector<int32_t> indices;
@@ -1368,15 +1369,18 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         if (this_past_distance < memory_window) {
           ++n_within;
         }
+        data_to_train.emplace_back(static_cast<double>(past_distance));
         assert(ok);
       }
 
       uint64_t blob_size = prev_blob_index.size();
       indices.emplace_back(max_n_past_timestamps);
       data.emplace_back(static_cast<double>(blob_size));
+      data_to_train.emplace_back(static_cast<double>(blob_size));
 
       indices.emplace_back(max_n_past_timestamps + 1);
       data.emplace_back(static_cast<double>(n_within));
+      data_to_train.emplace_back(static_cast<double>(n_within));
       // counter += 2;
 
       if(past_distances_count> 0) {
@@ -1384,8 +1388,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
           float edc;
           ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
           edcs.emplace_back(edc);
-          // indices.emplace_back(max_n_past_timestamps+2+i);
-          // data.emplace_back(edcs[i]);
+          data_to_train.emplace_back(edc);
           assert(ok);
         }
       }
@@ -1406,11 +1409,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         std::uniform_real_distribution<> dis(0, 1);
         double prob = dis(gen);
         if(prob < inverse_distance) {
-          s = db_->AddTrainingSample(past_distances,
-                                 blob_size,
-                                 n_within,
-                                 edcs,
-                                 distance);
+          data_to_train.emplace_back(static_cast<double>(distance));
+          s = db_->AddTrainingSample(data_to_train);
+          // s = db_->AddTrainingSample(past_distances,
+          //                        blob_size,
+          //                        n_within,
+          //                        edcs,
+          //                        distance);
           assert(s.ok()); 
         }
       }
@@ -1441,21 +1446,30 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         int64_t out_len ;
         assert(data.size() <= num_features_);
         indptr[1] = data.size();
-        int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-                                  static_cast<void *>(indptr.data()),
-                                  C_API_DTYPE_INT32,
-                                  indices.data(),
-                                  static_cast<void *>(data.data()),
-                                  C_API_DTYPE_FLOAT64,
-                                  2,
-                                  data.size(),
-                                  num_features_,  //remove future t
-                                  C_API_PREDICT_NORMAL,
-                                  0,
-                                  32,
-                                  inference_params.c_str(),
-                                  &out_len,
-                                  out_result.data());
+      int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
+                                                              static_cast<void *>(indptr.data()),
+                                                               C_API_DTYPE_INT32,
+                                                               indices.data(),
+                                                              static_cast<void *>(data.data()),
+                                                               2,
+                                                               data.size(),
+                                                               &out_len,
+                                                               out_result.data());
+        // int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+        //                           static_cast<void *>(indptr.data()),
+        //                           C_API_DTYPE_INT32,
+        //                           indices.data(),
+        //                           static_cast<void *>(data.data()),
+        //                           C_API_DTYPE_FLOAT64,
+        //                           2,
+        //                           data.size(),
+        //                           num_features_,  //remove future t
+        //                           C_API_PREDICT_NORMAL,
+        //                           0,
+        //                           32,
+        //                           inference_params.c_str(),
+        //                           &out_len,
+        //                           out_result.data());
         assert(predict_res == 0);
         double orig_value = std::expm1(out_result[0]);
         auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);

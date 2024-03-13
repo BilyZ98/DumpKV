@@ -29,6 +29,20 @@ TrainingData::TrainingData(Arena* arena,
   data_.reserve(batch_size_ * (num_features + 1));
 }
 
+Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
+
+  int32_t counter = indptr_.back();
+  for(size_t i = 0; i < data.size(); ++i) {
+    indices_.emplace_back(i);
+    data_.emplace_back(data[i]);
+    counter++;
+  }
+  assert(data.size() <= num_features_);
+  labels_.push_back(log1p(label));
+  indptr_.push_back(counter);
+  return Status::OK();
+}
+
 Status TrainingData::AddTrainingSample(const std::vector<uint64_t>& past_distances,
                          const uint64_t& blob_size,
                          const uint8_t& n_within,

@@ -2831,6 +2831,14 @@ void DBImpl::SchedulePendingPurge(std::string fname, std::string dir_to_sync,
   purge_files_.insert({{number, std::move(file_info)}});
 }
 
+void DBImpl::BGWorkDataCollection(void* arg) {
+  DataCollectionThreadArg dca = *(reinterpret_cast<DataCollectionThreadArg*>(arg));
+  delete reinterpret_cast<DataCollectionThreadArg*>(arg);
+  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::BOTTOM);
+  static_cast_with_check<DBImpl>(dca.db_)->BackgroundCallDataCollection();
+
+
+}
 void DBImpl::BGWorkFlush(void* arg) {
   FlushThreadArg fta = *(reinterpret_cast<FlushThreadArg*>(arg));
   delete reinterpret_cast<FlushThreadArg*>(arg);
@@ -3017,6 +3025,66 @@ Status DBImpl::BackgroundFlush(bool* made_progress, JobContext* job_context,
     cfd->UnrefAndTryDelete();
   }
   return status;
+}
+
+static void booster_deleter(BoosterHandle* booster) {
+  int res = LGBM_BoosterFree(*booster);
+  if(res != 0) {
+    assert(false);
+  }
+  delete booster;
+}
+
+static void booster_config_deleter(FastConfigHandle* booster_config) {
+  int res = LGBM_FastConfigFree(*booster_config);
+  if(res != 0) {
+    assert(false);
+  }
+  delete booster_config;
+}
+void DBImpl::BackgroundCallDataCollection() {
+  while(!shutting_down_.load(std::memory_order_acquire)) {
+    std::vector<double> data;
+    training_data_queue_.wait_dequeue(data);
+    double label = data.back();
+    data.pop_back();
+    Status s = training_data_->AddTrainingSample(data, label);
+    assert(s.ok());
+
+    const uint64_t threshold = 128000;
+    if(training_data_->GetNumTrainingSamples() >= threshold) {
+
+      BoosterHandle *new_model = new BoosterHandle();
+      uint64_t start_time = env_->NowMicros();
+      training_data_->TrainModel(new_model, training_params_);
+      uint64_t end_time = env_->NowMicros();
+      uint64_t duration_sec = (end_time - start_time) / 1000000;
+      assert(s.ok());
+
+      training_data_->ClearTrainingData();
+      FastConfigHandle *new_config = new FastConfigHandle();
+
+      std::string params = "num_threads=1";
+      int res = LGBM_BoosterPredictForCSRSingleRowFastInit(
+        *new_model, C_API_PREDICT_NORMAL,0, 0,
+        C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, 
+          params.c_str(), new_config);
+      if(res != 0) {
+        assert(false);
+      }
+
+      std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
+      std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
+      lightgbm_handle_ = new_model_ptr;
+      lightgbm_fastConfig_ = new_config_ptr;
+
+      ROCKS_LOG_INFO(
+              immutable_db_options_.info_log,
+                "training time: %lu sec",
+              duration_sec);
+      }
+  }
+
 }
 
 void DBImpl::BackgroundCallFlush(Env::Priority thread_pri) {

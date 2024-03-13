@@ -10224,13 +10224,65 @@ Multiple lifetime bucket.
 
 [Todo]
 Reduce flush time.
-[Status: Not started]
+[Status: Ongoing]
 
 [Todo]
 Save lots of time after removing training data logging and start
 thread training model.
+Use concurrent queue to add training data.
+Another thread fetching data.
+Start training in this training data fetching thread.
+I think I can use reader writer queue.
+```
+https://github.com/cameron314/readerwriterqueue
+```
+I can use concurrent queue.
+Let's tart implementing and then try.
+db_bench_tool.cc
+```cpp
 
-[Status: Not started]
+    ThreadArg* arg = new ThreadArg[n];
+      FLAGS_env->StartThread(ThreadBody, &arg[i]);
+
+        ThreadArg* arg = reinterpret_cast<ThreadArg*>(v);
+          // Start a new thread, invoking "function(arg)" within the new thread.
+          // When "function(arg)" returns, the thread will be destroyed.
+          virtual void StartThread(void (*function)(void* arg), void* arg) = 0;
+```
+
+db_impl_open.cc
+```
+
+  PeriodicTaskScheduler periodic_task_scheduler_;
+  if (s.ok()) {
+    s = impl->StartPeriodicTaskScheduler();
+  }
+        Status PeriodicTaskScheduler::Register(PeriodicTaskType task_type,
+                                               const PeriodicTaskFunc& fn) {
+          return Register(task_type, fn, kDefaultPeriodSeconds.at(task_type));
+        }
+
+```
+
+```cpp
+static void DataPumpThreadBody(void* arg) {
+  DataPumpThread* t = reinterpret_cast<DataPumpThread*>(arg);
+  DB* db = t->db;
+  Random rnd(301);
+  uint64_t i = 0;
+  while (i++ < FLAGS_num_inserts) {
+    if (!db->Put(WriteOptions(), Slice(rnd.RandomString(500)),
+                 Slice(rnd.RandomString(500)))
+             .ok()) {
+      fprintf(stderr, "Error in put\n");
+      exit(1);
+    }
+  }
+}
+
+
+```
+[Status: Ongoing]
 
 [Todo]
 Use model to do regression prediction of lifetime of key and 
@@ -10297,10 +10349,7 @@ This idea is not good.
 [Status: Done]
 
 
-[Todo]
-We can push key which are prediction wrong to data set and then train model.
-Pay more attention to these keys.
-[Status: Not started]
+
 
 
 [Todo]
@@ -10400,7 +10449,8 @@ not make sense to do another prediction.
 
 [Todo]
 Test ycsb a
-[Status: Not started]
+Need to compare my results with std rocksdb and other kv sep implementation.
+[Status: Ongoing]
 
 [Todo]
 Need to close sst files and blob files.
@@ -11324,7 +11374,8 @@ No need to adjust anything because we use the same config for all levels.
 
 [Todo]
 Generate run worklaod with 50M of update in ycsb.
-[Status: Not started]
+Actually is 25M writes.
+[Status: Done]
 
 [Todo]
 Create a new branch without model prediction 
@@ -11371,7 +11422,14 @@ Need to modify this.
 I will first let this run finish and copy the log.
 And then I will start another run without model.
 
-Run another bench without model with default lifetime as max.
+Run another bench without model with default lifetime as max. failed because of lack of storage space.
+Will do this later.
+
+dedicated gc with model default:(max-1)
+```
+2024/03/12-21:30:34.322041 74197 [db/blob/blob_file_builder.cc:497] [default] [JOB 1536] Generated blob file #5486: 4754 total blobs, 6161184 total bytes, lifetime label: 2 creation timestamp: 12046877
+2024/03/12-21:46:03.416467 74192 EVENT_LOG_v1 {"time_micros": 1710251163416456, "job": 2295, "event": "gc_started", "gc_files": [5486]}
+```
 [Status: Ongoing]
 
 
@@ -11393,4 +11451,75 @@ How can we solve this problem?
 [Status: Not started]
 
 
+[Todo]
+Add training sample for valid keys during gc.
+[Status: Not started]
 
+[Todo]
+Wait a little bit to aggregate more blob files
+before start gc.
+[Status: Not started]
+
+[Todo]
+Need to get read and write performance data.
+Does rocksdb have this stattistics data?
+```cpp
+class StatisticsImpl : public Statistics {
+ public:
+  StatisticsImpl(std::shared_ptr<Statistics> stats);
+  virtual ~StatisticsImpl();
+  const char* Name() const override { return kClassName(); }
+  static const char* kClassName() { return "BasicStatistics"; }
+
+  virtual uint64_t getTickerCount(uint32_t ticker_type) const override;
+  virtual void histogramData(uint32_t histogram_type,
+                             HistogramData* const data) const override;
+  std::string getHistogramString(uint32_t histogram_type) const override;
+
+  virtual void setTickerCount(uint32_t ticker_type, uint64_t count) override;
+  virtual uint64_t getAndResetTickerCount(uint32_t ticker_type) override;
+  virtual void recordTick(uint32_t ticker_type, uint64_t count) override;
+  // The function is implemented for now for backward compatibility reason.
+ 
+```
+I will just do it myself.
+Check how kvbench written by yf implents read and write rate count
+There is FinishiedOps in db_bench that can helps me get 
+read and write rate count.
+I think I should use that instead of writing code myself.
+How to do that ?
+```
+  void FinishedOps(DBWithColumnFamilies* db_with_cfh, DB* db, int64_t num_ops,
+
+
+
+```
+
+```
+  void Report(const Slice& name) {
+```
+Do see read and write performance data in log output .
+I will copy this log t oexperimental results folder for future reference.
+Cool.
+Solve this problem without writing any code myself.
+
+[Status: Done]
+
+[Todo]
+We can push key which are predicted wrong to data set and then train model.
+Pay more attention to these keys.
+[Status: Not started]
+
+[Todo]
+Change to use fast single infererence model function calling .
+[Status: Done]
+
+
+[Todo]
+Test with 8M as default lifetime. 
+[Status: Not started]
+
+[Todo]
+Generate ycsb data with evenly write keys.
+The goal is to beat hashkv.
+[Status: Not started]

@@ -6439,5 +6439,3 @@ report file name is /mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc/wit
 Completed ycsb_a (ID: ) in 9551 seconds
 ops_sec	mb_sec	lsm_sz	blob_sz	c_wgb	w_amp	c_mbps	c_wsecs	c_csecs	b_rgb	b_wgb	usec_op	p50	p99	p99.9	p99.99	pmax	uptime	stall%	Nstall	u_cpu	s_cpu	rss	test	date	version	job_id	githash
 6206	2.7	2GB	11GB	57.5	2.8	7.3	4186	4079	15	26	161.1	36.2	1106	3568	4394	644904152602598	8058	0.0	0	10.9	0.8	25.5	ycsb_a.t1.s1	2024-03-13T18:57:47	8.0.0		b408b02d5b	0.4
-total_size: 14G
-total_size_with_trace: 14G

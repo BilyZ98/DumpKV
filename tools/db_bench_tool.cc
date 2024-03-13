@@ -6519,6 +6519,18 @@ class Benchmark {
     }
   }
 
+  Status RecordRead(DBWithColumnFamilies* db_with_cfh, PinnableSlice* pinnable_val, const std::string& key, std::chrono::nanoseconds& duration) {
+    Status s;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    s = db_with_cfh->db->Get(read_options_,
+                           db_with_cfh->db->DefaultColumnFamily(), key,
+                           pinnable_val);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start_time);
+    return s;
+  }
+
   void ycsb_a(ThreadState* thread){
     int64_t puts = 0;
     int64_t gets = 0;
@@ -6551,6 +6563,7 @@ class Benchmark {
     std::string query_type;
     std::cout << "datas.size(): " << datas.size() << std::endl;
     int i = 0;
+
     for (std::vector<std::string> data : datas) {
       
       DBWithColumnFamilies* db_with_cfh = SelectDBWithCfh(thread);
@@ -6575,6 +6588,7 @@ class Benchmark {
                                    &pinnable_val);
         } else {
           pinnable_val.Reset();
+          // s = RecordRead(db_with_cfh, &pinnable_val, key, thread->duration);
           s = db_with_cfh->db->Get(read_options_,
                                    db_with_cfh->db->DefaultColumnFamily(), key,
                                    &pinnable_val);
