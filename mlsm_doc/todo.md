@@ -11517,9 +11517,22 @@ Change to use fast single infererence model function calling .
 
 [Todo]
 Test with 8M as default lifetime. 
-[Status: Not started]
+gc invalid key ratio drops from 0.6 to 0.5 after setting default lifetime shorter.
+Need to run more test and get more data to get a clear picture and decide 
+which default lifetime should we set.
+[Status: Ongoing]
 
 [Todo]
 Generate ycsb data with evenly write keys.
 The goal is to beat hashkv.
+[Status: Not started]
+
+
+[Todo]
+Add read cache to accelerate get during flush
+[Status: Not started]
+
+
+[Todo]
+Add mispredicted keys to training dample.
 [Status: Not started]

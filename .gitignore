@@ -2,6 +2,7 @@ make_config.mk
 rocksdb.pc
 
 LOG
+0.8
 *.a
 *.arc
 *.d

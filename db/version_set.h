@@ -1361,6 +1361,8 @@ class VersionSet {
       const std::vector<std::function<void(const Status&)>>& manifest_wcbs =
           {});
 
+
+  const std::string& GetDBName() const { return dbname_; }
   static Status GetCurrentManifestPath(const std::string& dbname,
                                        FileSystem* fs,
                                        std::string* manifest_filename,

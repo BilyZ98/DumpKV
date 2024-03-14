@@ -2153,7 +2153,7 @@ Status Version::GetBlob(const ReadOptions& read_options, const Slice& user_key,
                         PinnableSlice* value, uint64_t* bytes_read) const {
   BlobIndex blob_index;
 
-  uint64_t blob_index_len;
+  uint64_t blob_index_len = 0;
   {
     Status s = blob_index.DecodeFromWithKeyMeta(blob_index_slice, &blob_index_len);
     if (!s.ok()) {

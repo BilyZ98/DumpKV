@@ -95,7 +95,7 @@ CompactionIterator::CompactionIterator(
     lifetime_keys_count_[i] = 0;
   }
   const EnvOptions soptions;
-  std::string infer_data_file_path = "/mnt/nvme1n1/mlsm/test_blob_with_model_with_orig_gc/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
+  std::string infer_data_file_path = version_set_->GetDBName() + "/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
   Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
   assert(s.ok());
 
@@ -1267,6 +1267,10 @@ bool CompactionIterator::ExtractLargeValueIfNeededImplWithLifetimeLabel(uint64_t
 
 Status CompactionIterator::WriteTrainDataToFile(const std::vector<double>& data, double label) {
   Status s;
+  if(!train_data_file_) {
+    assert(false);
+    return s;
+  }
   for(size_t i = 0; i < data.size(); i++) {
     std::string data_with_sep = std::to_string(data[i]) + " ";
     s = train_data_file_->Append(data_with_sep);
@@ -1338,7 +1342,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     std::vector<float> edcs;
     edcs.reserve(n_edc_feature);
     uint64_t past_seq;
-    uint64_t distance;
+    uint64_t distance = 0;
     if(is_iter_valid && db_internal_iter_->user_key().compare(user_key()) == 0) {
       bool get_feat = false;
       BlobIndex prev_blob_index;
