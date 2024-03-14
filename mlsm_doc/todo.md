@@ -11530,9 +11530,16 @@ The goal is to beat hashkv.
 
 [Todo]
 Add read cache to accelerate get during flush
-[Status: Not started]
+Need to pass cache object to flush job.
+Need to check how rocksdb use cache to get key.
+[Status: Ongoing]
 
 
 [Todo]
 Add mispredicted keys to training dample.
+[Status: Not started]
+
+
+[Todo]
+Change regression task to multi-class classification task.
 [Status: Not started]
