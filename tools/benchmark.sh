@@ -1084,7 +1084,7 @@ function run_ycsb_a {
   local num_features=44
   # gdb --args
   # cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
-  cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \
@@ -1098,7 +1098,6 @@ function run_ycsb_a {
        --compaction_trace_file=${compaction_trace_file} \
        --num_features=${num_features} \
        --open_files=512 \
-       --default_lifetime_idx=3 \
        2>&1 | tee -a $log_file_name"
   if [[ "$job_id" != "" ]]; then
     echo "Job ID: ${job_id}" > $log_file_name

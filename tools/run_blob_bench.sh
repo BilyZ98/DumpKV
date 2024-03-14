@@ -139,6 +139,8 @@ prepopulate_blob_cache=${PREPOPULATE_BLOB_CACHE:-0}
 model_path=${MODEL_PATH:-""} 
 features_file_path=${FEATURES_FILE_PATH:-""}
 
+default_lifetime_idx=${DEFAULT_LIFETIME_IDX:-0}
+
 if [ "$enable_blob_files" == "1" ]; then
   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
 else
@@ -175,6 +177,7 @@ echo -e "Blob cache number of shard bits:\t\t$blob_cache_numshardbits"
 echo -e "Blob cache prepopulated:\t\t\t$prepopulate_blob_cache"
 echo -e "Target SST file size:\t\t\t$target_file_size_base"
 echo -e "Maximum size of base level:\t\t$max_bytes_for_level_base"
+echo -e "Default lifetime index:\t\t\t$default_lifetime_idx"
 echo "================================================================="
 
 rm -rf "$db_dir"
@@ -221,7 +224,8 @@ PARAMS_GC="$PARAMS \
   --enable_blob_garbage_collection=$enable_blob_garbage_collection \
   --blob_garbage_collection_age_cutoff=$blob_garbage_collection_age_cutoff \
   --blob_garbage_collection_force_threshold=$blob_garbage_collection_force_threshold \
-  --blob_compaction_readahead_size=$blob_compaction_readahead_size"
+  --blob_compaction_readahead_size=$blob_compaction_readahead_size \
+  --default_lifetime_idx=$default_lifetime_idx "
 
 # bulk load (using fillrandom) + compact
 # env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"

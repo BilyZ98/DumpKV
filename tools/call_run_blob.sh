@@ -10,9 +10,9 @@ function call_run_blob() {
   age_cutoff=${7:-1.0}
   compaction_trace_file=${8:-""}
   op_trace_file=${9:-""}
-  local force_gc_threshold=${10:-"1.0"}
+
   local write_buffer_size=$((100 * 1024 * 1024))
-  # echo "db_dir: $db_dir"
+  echo "default_lifetime_idx: $default_lifetime_idx"
   COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=$wal_dir \
    NUM_KEYS=$num_keys DB_DIR=$db_dir \
    OUTPUT_DIR=$output_dir ENABLE_BLOB_FILES=$enable_blob_file \
@@ -20,6 +20,7 @@ function call_run_blob() {
    WRITE_BUFFER_SIZE=$write_buffer_size NUM_THREADS=1 \
    COMPACTION_TRACE_FILE=$compaction_trace_file \
    OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
+   DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -56,12 +57,21 @@ gc_threshold_gap='0.2'
 
 function run_with_gc_dbbench {
 
-  for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
-    echo $force_gc_threshold
+
+  lifetime_idx_range=$(seq 0 1 4)
+  for lifetime_idx in $lifetime_idx_range ; do
+  # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
+    force_gc_threshold=0.8
+
+    echo "lifetime_idx-------------------: $lifetime_idx"
+    default_lifetime_idx=$lifetime_idx
 
 
-    with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${force_gc_threshold}
-    date_log_path=$(date +"%Y-%m-%d-%H-%M-%S")-${run_name} 
+    cur_run_name=${run_name}_${lifetime_idx}
+    # one_run_name=${run_name}_${lifetime_idx}
+    # with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${lifetime_idx}
+    with_gc_dir=${db_dir}/${cur_run_name}
+    date_log_path=$(date +"%Y-%m-%d-%H-%M-%S")-${cur_run_name} 
     db_log_dir=${date_log_path}
     if [ ! -d $db_log_dir ]; then
       mkdir -p $db_log_dir
@@ -70,22 +80,24 @@ function run_with_gc_dbbench {
     with_gc_compaction_trace_file=""
     # with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
     with_gc_op_trace_file=""
-    output_text=with_gc_${age_cutoff}_${force_gc_threshold}.txt
+    # output_text=with_gc_${age_cutoff}_${force_gc_threshold}.txt
+    output_text=${cur_run_name}.txt
+    output_text_path=${db_log_dir}/${output_text}
 
     call_run_blob  $with_gc_dir $num_keys $with_gc_dir $with_gc_dir $enable_blob_file \
       $enable_blob_gc $age_cutoff $with_gc_compaction_trace_file \
-      $with_gc_op_trace_file $force_gc_threshold | tee $output_text
+      $with_gc_op_trace_file "$force_gc_threshold"  | tee $output_text_path
 
     # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
     # if [ ! -d $trace_analye_output_dir ]; then
     #   mkdir -p $trace_analye_output_dir
     # fi
-    cp $output_text $db_log_dir
+    # cp $output_text $db_log_dir
     cp ${with_gc_dir}/LOG $db_log_dir
-    trace_analye_output_dir=${with_gc_dir}/trace_analyzer
-    if [ ! -d $trace_analye_output_dir ]; then
-      mkdir -p $trace_analye_output_dir
-    fi
+    # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
+    # if [ ! -d $trace_analye_output_dir ]; then
+    #   mkdir -p $trace_analye_output_dir
+    # fi
     # op_trace_cmd="$op_trace_analyzer_exe --trace_path=$with_gc_op_trace_file  --output_dir=$with_gc_dir --convert_to_human_readable_trace=true"
     # echo "op_trace_cmd: ${op_trace_cmd}"
     # eval $op_trace_cmd
