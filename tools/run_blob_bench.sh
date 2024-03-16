@@ -141,6 +141,8 @@ features_file_path=${FEATURES_FILE_PATH:-""}
 
 default_lifetime_idx=${DEFAULT_LIFETIME_IDX:-0}
 
+ycsb_a_run_path=${YCSB_A_RUN_PATH:-""}
+
 if [ "$enable_blob_files" == "1" ]; then
   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
 else
@@ -225,7 +227,8 @@ PARAMS_GC="$PARAMS \
   --blob_garbage_collection_age_cutoff=$blob_garbage_collection_age_cutoff \
   --blob_garbage_collection_force_threshold=$blob_garbage_collection_force_threshold \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size \
-  --default_lifetime_idx=$default_lifetime_idx "
+  --default_lifetime_idx=$default_lifetime_idx \
+  --ycsb_a_run_path=$ycsb_a_run_path"
 
 # bulk load (using fillrandom) + compact
 # env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"

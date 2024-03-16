@@ -82,7 +82,8 @@ GarbageCollectionJob::GarbageCollectionJob(
     const std::string& dbname, 
      CompactionJobStats* compaction_job_stats,
     Env::Priority thread_pri,
-    DBImpl* db)
+    DBImpl* db,
+    moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue)
     : gc_(gc),
       db_options_(db_options),
       mutable_db_options_copy_(mutable_db_options),
@@ -104,7 +105,8 @@ GarbageCollectionJob::GarbageCollectionJob(
       thread_pri_(thread_pri),
       db_(db),
       write_hint_(Env::WLTH_NOT_SET),
-      gc_output_(gc)
+      gc_output_(gc),
+      training_data_queue_(training_data_queue)
       {
 
   assert(log_buffer_ != nullptr);
@@ -198,6 +200,92 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
 
 }
 
+bool GarbageCollectionJob::GetKeyMeta(const Slice& key, const Slice& value, std::vector<double>& data_to_train) {
+  uint32_t past_distances_count = 0;
+  std::vector<uint64_t> past_distances;
+  past_distances.reserve(max_n_past_timestamps);
+  std::vector<float> edcs;
+  edcs.reserve(n_edc_feature);
+  // uint64_t past_seq;
+  uint64_t distance = 0;
+  
+  Slice prev_value = value;
+
+
+  Status s ;
+  BlobIndex prev_blob_index;
+  uint64_t blob_index_len = 0;
+  s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
+  assert(s.ok());
+  prev_value.remove_prefix(blob_index_len);
+  bool ok = GetVarint32(&prev_value, &past_distances_count);
+  if(!ok) {
+    assert(false);
+  }
+  if(past_distances_count == 0) {
+    return false;
+  }
+  std::vector<int32_t> indptr(2);
+  indptr[0] = 0;
+  uint32_t this_past_distance = 0;
+  uint8_t n_within = 0;
+  uint32_t i = 0;
+  assert(past_distances_count <= max_n_past_timestamps);
+  for(i=0; i < past_distances_count ; i++) {
+    uint64_t past_distance;
+    ok = GetVarint64(&prev_value, &past_distance);
+    past_distances.emplace_back(past_distance);
+    this_past_distance +=  past_distance;  
+    if (this_past_distance < memory_window) {
+      ++n_within;
+    }
+    data_to_train.emplace_back(static_cast<double>(past_distance));
+    assert(ok);
+  }
+
+  uint64_t blob_size = prev_blob_index.size();
+  data_to_train.emplace_back(static_cast<double>(blob_size));
+
+  data_to_train.emplace_back(static_cast<double>(n_within));
+
+  if(past_distances_count> 0) {
+    for(i=0; i < n_edc_feature; i++) {
+      float edc;
+      ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+      edcs.emplace_back(edc);
+      data_to_train.emplace_back(edc);
+      assert(ok);
+    }
+  }
+  //update edcs
+  ParsedInternalKey past_key;
+  s = ParseInternalKey(key, &past_key, false);
+  // past_seq = past_key.sequence;
+
+  assert(edcs.size() == n_edc_feature);
+
+  return true;
+
+}
+
+
+uint64_t GarbageCollectionJob::GetNextLifetimeIndex(uint64_t cur_seq, uint64_t key_seq) {
+  uint64_t seq_elapsed = cur_seq - key_seq;
+  auto lower_bound_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), seq_elapsed);
+  if(lower_bound_iter == LifetimeSequence.end()) {
+    return LifetimeSequence.size() - 1;
+  }
+  uint64_t new_remain_lifetime =  *lower_bound_iter - seq_elapsed; 
+
+  auto new_lifetime_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), new_remain_lifetime);
+  if(new_lifetime_iter == LifetimeSequence.end()) {
+    assert(false);
+  }
+  return std::distance(LifetimeSequence.begin(), new_lifetime_iter);
+
+  // return std::distance(LifetimeSequence.begin(), lower_bound_iter);
+
+}
 Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
 
   std::ofstream fout;
@@ -269,8 +357,8 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     uint64_t blob_file_num = blob_file->GetBlobFileNumber();
     std::string blob_file_path = BlobFileName(dbname_, blob_file->GetBlobFileNumber());;
     uint64_t lifetime_label = blob_file->GetLifetimeLabel();
-    uint64_t next_lifetime_label = std::min(lifetime_label + 1, LifetimeSequence.size() - 1);
-    oldest_blob_file_creation_time[next_lifetime_label] = std::min(oldest_blob_file_creation_time[next_lifetime_label], blob_file->GetCreationTimestamp());
+    // uint64_t next_lifetime_label = std::min(lifetime_label + 1, LifetimeSequence.size() - 1);
+     uint64_t next_lifetime_label = 0;
 
     std::unique_ptr<FSRandomAccessFile> file;
     constexpr IODebugContext* dbg = nullptr;
@@ -341,8 +429,18 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
         if(parsed_ikey.user_key.compare(parsed_blob_key.user_key)==0 &&
           parsed_ikey.sequence == parsed_blob_key.sequence &&
           parsed_ikey.type == rocksdb::kTypeBlobIndex) {
+
+          next_lifetime_label = GetNextLifetimeIndex(versions_->LastSequence(), parsed_ikey.sequence);
+          // std::vector<double> key_meta;
+          // bool ok = GetKeyMeta(find_internal_key, iter->value(), key_meta);
+          // if(ok) {
+            // key_meta.emplace_back(LifetimeSequence[next_lifetime_label]); 
+            // db_->AddTrainingSample(key_meta);
+          // }
+
           uint64_t cur_blob_offset = blob_offset;
           uint64_t cur_blob_file_num = blob_file_num; 
+
 
 
           blob_index_str.clear();

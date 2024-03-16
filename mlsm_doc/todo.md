@@ -11532,14 +11532,256 @@ The goal is to beat hashkv.
 Add read cache to accelerate get during flush
 Need to pass cache object to flush job.
 Need to check how rocksdb use cache to get key.
-[Status: Ongoing]
+```cpp
+Status TableCache::Get(
+    const ReadOptions& options,
+    const InternalKeyComparator& internal_comparator,
+    const FileMetaData& file_meta, const Slice& k, GetContext* get_context,
+    const std::shared_ptr<const SliceTransform>& prefix_extractor,
+    HistogramImpl* file_read_hist, bool skip_filters, int level,
+    size_t max_file_size_for_l0_meta_pin) {
 
+    if (t == nullptr) {
+      s = FindTable(options, file_options_, internal_comparator, file_meta,
+                    &handle, prefix_extractor,
+                    options.read_tier == kBlockCacheTier /* no_io */,
+                    true /* record_read_stats */, file_read_hist, skip_filters,
+                    level, true /* prefetch_index_and_filter_in_cache */,
+                    max_file_size_for_l0_meta_pin, file_meta.temperature);
+ 
+      get_context->SetReplayLog(row_cache_entry);  // nullptr if no cache.
+      s = t->Get(options, k, get_context, prefix_extractor.get(), skip_filters);
+
+        Status BlockBasedTable::Get(const ReadOptions& read_options, const Slice& key,
+                                    GetContext* get_context,
+                                    const SliceTransform* prefix_extractor,
+                                    bool skip_filters) {
+
+      NewDataBlockIterator<DataBlockIter>(
+          read_options, v.handle, &biter, BlockType::kData, get_context,
+          &lookup_data_block_context, /*prefetch_buffer=*/nullptr,
+          /*for_compaction=*/false, /*async_read=*/false, tmp_status);
+
+ 
+```
+
+```cpp
+TBlockIter* BlockBasedTable::NewDataBlockIterator(
+    const ReadOptions& ro, const BlockHandle& handle, TBlockIter* input_iter,
+ 
+    s = RetrieveBlock(
+        prefetch_buffer, ro, handle, dict, &block.As<IterBlocklike>(),
+        get_context, lookup_context, for_compaction,
+        /* use_cache */ true, /* wait_for_cache */ true, async_read);
+ 
+        WithBlocklikeCheck<Status, TBlocklike> BlockBasedTable::RetrieveBlock(
+            FilePrefetchBuffer* prefetch_buffer, const ReadOptions& ro,
+            const BlockHandle& handle, const UncompressionDict& uncompression_dict,
+
+           Status s;
+          if (use_cache) {
+            s = MaybeReadBlockAndLoadToCache(
+                prefetch_buffer, ro, handle, uncompression_dict, wait_for_cache,
+                for_compaction, out_parsed_block, get_context, lookup_context,
+         
+                BlockBasedTable::MaybeReadBlockAndLoadToCache(
+                    FilePrefetchBuffer* prefetch_buffer, const ReadOptions& ro,
+                    const BlockHandle& handle, const UncompressionDict& uncompression_dict,
+
+                   BlockCacheInterface<TBlocklike> block_cache{
+                      rep_->table_options.block_cache.get()};
+
+ 
+                  bool is_cache_hit = false;
+                  if (block_cache) {
+                    // create key for block cache
+                    key_data = GetCacheKey(rep_->base_cache_key, handle);
+                    key = key_data.AsSlice();
+
+                    if (!contents) {
+                      s = GetDataBlockFromCache(key, block_cache, out_parsed_block, wait,
+                                                get_context);
+                      // Value could still be null at this point, so check the cache handle
+                      // and update the read pattern for prefetching
+                      if (out_parsed_block->GetValue() || out_parsed_block->GetCacheHandle()) {
+                        // TODO(haoyu): Differentiate cache hit on uncompressed block cache and
+                        // compressed block cache.
+                        is_cache_hit = true;
+
+                    if (BlockCacheTraceHelper::IsGetOrMultiGetOnDataBlock(
+                            trace_block_type, lookup_context->caller)) {
+                      // Defer logging the access to Get() and MultiGet() to trace additional
+                      // information, e.g., referenced_key_exist_in_block.
+
+                      // Make a copy of the block key here since it will be logged later.
+                      lookup_context->FillLookupContext(
+                          is_cache_hit, no_insert, trace_block_type,
+                          /*block_size=*/usage, /*block_key=*/key.ToString(), nkeys);
+
+                  void FillLookupContext(bool _is_cache_hit, bool _no_insert,
+                                         TraceType _block_type, uint64_t _block_size,
+                                         const std::string& _block_key,
+                                         uint64_t _num_keys_in_block) {
+                    is_cache_hit = _is_cache_hit;
+                    no_insert = _no_insert;
+                    block_type = _block_type;
+                    block_size = _block_size;
+                    block_key = _block_key;
+                    num_keys_in_block = _num_keys_in_block;
+                  }
+
+```
+I think I can just use Version->Get() to get key .
+And set no_filled_cache, no read_blob.
+This should work.
+Does internal iterator use block cache? If so I won't do any change
+I think internal iterator already use block cache.
+Still need to use version to get key. Need to make sure 
+we get key meta feautre from keys in L0 as well.
+The worst case is that lots of keys are flush to level0
+so later keys won't have any key meta. Thus we lose 
+past write information of this key.
+```
+    readoptionscopy.snapshot = db->GetSnapshot();
+      s = db->Get(readoptionscopy, key_slices[i], value);
+    db->ReleaseSnapshot(readoptionscopy.snapshot);
+```
+
+```
+  ReadOptions roptions;
+  if (take_snapshot) {
+    roptions.snapshot = db->GetSnapshot();
+    db->GetDBOptions().env->SleepForMicroseconds(
+        static_cast<int>(delay_ms * 1000));
+  }
+
+
+```
+Don't wthink I can Use GetSnapshot for each get.
+Maybe I can use internal iterator and update read options to not fill
+ cache.. Maybe fill cache is ok as well because lsm-tree is small enough
+to hold many blocks.
+This should work.
+CAn we get sequence number of imm memtable??
+
+```cpp
+  // kMaxSequenceNumber will be returned.
+  SequenceNumber GetEarliestSequenceNumber() {
+    return earliest_seqno_.load(std::memory_order_relaxed);
+  }
+
+
+```
+
+We can use this earliest_seqno_ to create internal iterator
+from rocksdb.. 
+didnt' change many things after checking code .
+Update kMaxSequenceNumber to smallest_seqno.
+
+
+Add adaptive_readahead = true to flush job .
+Maybe we can se t this true.
+
+Don't think I need to do 
+[Status: Done]
 
 [Todo]
-Add mispredicted keys to training dample.
-[Status: Not started]
+Check titan gc param.
+```cpp
+std::unique_ptr<BlobGC> BasicBlobGCPicker::PickBlobGC(
+    BlobStorage*
+     blob_storage) {
+  Status s;
+  std::vector<std::shared_ptr<BlobFileMeta>> blob_files;
+
+  uint64_t batch_size = 0;
+  uint64_t estimate_output_size = 0;
+  bool stop_picking = false;
+  bool maybe_continue_next_time = false;
+  uint64_t next_gc_size = 0;
+  bool in_fallback = cf_options_.blob_run_mode == TitanBlobRunMode::kFallback;
+
+  for (auto& gc_score : blob_storage->gc_score()) {
+    if (gc_score.score < cf_options_.blob_file_discardable_ratio) {
+      break;
+ 
+```
+[Status: Done]
+
+[Todo]
+Add mispredicted keys to training sample.
+[Status: Ongoing]
 
 
 [Todo]
 Change regression task to multi-class classification task.
 [Status: Not started]
+
+
+[Todo]
+Count number of invalid keys that has past_distance_idx > 0;
+[Status: Ongoing]
+
+[todo]
+Put keys to bucket based on  their sequence  number.
+The result is pretty good.
+[Status: Ongoing]
+
+
+OH fuck, there is no drastic improvment when intrducing model 
+Another big failure I met during this project.
+Why does the model not work?
+
+
+[Todo]
+Offiline evaluation of ycsb dataset with model prediction..
+[Status: Not started]
+
+[Todo]
+YCSB a theata in which keys have at least 5 times writes. 
+[Status: Not started]
+
+[Todo]
+Fix lightgbm single row predict error if possible.
+Switch from predict row fast to normal predict.
+Didn't get this erro after doing the swithc
+[Status: Done]
+
+
+[Todo]
+
+Get ycsb 
+https://github.com/lixiao-c/YCSB-generator?tab=readme-ov-file
+
+Test diff skewness of ycsb
+```bash
+0.8
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 1505402
+top 5% write count: 3495118
+
+
+
+0.99
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 2451824
+top 5% write count: 2548231
+
+
+0.5
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 4052923
+top 5% write count: 947597
+
+
+0.2 
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 4338559
+top 5% write count: 661961
+```
+
+Still got 60% of keys with one time write. 
+[Status: Ongoing]
+
+Maybe we can test latest districution of ycsb
+

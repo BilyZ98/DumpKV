@@ -1025,6 +1025,16 @@ class Version {
            SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
            bool* is_blob = nullptr, bool do_merge = true);
 
+  void GetNoBlob(const ReadOptions&, const LookupKey& key, PinnableSlice* value,
+           PinnableWideColumns* columns, std::string* timestamp, Status* status,
+           MergeContext* merge_context,
+           SequenceNumber* max_covering_tombstone_seq,
+           PinnedIteratorsManager* pinned_iters_mgr,
+           bool* value_found = nullptr, bool* key_exists = nullptr,
+           SequenceNumber* seq = nullptr, ReadCallback* callback = nullptr,
+           bool* is_blob = nullptr, bool do_merge = true,
+           bool no_read_blob=true);
+
   void MultiGet(const ReadOptions&, MultiGetRange* range,
                 ReadCallback* callback = nullptr);
 

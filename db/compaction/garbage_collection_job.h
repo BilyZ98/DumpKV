@@ -33,6 +33,7 @@
 #include "rocksdb/compaction_job_stats.h"
 #include "rocksdb/db.h"
 #include "rocksdb/env.h"
+#include "db/blockingconcurrentqueue.h"
 #include "rocksdb/memtablerep.h"
 #include "rocksdb/transaction_log.h"
 #include "table/scoped_arena_iterator.h"
@@ -87,7 +88,9 @@ public:
                       const std::string& dbname, 
                        CompactionJobStats* compaction_job_stats,
                        Env::Priority thread_pri,
-                       DBImpl* db);
+                       DBImpl* db,
+                      moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue
+                       );
 
 
   virtual ~GarbageCollectionJob();
@@ -108,6 +111,10 @@ public:
 
 protected:
   Status ProcessGarbageCollection(InternalIterator* iter);
+
+  bool GetKeyMeta(const Slice& key, const Slice& value, std::vector<double>& key_meta);
+
+  uint64_t GetNextLifetimeIndex(uint64_t cur_seq, uint64_t key_seq );
 
   void UpdateBlobStats(); 
   void UpdateGarbageCollectionStats();
@@ -175,6 +182,8 @@ protected:
   GarbageCollectionOutput gc_output_;
 
   std::unordered_map<uint64_t, uint64_t> blob_file_map_;
+
+  moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue_;
 
 };
 

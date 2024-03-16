@@ -13,6 +13,7 @@ function call_run_blob() {
 
   local write_buffer_size=$((100 * 1024 * 1024))
   echo "default_lifetime_idx: $default_lifetime_idx"
+  echo "ycsb_a_run_path: $ycsb_a_run_path"
   COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=$wal_dir \
    NUM_KEYS=$num_keys DB_DIR=$db_dir \
    OUTPUT_DIR=$output_dir ENABLE_BLOB_FILES=$enable_blob_file \
@@ -21,6 +22,7 @@ function call_run_blob() {
    COMPACTION_TRACE_FILE=$compaction_trace_file \
    OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
    DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
+   YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -37,14 +39,15 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
+ycsb_a_run_path=/mnt/nvme1n1/zt/YCSB-C/data/workloaduniform-load-10000000-50000000.log_run.formated
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
 num_keys=50000000
-enable_blob_file=1
 enable_blob_gc=true
+enable_blob_file=1
 
 age_cutoff=1.0
 op_trace_analyzer_exe=/home/zt/rocksdb_kv_sep/build/trace_analyzer
@@ -58,7 +61,7 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=$(seq 1 1 1)
+  lifetime_idx_range=$(seq 3 1 3)
   for lifetime_idx in $lifetime_idx_range ; do
   # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
     force_gc_threshold=0.8
@@ -88,6 +91,10 @@ function run_with_gc_dbbench {
       $enable_blob_gc $age_cutoff $with_gc_compaction_trace_file \
       $with_gc_op_trace_file "$force_gc_threshold"  | tee $output_text_path
 
+    if [ ! $? -eq 0 ]; then
+      echo "run blob failed"
+      exit 1
+    fi
     # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
     # if [ ! -d $trace_analye_output_dir ]; then
     #   mkdir -p $trace_analye_output_dir
