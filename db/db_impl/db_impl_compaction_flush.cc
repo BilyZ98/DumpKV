@@ -3042,10 +3042,15 @@ static void booster_config_deleter(FastConfigHandle* booster_config) {
   }
   delete booster_config;
 }
+
 void DBImpl::BackgroundCallDataCollection() {
   while(!shutting_down_.load(std::memory_order_acquire)) {
     std::vector<double> data;
-    training_data_queue_.wait_dequeue(data);
+    std::int64_t timeout = 10;
+    bool get_data =  training_data_queue_.wait_dequeue_timed(data, timeout);
+    if(!get_data) {
+      continue;
+    }
     double label = data.back();
     data.pop_back();
     Status s = training_data_->AddTrainingSample(data, label);
@@ -3545,7 +3550,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
                                 dbname_,
                                 &compaction_job_stats,
                                 thread_pri,
-                                this);
+                                this,
+                                &training_data_queue_);
 
     gc_job.Prepare();
     mutex_.Unlock();
@@ -3555,6 +3561,7 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
       auto cfd = gc->column_family_data();
       SuperVersion* sv = cfd->GetSuperVersion();
       ReadOptions read_options;
+      read_options.fill_cache = false;
       ScopedArenaIterator iter;
       iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
 

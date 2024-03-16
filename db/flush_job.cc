@@ -959,12 +959,13 @@ Status FlushJob::WriteLevel0Table() {
       // auto cfd = gc->column_family_data();
       SuperVersion* sv = cfd_->GetSuperVersion()->Ref();
       ReadOptions read_options;
+      read_options.adaptive_readahead = true;
       ScopedArenaIterator db_iter;
       db_iter.set(db_impl_->NewInternalIteratorStartingFromLevel0(read_options, 
                                                            cfd_,
                                                            sv,
                                                            &db_iter_arena,
-                                                           kMaxSequenceNumber,
+                                                           smallest_seqno,
                                                            false));
       this->SetInternalIterator(db_iter.get());
 

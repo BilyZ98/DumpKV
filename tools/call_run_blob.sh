@@ -37,14 +37,14 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
 num_keys=50000000
-enable_blob_file=1
 enable_blob_gc=true
+enable_blob_file=1
 
 age_cutoff=1.0
 op_trace_analyzer_exe=/home/zt/rocksdb_kv_sep/build/trace_analyzer
@@ -58,7 +58,7 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=$(seq 0 1 4)
+  lifetime_idx_range=$(seq 3 1 3)
   for lifetime_idx in $lifetime_idx_range ; do
   # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
     force_gc_threshold=0.8
@@ -88,6 +88,10 @@ function run_with_gc_dbbench {
       $enable_blob_gc $age_cutoff $with_gc_compaction_trace_file \
       $with_gc_op_trace_file "$force_gc_threshold"  | tee $output_text_path
 
+    if [ ! $? -eq 0 ]; then
+      echo "run blob failed"
+      exit 1
+    fi
     # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
     # if [ ! -d $trace_analye_output_dir ]; then
     #   mkdir -p $trace_analye_output_dir

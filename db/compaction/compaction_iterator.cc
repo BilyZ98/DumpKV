@@ -1455,30 +1455,30 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         int64_t out_len ;
         assert(data.size() <= num_features_);
         indptr[1] = data.size();
-      int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
-                                                              static_cast<void *>(indptr.data()),
-                                                               C_API_DTYPE_INT32,
-                                                               indices.data(),
-                                                              static_cast<void *>(data.data()),
-                                                               2,
-                                                               data.size(),
-                                                               &out_len,
-                                                               out_result.data());
-        // int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-        //                           static_cast<void *>(indptr.data()),
-        //                           C_API_DTYPE_INT32,
-        //                           indices.data(),
-        //                           static_cast<void *>(data.data()),
-        //                           C_API_DTYPE_FLOAT64,
-        //                           2,
-        //                           data.size(),
-        //                           num_features_,  //remove future t
-        //                           C_API_PREDICT_NORMAL,
-        //                           0,
-        //                           32,
-        //                           inference_params.c_str(),
-        //                           &out_len,
-        //                           out_result.data());
+      // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
+      //                                                         static_cast<void *>(indptr.data()),
+      //                                                          C_API_DTYPE_INT32,
+      //                                                          indices.data(),
+      //                                                         static_cast<void *>(data.data()),
+      //                                                          2,
+      //                                                          data.size(),
+      //                                                          &out_len,
+      //                                                          out_result.data());
+        int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+                                  static_cast<void *>(indptr.data()),
+                                  C_API_DTYPE_INT32,
+                                  indices.data(),
+                                  static_cast<void *>(data.data()),
+                                  C_API_DTYPE_FLOAT64,
+                                  2,
+                                  data.size(),
+                                  num_features_,  //remove future t
+                                  C_API_PREDICT_NORMAL,
+                                  0,
+                                  32,
+                                  inference_params.c_str(),
+                                  &out_len,
+                                  out_result.data());
         assert(predict_res == 0);
         double orig_value = std::expm1(out_result[0]);
         auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);

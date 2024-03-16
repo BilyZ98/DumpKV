@@ -1,0 +1,4 @@
+total_size: 5.0G
+total_size_with_trace: 5.0G
+total_size: 12G
+total_size_with_trace: 12G

@@ -1129,6 +1129,10 @@ DEFINE_bool(report_bg_io_stats, false,
 DEFINE_bool(use_stderr_info_logger, false,
             "Write info logs to stderr instead of to LOG file. ");
 
+DEFINE_string(ycsb_a_run_path, "",
+              "Path to the YCSB-A run file. If not empty, db_bench will run "
+              "YCSB-A workload using the specified run file.");
+
 DEFINE_string(model_path, "",
               "Path to the model file used by the ML-based compaction "
               "policy. If empty, the default model will be used.");
@@ -6558,8 +6562,14 @@ class Benchmark {
     //     "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-load-10000000-10000000.log.formated"
     //     ,"/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
     // };
+    //
+        // "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
+    if(FLAGS_ycsb_a_run_path.empty()){
+      std::cout << "FLAGS_ycsb_a_run_path is empty" << std::endl;
+      return;
+    }
     std::vector<std::string> files = {
-        "/mnt/nvme/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated"
+      FLAGS_ycsb_a_run_path
     };
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);
