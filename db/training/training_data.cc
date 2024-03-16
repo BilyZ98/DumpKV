@@ -174,6 +174,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     params_string += kv.first + "=" + kv.second + " ";
       // converted_params.push_back(kv.first + "=" + kv.second);
   }
+  uint64_t num_iterations = std::stoi(training_params.at("num_iterations")) - 1;
   auto params = params_string.c_str();
   int res = 0;
 
@@ -237,7 +238,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                             num_features_,  //remove future t
                             C_API_PREDICT_NORMAL,
                             0,
-                            std::stoi(training_params.at("num_iterations")) - 1,
+                            num_iterations,
                             params,
                             &len,
                             result_.data());
