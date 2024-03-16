@@ -11766,7 +11766,22 @@ top 5% write count: 3495118
 ➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
 95% write count: 2451824
 top 5% write count: 2548231
+
+
+0.5
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 4052923
+top 5% write count: 947597
+
+
+0.2 
+➜  ycsb_a git:(dev_use_cache_in_flush_and_gc) ✗ python3 write_access_count.py
+95% write count: 4338559
+top 5% write count: 661961
 ```
 
+Still got 60% of keys with one time write. 
 [Status: Ongoing]
+
+Maybe we can test latest districution of ycsb
 

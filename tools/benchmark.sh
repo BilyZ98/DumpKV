@@ -1098,7 +1098,6 @@ function run_ycsb_a {
        --compaction_trace_file=${compaction_trace_file} \
        --num_features=${num_features} \
        --open_files=512 \
-       --ycsb_a_run_path=/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-50000000.log.formated \
        2>&1 | tee -a $log_file_name"
   if [[ "$job_id" != "" ]]; then
     echo "Job ID: ${job_id}" > $log_file_name

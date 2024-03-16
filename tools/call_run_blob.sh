@@ -13,6 +13,7 @@ function call_run_blob() {
 
   local write_buffer_size=$((100 * 1024 * 1024))
   echo "default_lifetime_idx: $default_lifetime_idx"
+  echo "ycsb_a_run_path: $ycsb_a_run_path"
   COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=$wal_dir \
    NUM_KEYS=$num_keys DB_DIR=$db_dir \
    OUTPUT_DIR=$output_dir ENABLE_BLOB_FILES=$enable_blob_file \
@@ -21,6 +22,7 @@ function call_run_blob() {
    COMPACTION_TRACE_FILE=$compaction_trace_file \
    OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
    DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
+   YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -38,6 +40,7 @@ fi
 
 # with_gc and without_gc
 db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
+ycsb_a_run_path=/mnt/nvme1n1/zt/YCSB-C/data/workloaduniform-load-10000000-50000000.log_run.formated
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
