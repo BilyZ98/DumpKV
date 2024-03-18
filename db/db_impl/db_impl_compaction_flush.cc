@@ -3065,7 +3065,12 @@ void DBImpl::BackgroundCallDataCollection() {
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
-
+      if(lightgbm_handle_ != nullptr) {
+        int res = LGBM_BoosterMerge(*new_model, *lightgbm_handle_);
+        if(res != 0) {
+          assert(false);
+        }
+      }
       training_data_->ClearTrainingData();
       FastConfigHandle *new_config = new FastConfigHandle();
 

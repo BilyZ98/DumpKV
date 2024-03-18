@@ -1312,7 +1312,7 @@ class DBImpl : public DB {
 
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
-  std::shared_ptr<BoosterHandle> lightgbm_handle_;
+  std::shared_ptr<BoosterHandle> lightgbm_handle_ = nullptr;
   std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ ;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
   moodycamel::BlockingConcurrentQueue<std::vector<double>> training_data_queue_;

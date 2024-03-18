@@ -1,0 +1,2 @@
+total_size: 11G
+total_size_with_trace: 11G

@@ -11841,12 +11841,14 @@ Count: 25001560 Average: 161.3566  StdDev: 882.57
 Microseconds per read:
 Count: 24998440 Average: 115.1719  StdDev: 12958.56
 
-[Status: Ongoing]
+[Status: Done]
 
 
 Maybe we can test latest distribution of ycsb
+
 [Todo]
 Update existing model instead of training new model each time.
+mlsm_scripts/mixgraph/generate_features.py
 [Status: Ongoing]
 
 [Todo]
@@ -11857,6 +11859,16 @@ Remove compaction infer data file to get faster write?
 Need to mention in paper that we use both update frequence and age information 
 for each keys.
 According to Midas paper.
+[Status: Not started]
+
+[Todo]
+Try catboost?
+[Status: Not started]
+
+[Todo]
+Why do we need to get lifetime distribution ?
+I want to put keys with zero writes or one writes to a good default lifetime bucket
+so that their invalidated time is close to this default lifetime bucket time.
 [Status: Not started]
 
 [Todo]
