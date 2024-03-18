@@ -22,6 +22,7 @@ delta_prefix = 'delta_'
 edc_prefix = 'edc_'
 
 
+data_path = "/mnt/nvme1n1/zt/YCSB-C/data/workloada-load-10000000-50000000.log_run.formated"
 output_path = "/mnt/nvme1n1/mlsm/ycsba_0.2_zipfian_50M/features_{}.csv"
 
 hash_edcs = [pow(0.5, i) for i in range(0, max_hash_edc_idx+1)]
@@ -187,8 +188,10 @@ def GenerateFeatures(server_trace ):
     # df_write = df_group_by_type.get_group('Write')
     # df_group_by_disknumber_offset = df_group_by_type.groupby(['disknumber', 'offset'])
     df_group_by_op_type = df.groupby(group_by_columns)
-    df_group_by_op_type = df_group_by_op_type.reset_index(drop=True)
+    df_gropu_write = df_group_by_op_type.get_group('UPDATE')
+    df_group_by_op_type = df_gropu_write.reset_index(drop=True)
     df_group_by_op_type = df_group_by_op_type.reset_index().rename_axis('timestamp', axis=1)
+    print('df_group_by_op_type', df_group_by_op_type.head())
 
     df_group_by_key = df_group_by_op_type.groupby(['key'])
 
@@ -218,7 +221,7 @@ def GenerateFeatures(server_trace ):
     #     print('head of df_return: ', df_return.head(), 'len of df_return: ', len(df_return) )
 
 
- if __name__ == '__main__': 
+if __name__ == '__main__': 
     # all_traces = ['prxy_0', 'prxy_1', 'prn_0']
     # all_traces = ['prn_0']
     GenerateFeatures(data_path)

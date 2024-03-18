@@ -11875,6 +11875,11 @@ so that their invalidated time is close to this default lifetime bucket time.
 [Status: Not started]
 
 [Todo]
+Adaptive lifetime bucket creation. 
+Search paper.
+[Status: Not started]
+
+[Todo]
 https://github.com/Microsoft/LightGBM/issues/1157
 ```
 [LightGBM] [Warning] No further splits with positive gain, best gain: -inf
