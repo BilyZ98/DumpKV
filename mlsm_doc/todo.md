@@ -11849,6 +11849,9 @@ Maybe we can test latest distribution of ycsb
 [Todo]
 Update existing model instead of training new model each time.
 mlsm_scripts/mixgraph/generate_features.py
+Model is not working after call BoosterMerge. I don't know why
+Maybe I wrongly understand the BoosterMerge semantics.
+
 [Status: Ongoing]
 
 [Todo]

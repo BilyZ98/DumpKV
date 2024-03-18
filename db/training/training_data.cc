@@ -187,7 +187,6 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 
   // Prepare parameters for LGBM_DatasetCreateFromCSR
   // if (booster) LGBM_BoosterFree(booster);
-  BoosterHandle new_model;
   // create training dataset
   DatasetHandle trainData;
   res = LGBM_DatasetCreateFromCSR(
@@ -212,7 +211,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   assert(res == 0);
 
   // init booster
-  res = LGBM_BoosterCreate(trainData, params, &new_model);
+  res = LGBM_BoosterCreate(trainData, params, new_model_ptr);
   if (res != 0) {
     assert(false);
   }
@@ -220,7 +219,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   // train
   for (int i = 0; i < stoi(training_params.at("num_iterations")); i++) {
     int isFinished;
-    res = LGBM_BoosterUpdateOneIter(new_model, &isFinished);
+    res = LGBM_BoosterUpdateOneIter(*new_model_ptr, &isFinished);
     if(res != 0) {
       assert(false);
       return Status::Incomplete("LGBM_BoosterUpdateOneIter failed");
@@ -236,7 +235,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   uint64_t result_size = (indptr_.size()-1) * num_class;
   // result_.resize(indptr_.size() - 1);
   result_.resize(result_size);
-  res = LGBM_BoosterPredictForCSR(new_model,
+  res = LGBM_BoosterPredictForCSR(*new_model_ptr,
                             static_cast<void *>(indptr_.data()),
                             C_API_DTYPE_INT32,
                             indices_.data(),
@@ -288,7 +287,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     assert(false);
     return Status::Incomplete("LGBM_DatasetFree failed");
   }
-  *new_model_ptr = new_model;
+  // *new_model_ptr = new_model;
   return Status::OK();
 
 }

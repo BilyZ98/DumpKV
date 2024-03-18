@@ -17,10 +17,12 @@ from multiprocessing import Value, Pool
 max_hash_edc_idx = 65535
 base_edc_window = 10
 n_edc_feature = 10
-delta_count = 10
+delta_count = 32
 delta_prefix = 'delta_'
 edc_prefix = 'edc_'
 
+
+output_path = "/mnt/nvme1n1/mlsm/ycsba_0.2_zipfian_50M/features_{}.csv"
 
 hash_edcs = [pow(0.5, i) for i in range(0, max_hash_edc_idx+1)]
 edc_windows = [ pow(2, base_edc_window + i) for i in range(0, n_edc_feature)]
@@ -72,7 +74,7 @@ def GetEDC(df_group_by_disknumber_offset):
         df_group_by_disknumber_offset[cur_delta_col_name] = df_group_by_disknumber_offset['lifetime'].shift(i)
 
 
-    df_group_by_disknumber_offset.fillna(np.inf, inplace=True)
+    df_group_by_disknumber_offset.fillna(0, inplace=True)
 
     edc_column_idxs = []
     for edc_column in edc_columns:
@@ -115,7 +117,7 @@ def GetEDC(df_group_by_disknumber_offset):
 
 
  
-def ApplyGetLifetime(df_group, output_path, all_output_path):
+def ApplyGetLifetime(df_group_write, output_path, all_output_path):
 
 
     
@@ -136,16 +138,14 @@ def ApplyGetLifetime(df_group, output_path, all_output_path):
     # df_group_read['lifetime_next'] = df_group_read['latter_timestamp'] - df_group_read['unix_timestamp']
 
 
-    df_group_write['timestamp'] = df_group_write['timestamp'].apply(convert_micro_to_sec)
     df_group_write['prev_timestamp'] = df_group_write['timestamp'].shift(1)
     df_group_write['latter_timestamp'] = df_group_write['timestamp'].shift(-1)
     df_group_write['lifetime'] = df_group_write['timestamp'] - df_group_write['prev_timestamp']
     df_group_write['lifetime_next'] = df_group_write['latter_timestamp'] - df_group_write['timestamp']
-    df_group_write['pre_read_count'] = df_group_write['index'] - df_group_write['index'].shift(1) - 1
-    df_group_write['pre_read_count'] = df_group_write['pre_read_count'].fillna(0)
+    # df_group_write['pre_read_count'] = df_group_write['index'] - df_group_write['index'].shift(1) - 1
+    # df_group_write['pre_read_count'] = df_group_write['pre_read_count'].fillna(0)
 
 
-    # df_group_read = df_group_read.apply(ApplyGetEDC)
     # df_group_write = GetEDC(df_group_write)
     GetEDC(df_group_write)
     cur_counter = increment_counter()
@@ -190,9 +190,10 @@ def GenerateFeatures(server_trace ):
     df_group_by_op_type = df_group_by_op_type.reset_index(drop=True)
     df_group_by_op_type = df_group_by_op_type.reset_index().rename_axis('timestamp', axis=1)
 
+    df_group_by_key = df_group_by_op_type.groupby(['key'])
 
 
-
+    
     trace_output_path = output_path.format( 'with_at_least_2_write')
     all_trace_output_path = output_path.format( 'all')
     # timestamp,hostname,disknumber,type,offset,size,response_time,prev_timestamp,lifetime,
@@ -206,7 +207,7 @@ def GenerateFeatures(server_trace ):
     with open(all_trace_output_path, 'w') as f:
         f.truncate(0)
     
-    df_return = df_group_by_op_type.apply( ApplyGetLifetime, output_path=trace_output_path, all_output_path=all_trace_output_path )
+    df_return = df_group_by_key.apply( ApplyGetLifetime, output_path=trace_output_path, all_output_path=all_trace_output_path )
     print('type of df_return: ', type(df_return))
     #df_return = df_group_by_disknumber_offset.apply_parallel( ApplyGetLifetime, output_path=trace_output_path )
 
