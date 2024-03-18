@@ -11725,6 +11725,8 @@ Count number of invalid keys that has past_distance_idx > 0;
 [todo]
 Put keys to bucket based on  their sequence  number.
 The result is pretty good.
+We get better space amp after we update next lifetime label cauculation
+ for each key during gc.
 [Status: Ongoing]
 
 
@@ -11781,7 +11783,119 @@ top 5% write count: 661961
 ```
 
 Still got 60% of keys with one time write. 
+
+
+Not much imporvement after introducing model for 50M uniform ycsb workload.
+with model
+wamp : 3.1
+total size: 15.1
+
+without model:
+wamp: 2.7
+total size: 16.1
+
+
+Now try ycsba with zipfian 0.2 50M
+Still not so good.
+Data: 0.2 zipfian ycsb a 50M , 25 M read 25M write
+with model: 
+wamp : 3.1
+blob total size: 9.3GB
+gc input blob: 32252788, gc output blobs: 19916996, gc dropped blobs: 12335792, gc invalid key ratio: 0.382
+Microseconds per write:
+Count: 25001560 Average: 119.4157  StdDev: 282.22
+Microseconds per read:
+Count: 24998440 Average: 38.2915  StdDev: 5427.23
+Uptime(secs): 3945.0 total, 0.1 interval
+
+
+without model:
+wamp : 2.6
+blob total size: 12.4 GB
+gc input blob: 18650475, gc output blobs: 4172342, gc dropped blobs: 14478133, gc invalid key ratio: 0.776
+Microseconds per write:
+Count: 25001560 Average: 135.7310  StdDev: 91.24
+Microseconds per read:
+Count: 24998440 Average: 32.2354  StdDev: 5031.52
+Key drop rate :0.146118721
+Uptime(secs): 4201.3 total, 1.0 interval
+
+with multi-class model(relwithdebinfo mode):
+wamp: 2.6
+blob total size:  11.5 GB
+gc input blob: 19509959, gc output blobs: 4852176, gc dropped blobs: 14657783, gc invalid key ratio: 0.751
+Microseconds per write:
+Count: 25001560 Average: 119.1656  StdDev: 175.06
+Microseconds per read:
+Count: 24998440 Average: 34.2789  StdDev: 5504.66
+Key drop rate:  0.145631068 
+Uptime(secs): 3838.3 total, 55.5 interval
+
+
+with multi-class model(debug mode)
+wamp : 2.6
+blob total size: 11.6 GB
+gc input blob: 20225822, gc output blobs: 5127970, gc dropped blobs: 15097852, gc invalid key ratio: 0.746
+Microseconds per write:
+Count: 25001560 Average: 161.3566  StdDev: 882.57
+Microseconds per read:
+Count: 24998440 Average: 115.1719  StdDev: 12958.56
+
 [Status: Ongoing]
 
-Maybe we can test latest districution of ycsb
+
+Maybe we can test latest distribution of ycsb
+[Todo]
+Update existing model instead of training new model each time.
+[Status: Ongoing]
+
+[Todo]
+Remove compaction infer data file to get faster write?
+[Status: Not started]
+
+[Todo]
+Need to mention in paper that we use both update frequence and age information 
+for each keys.
+According to Midas paper.
+[Status: Not started]
+
+[Todo]
+https://github.com/Microsoft/LightGBM/issues/1157
+```
+[LightGBM] [Warning] No further splits with positive gain, best gain: -inf
+it means:
+
+1. the num_leaves is too large, you can set it to a smaller value
+2. the min_data is too large
+3. your data is hard to fit
+```
+[Status: Not started]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -128,7 +128,7 @@ class BlobFileBuilder {
   uint64_t min_seq_;
   uint64_t max_seq_;
 
-  uint64_t cur_blob_file_num_;
+  uint64_t cur_blob_file_num_ = 0;
 };
 
 }  // namespace ROCKSDB_NAMESPACE

@@ -23,6 +23,8 @@
 namespace ROCKSDB_NAMESPACE {
 
 class Arena;
+
+extern const std::vector<uint64_t> LifetimeSequence; 
 class TrainingData{
 public:
   TrainingData(Arena* arena, size_t num_features, 

@@ -36,7 +36,7 @@ const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 };
 
 #define M 1000000
-const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M, 16 * M, 32 * M };
+const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M, 16 * M };
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
 //   {1, 10},
@@ -1451,7 +1451,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       if(fast_config_handle_ && past_distances_count > 0) {
 
         std::string inference_params = "num_threads=1 verbosity=0";
-        std::vector<double> out_result(1, 0.0);
+        std::vector<double> out_result(LifetimeSequence.size(), 0.0);
         int64_t out_len ;
         assert(data.size() <= num_features_);
         indptr[1] = data.size();
@@ -1480,16 +1480,25 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
                                   &out_len,
                                   out_result.data());
         assert(predict_res == 0);
-        double orig_value = std::expm1(out_result[0]);
-        auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
-        if(lower_bound_iter == std::end(LifetimeSequence)) {
-          maxIndex = LifetimeSequence.size() - 1;
-        } else {
-          maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+        // uint32_t max_idx = 0;
+        double max_val = out_result[0];
+        for(size_t res_idx = 1; res_idx < out_result.size(); res_idx++) {
+          if(out_result[res_idx] > max_val) {
+            max_val = out_result[res_idx];
+            maxIndex = res_idx;
+          }
         }
+        // double orig_value = std::expm1(out_result[0]);
+        // auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
+        // if(lower_bound_iter == std::end(LifetimeSequence)) {
+        //   maxIndex = LifetimeSequence.size() - 1;
+        // } else {
+        //   maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+        // }
+        //
         // maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
-        s = WriteTrainDataToFile(data,orig_value);
+        s = WriteTrainDataToFile(data,maxIndex);
         assert(s.ok());
       }
       lifetime_keys_count_[maxIndex] += 1;

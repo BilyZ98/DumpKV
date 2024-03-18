@@ -489,9 +489,11 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     blob_log_reader.ReadFooter(&footer);
 
     uint64_t cur_new_blob_file = blob_file_builders[next_lifetime_label]->GetCurBlobFileNum();
-    auto res = blob_file_map_.emplace(blob_file_num, cur_new_blob_file);
-    if(!res.second) {
-      assert(false);
+    if(valid_key_num > 0) {
+      auto res = blob_file_map_.emplace(blob_file_num, cur_new_blob_file);
+      if(!res.second) {
+        assert(false);
+      }
     }
     s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded() ;
     //
@@ -588,9 +590,13 @@ Status GarbageCollectionJob::InstallGarbageCollectionResults(const MutableCFOpti
   for (const auto& blob : *gc_output_.blob_file_additions()) {
     edit->AddBlobFile(blob);
   }
-  assert(!blob_file_map_.empty());
+  // assert(!blob_file_map_.empty());
   edit->AddBlobFileMap(&blob_file_map_);
-  assert(!blob_offset_map_.empty());
+  // assert(!blob_offset_map_.empty());
+  if(!blob_file_map_.empty()) {
+    assert(!blob_offset_map_.empty());
+  }
+
   edit->AddBlobOffsetMap(&blob_offset_map_);
 
   return versions_->LogAndApply(gc_->column_family_data(), 

@@ -38,7 +38,14 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
     counter++;
   }
   assert(data.size() <= num_features_);
-  labels_.push_back(log1p(label));
+  uint64_t label_uint64_t = static_cast<uint64_t>(label);
+  const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
+  uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
+  if(lifetime_index == LifetimeSequence.size()) {
+    lifetime_index = LifetimeSequence.size() - 1;
+  }
+  // labels_.push_back(log1p(label));
+  labels_.push_back(lifetime_index);
   indptr_.push_back(counter);
   return Status::OK();
 }
@@ -223,9 +230,12 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     }
   }
 
+  size_t num_class = stoi(training_params.at("num_class"));
   int64_t len;
   // std::vector<double> result(indptr_.size() - 1);
-  result_.resize(indptr_.size() - 1);
+  uint64_t result_size = (indptr_.size()-1) * num_class;
+  // result_.resize(indptr_.size() - 1);
+  result_.resize(result_size);
   res = LGBM_BoosterPredictForCSR(new_model,
                             static_cast<void *>(indptr_.data()),
                             C_API_DTYPE_INT32,
@@ -243,6 +253,20 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                             result_.data());
 
   assert(res == 0);
+  for(size_t i = 0; i < result_.size(); i+=num_class) {
+    int32_t max_idx=0;
+    for(size_t k = 0; k < num_class; ++k) {
+      if(result_[i+k] > result_[i+max_idx]) {
+        max_idx = k;
+      }
+    }
+    if(max_idx == indptr_[i/num_class]) {
+      res_long_count_++;
+    } else {
+      res_short_count_++;
+    }
+
+  }
   // for(size_t i = 0; i < result.size(); ++i) {
   //   if(result[i] > 0.5) {
   //     res_long_count_++;

@@ -1,0 +1,10 @@
+total_size: 11G
+total_size_with_trace: 11G
+total_size: 13G
+total_size_with_trace: 13G
+total_size: 16G
+total_size_with_trace: 16G
+total_size: 1.2G
+total_size_with_trace: 1.2G
+total_size: 16G
+total_size_with_trace: 16G

@@ -983,7 +983,9 @@ void DBImpl::InitTrainingParams() {
     training_params_ = {
             //don't use alias here. C api may not recongize
             {"boosting",         "gbdt"},
-            {"objective",        "regression"},
+            {"objective",        "multiclass"},
+            {"metric",           "multi_logloss"},
+            {"num_class",        std::to_string(LifetimeSequence.size()).c_str()}, 
             {"num_iterations",   "32"},
             {"num_leaves",       "32"},
             {"num_threads",      "4"},
