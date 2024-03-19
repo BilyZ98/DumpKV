@@ -11852,6 +11852,9 @@ mlsm_scripts/mixgraph/generate_features.py
 Model is not working after call BoosterMerge. I don't know why
 Maybe I wrongly understand the BoosterMerge semantics.
 
+It might be because of that the first model always gives zero prediction 
+which affects the overall  model prediction.
+
 [Status: Ongoing]
 
 [Todo]
@@ -11873,6 +11876,7 @@ Why do we need to get lifetime distribution ?
 I want to put keys with zero writes or one writes to a good default lifetime bucket
 so that their invalidated time is close to this default lifetime bucket time.
 [Status: Not started]
+
 [Todo]
 Adaptive lifetime bucket creation. 
 Search paper.
@@ -11890,6 +11894,13 @@ it means:
 ```
 [Status: Not started]
 
+[Todo]
+Add prediction to second time write of keys.
+lrb does this as well.
+So let's try. 
+
+Add keys with 2 writes to training sample.
+[Status: Not started]
 
 [Todo]
 Figure out why there is no other lifetime bucket index prediction geven by 
@@ -11926,10 +11937,25 @@ Steps to take:
 2. Add model prediction numeric value to training and infer log.
 3. Add default index count and model prediction count to log.
 
+Seems that I found that bug.
+It's because of default predicted result value comparison.
+My code does not set predicted value to 0 if possbile.
+
+Print confusion matrix to get more detail prediction performance in training  . 
 [Status: Ongoing]
 
 Lightgbm python code example for multi class classification.
 https://www.geeksforgeeks.org/multiclass-classification-using-lightgbm/
+
+
+[Todo]
+Pay more attention to minority labelled keys.
+[Status: Not started]
+
+Learn more about shared_ptr creation and deletion in multiple thread.s
+https://stackoverflow.com/questions/14482830/stdshared-ptr-thread-safety
+It's not safe to update shared_ptr in multiple threads.
+
 
 
 

@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -54,6 +55,9 @@ Status AddTrainingSample(const std::vector<double>& data, const double& label ) 
   uint64_t GetNumTrainingSamples() const { return labels_.size(); } 
 
 private:
+  void printConfusionMatrix(const std::vector<int>& y_true, const std::vector<int>& y_pred,
+                            int num_classes, std::stringstream& ss);
+
   Arena* arena_;
   std::vector<float> labels_;
   std::vector<int32_t> indptr_;

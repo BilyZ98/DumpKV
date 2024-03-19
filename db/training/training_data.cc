@@ -385,6 +385,23 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
 
 
 }
+void TrainingData::printConfusionMatrix(const std::vector<int>& y_true, const std::vector<int>& y_pred, 
+                                        int num_class, std::stringstream& ss) {
+    std::map<std::pair<int, int>, int> confusionMatrix;
+
+    for (size_t i = 0; i < y_true.size(); i++) {
+        confusionMatrix[std::make_pair(y_true[i], y_pred[i])]++;
+    }
+
+    // std::cout << "Confusion Matrix: \n";
+    for (int i = 0; i < num_class; i++) {
+        for (int j = 0; j < num_class; j++) {
+            ss << confusionMatrix[std::make_pair(i, j)] << "\t";
+        }
+        ss << "\n";
+    }
+}
+
 
 Status TrainingData::LogKeyRatioForMultiClass(const ImmutableDBOptions& ioptions, uint64_t num_class) {
   std::vector<int> label_count(num_class, 0);
@@ -396,16 +413,39 @@ Status TrainingData::LogKeyRatioForMultiClass(const ImmutableDBOptions& ioptions
   for(size_t i = 0; i < label_count.size(); ++i) {
     result_str += std::to_string(i) + ":" + std::to_string(label_count[i]) + " ";
   }
-  std::string predicted_label_str;
-  for(size_t i = 0; i < predicted_labes_.size(); ++i) {
-    predicted_label_str += std::to_string(predicted_labes_[i]) + " ";
+
+  std::vector<int> predicted_label_count(num_class, 0);
+  for(const auto &label: predicted_labes_) {
+    int label_int = static_cast<int>(label);
+    predicted_label_count[label_int]++;
   }
+  std::string predicted_result_str;
+  for(size_t i = 0; i < predicted_label_count.size(); ++i) {
+    predicted_result_str += std::to_string(i) + ":" + std::to_string(predicted_label_count[i]) + " ";
+  }
+
+  std::string confusion_matrix_str;
+  std::stringstream ss;
+  std::vector<int> labels_int(labels_.size());
+  for(size_t i = 0; i < labels_.size(); ++i) {
+    labels_int[i] = static_cast<int>(labels_[i]);
+  }
+  std::vector<int> predicted_labes_int(predicted_labes_.size());
+  for(size_t i = 0; i < predicted_labes_.size(); ++i) {
+    predicted_labes_int[i] = static_cast<int>(predicted_labes_[i]);
+  }
+
+  printConfusionMatrix(labels_int, predicted_labes_int, num_class, ss);
+
   ROCKS_LOG_INFO(
           ioptions.info_log,
           "Train data label %s"
           " res_short_count: %lu, res_long_count: %lu"
-          " predicted_labels: %s",
-          result_str.c_str(), res_short_count_, res_long_count_, predicted_label_str.c_str());
+          " predicted label %s",
+          result_str.c_str(), res_short_count_, res_long_count_,
+          predicted_result_str.c_str());
+
+  ROCKS_LOG_INFO(ioptions.info_log, "Confusion Matrix: \n%s", ss.str().c_str());
   
    return Status::OK();
 

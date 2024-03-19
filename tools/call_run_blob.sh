@@ -41,8 +41,8 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
-ycsb_a_run_path=/mnt/nvme1n1/zt/YCSB-C/data/workloada-load-10000000-50000000.log_run.formated
+db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
@@ -64,7 +64,9 @@ function run_with_gc_dbbench {
 
 
   lifetime_idx_range=$(seq 0 1 4)
+  # lifetime_idx_range=(1 3)
   for lifetime_idx in $lifetime_idx_range ; do
+  # for lifetime_idx in "${lifetime_idx_range[@]}" ; do
   # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
     force_gc_threshold=0.8
 

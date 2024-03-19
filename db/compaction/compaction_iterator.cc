@@ -95,6 +95,12 @@ CompactionIterator::CompactionIterator(
   for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
     lifetime_keys_count_[i] = 0;
   }
+  if(booster_handle_){
+    ROCKS_LOG_INFO(info_log_, "Model is available");
+  } else {
+    ROCKS_LOG_INFO(info_log_, "Model is not available");
+  }
+
   const EnvOptions soptions;
   std::string infer_data_file_path = version_set_->GetDBName() + "/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
   Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
@@ -1449,11 +1455,6 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         }
       }
 
-      if(booster_handle_){
-        ROCKS_LOG_INFO(info_log_, "Model is available");
-      } else {
-        ROCKS_LOG_INFO(info_log_, "Model is not available");
-      }
       if(booster_handle_ && past_distances_count > 0) {
 
         std::string inference_params = "num_threads=1 verbosity=0";
@@ -1487,8 +1488,9 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
                                   out_result.data());
         assert(predict_res == 0);
         // uint32_t max_idx = 0;
-        double max_val = out_result[0];
-        for(size_t res_idx = 1; res_idx < out_result.size(); res_idx++) {
+        double max_val = 0.0;
+        for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
+          data.emplace_back(out_result[res_idx]);
           if(out_result[res_idx] > max_val) {
             max_val = out_result[res_idx];
             maxIndex = res_idx;
