@@ -1380,7 +1380,7 @@ DEFINE_int64(stats_interval_seconds, 0,
              "Report stats every N seconds. This overrides stats_interval when"
              " both are > 0.");
 
-DEFINE_uint64(db_stats_interval_seconds, 1,
+DEFINE_uint64(db_stats_interval_seconds, 600,
               "Report DB stats every N seconds. This overrides stats_interval "
               "when both are > 0.");
 

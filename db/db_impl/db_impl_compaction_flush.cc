@@ -269,7 +269,9 @@ Status DBImpl::FlushMemTableToOutputFile(
     flush_job.SetCompactionTracer(compaction_tracer_);
     // flush_job.SetBoosterHandle(this->lightgbm_handle_);
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
-    flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
+    auto local_booster = atomic_load(&lightgbm_handle_);
+    auto local_fastConfig = atomic_load(&lightgbm_fastConfig_);
+    flush_job.SetModelAndData(local_booster, local_fastConfig, &features_);
     flush_job.SetKeyMetas(&key_metas_, &key_meta_mutex_);
     flush_job.SetDBImpl(this);
     // {
@@ -3065,7 +3067,15 @@ void DBImpl::BackgroundCallDataCollection() {
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
-
+      uint64_t num_class = std::stoi(training_params_["num_class"]);
+      training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
+      training_data_->WriteTrainingDataForMultiClass(dbname_ + "/train_data.txt" , env_, num_class);
+      // if(lightgbm_handle_ != nullptr) {
+      //   int res = LGBM_BoosterMerge(*new_model, *lightgbm_handle_);
+      //   if(res != 0) {
+      //     assert(false);
+      //   }
+      // }
       training_data_->ClearTrainingData();
       FastConfigHandle *new_config = new FastConfigHandle();
 
@@ -3080,8 +3090,11 @@ void DBImpl::BackgroundCallDataCollection() {
 
       std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
       std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
-      lightgbm_handle_ = new_model_ptr;
-      lightgbm_fastConfig_ = new_config_ptr;
+
+      std::atomic_store(&lightgbm_handle_, new_model_ptr);
+      std::atomic_store(&lightgbm_fastConfig_, new_config_ptr);
+      // lightgbm_handle_ = new_model_ptr;
+      // lightgbm_fastConfig_ = new_config_ptr;
 
       ROCKS_LOG_INFO(
               immutable_db_options_.info_log,

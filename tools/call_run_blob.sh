@@ -8,8 +8,10 @@ function call_run_blob() {
   enable_blob_file=${5:1}
   enable_blob_gc=${6:-1}
   age_cutoff=${7:-1.0}
-  compaction_trace_file=${8:-""}
-  op_trace_file=${9:-""}
+  # compaction_trace_file=${8:-""}
+  compaction_trace_file=$with_gc_compaction_trace_file
+  # op_trace_file=${9:-""}
+  op_trace_file=$with_gc_op_trace_file
 
   local write_buffer_size=$((100 * 1024 * 1024))
   echo "default_lifetime_idx: $default_lifetime_idx"
@@ -39,8 +41,8 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
-ycsb_a_run_path=/mnt/nvme1n1/zt/YCSB-C/data/workloaduniform-load-10000000-50000000.log_run.formated
+db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
@@ -61,8 +63,10 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=$(seq 3 1 3)
+  lifetime_idx_range=$(seq 0 1 4)
+  # lifetime_idx_range=(1 3)
   for lifetime_idx in $lifetime_idx_range ; do
+  # for lifetime_idx in "${lifetime_idx_range[@]}" ; do
   # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
     force_gc_threshold=0.8
 

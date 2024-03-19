@@ -38,7 +38,14 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
     counter++;
   }
   assert(data.size() <= num_features_);
-  labels_.push_back(log1p(label));
+  uint64_t label_uint64_t = static_cast<uint64_t>(label);
+  const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
+  uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
+  if(lifetime_index == LifetimeSequence.size()) {
+    lifetime_index = LifetimeSequence.size() - 1;
+  }
+  // labels_.push_back(log1p(label));
+  labels_.push_back(lifetime_index);
   indptr_.push_back(counter);
   return Status::OK();
 }
@@ -181,7 +188,6 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 
   // Prepare parameters for LGBM_DatasetCreateFromCSR
   // if (booster) LGBM_BoosterFree(booster);
-  BoosterHandle new_model;
   // create training dataset
   DatasetHandle trainData;
   res = LGBM_DatasetCreateFromCSR(
@@ -206,7 +212,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   assert(res == 0);
 
   // init booster
-  res = LGBM_BoosterCreate(trainData, params, &new_model);
+  res = LGBM_BoosterCreate(trainData, params, new_model_ptr);
   if (res != 0) {
     assert(false);
   }
@@ -214,7 +220,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
   // train
   for (int i = 0; i < stoi(training_params.at("num_iterations")); i++) {
     int isFinished;
-    res = LGBM_BoosterUpdateOneIter(new_model, &isFinished);
+    res = LGBM_BoosterUpdateOneIter(*new_model_ptr, &isFinished);
     if(res != 0) {
       assert(false);
       return Status::Incomplete("LGBM_BoosterUpdateOneIter failed");
@@ -224,10 +230,14 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     }
   }
 
+  size_t num_class = stoi(training_params.at("num_class"));
   int64_t len;
   // std::vector<double> result(indptr_.size() - 1);
-  result_.resize(indptr_.size() - 1);
-  res = LGBM_BoosterPredictForCSR(new_model,
+  uint64_t result_size = (indptr_.size()-1) * num_class;
+  predicted_labes_.resize(indptr_.size() - 1);
+  // result_.resize(indptr_.size() - 1);
+  result_.resize(result_size);
+  res = LGBM_BoosterPredictForCSR(*new_model_ptr,
                             static_cast<void *>(indptr_.data()),
                             C_API_DTYPE_INT32,
                             indices_.data(),
@@ -244,6 +254,25 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                             result_.data());
 
   assert(res == 0);
+  if(num_class > 2) {
+    size_t label_idx = 0;
+    for(size_t i = 0; i < result_.size(); i+=num_class, label_idx++) {
+      int32_t max_idx=0;
+      for(size_t k = 0; k < num_class; ++k) {
+        if(result_[i+k] > result_[i+max_idx]) {
+          max_idx = k;
+        }
+      }
+      predicted_labes_[label_idx] = max_idx;
+      if(predicted_labes_[label_idx] == labels_[label_idx]) {
+        res_long_count_++;
+      } else {
+        res_short_count_++;
+      }
+
+    }
+
+  }
   // for(size_t i = 0; i < result.size(); ++i) {
   //   if(result[i] > 0.5) {
   //     res_long_count_++;
@@ -265,7 +294,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     assert(false);
     return Status::Incomplete("LGBM_DatasetFree failed");
   }
-  *new_model_ptr = new_model;
+  // *new_model_ptr = new_model;
   return Status::OK();
 
 }
@@ -281,6 +310,49 @@ void TrainingData::ClearTrainingData() {
   res_long_count_ = 0;
 }
 
+Status TrainingData::WriteTrainingDataForMultiClass(const std::string& file_path, Env* env, uint64_t num_class) {
+
+  std::unique_ptr<WritableFile> file;
+  const EnvOptions soptions;
+  Status s = env->NewWritableFile(file_path, &file, soptions);
+  if (!s.ok()) {
+    return s;
+  }
+  // write csr format data to file
+  for (size_t i = 0; i < indptr_.size()-1; ++i) {
+    uint64_t cur_pos = indptr_[i];
+    uint64_t next_pos = indptr_[i+1];
+    for (uint64_t j = cur_pos; j < next_pos; ++j) {
+      
+
+      std::string data_with_sep =  std::to_string(data_[j]) + " ";
+      s = file->Append(data_with_sep);
+      if (!s.ok()) {
+        return s;
+      }
+    }
+
+    for(size_t k = 0; k < num_class; ++k) {
+      size_t result_idx = i*num_class + k;
+      std::string predict_result_str =   std::to_string(result_[result_idx])  + " ";
+      s = file->Append(predict_result_str);
+      if (!s.ok()) {
+        return s;
+      }
+    }
+
+    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(predicted_labes_[i]) + "\n";
+    s = file->Append(label_str);
+    if (!s.ok()) {
+      return s;
+    }
+
+  }
+  file->Close();
+  return Status::OK();
+
+
+}
 Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
   std::unique_ptr<WritableFile> file;
   const EnvOptions soptions;
@@ -314,7 +386,71 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
 
 
 }
+void TrainingData::printConfusionMatrix(const std::vector<int>& y_true, const std::vector<int>& y_pred, 
+                                        int num_class, std::stringstream& ss) {
+    std::map<std::pair<int, int>, int> confusionMatrix;
 
+    for (size_t i = 0; i < y_true.size(); i++) {
+        confusionMatrix[std::make_pair(y_true[i], y_pred[i])]++;
+    }
+
+    // std::cout << "Confusion Matrix: \n";
+    for (int i = 0; i < num_class; i++) {
+        for (int j = 0; j < num_class; j++) {
+            ss << confusionMatrix[std::make_pair(i, j)] << "\t";
+        }
+        ss << "\n";
+    }
+}
+
+
+Status TrainingData::LogKeyRatioForMultiClass(const ImmutableDBOptions& ioptions, uint64_t num_class) {
+  std::vector<int> label_count(num_class, 0);
+  for(const auto &label: labels_) {
+    int label_int = static_cast<int>(label);
+    label_count[label_int]++;
+  }
+  std::string result_str;
+  for(size_t i = 0; i < label_count.size(); ++i) {
+    result_str += std::to_string(i) + ":" + std::to_string(label_count[i]) + " ";
+  }
+
+  std::vector<int> predicted_label_count(num_class, 0);
+  for(const auto &label: predicted_labes_) {
+    int label_int = static_cast<int>(label);
+    predicted_label_count[label_int]++;
+  }
+  std::string predicted_result_str;
+  for(size_t i = 0; i < predicted_label_count.size(); ++i) {
+    predicted_result_str += std::to_string(i) + ":" + std::to_string(predicted_label_count[i]) + " ";
+  }
+
+  std::string confusion_matrix_str;
+  std::stringstream ss;
+  std::vector<int> labels_int(labels_.size());
+  for(size_t i = 0; i < labels_.size(); ++i) {
+    labels_int[i] = static_cast<int>(labels_[i]);
+  }
+  std::vector<int> predicted_labes_int(predicted_labes_.size());
+  for(size_t i = 0; i < predicted_labes_.size(); ++i) {
+    predicted_labes_int[i] = static_cast<int>(predicted_labes_[i]);
+  }
+
+  printConfusionMatrix(labels_int, predicted_labes_int, num_class, ss);
+
+  ROCKS_LOG_INFO(
+          ioptions.info_log,
+          "Train data label %s"
+          " res_short_count: %lu, res_long_count: %lu"
+          " predicted label %s",
+          result_str.c_str(), res_short_count_, res_long_count_,
+          predicted_result_str.c_str());
+
+  ROCKS_LOG_INFO(ioptions.info_log, "Confusion Matrix: \n%s", ss.str().c_str());
+  
+   return Status::OK();
+
+}
 Status TrainingData::LogKeyRatio(const ImmutableDBOptions& ioptions) {
   uint64_t short_count = 0;  
   uint64_t long_count = 0 ;

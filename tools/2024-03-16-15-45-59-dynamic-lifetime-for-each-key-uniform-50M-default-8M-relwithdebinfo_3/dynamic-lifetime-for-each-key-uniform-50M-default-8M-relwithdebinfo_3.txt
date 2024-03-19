@@ -1,0 +1,3 @@
+default_lifetime_idx: 3
+ycsb_a_run_path: /mnt/nvme1n1/zt/YCSB-C/data/workloaduniform-load-10000000-50000000.log_run.formated
+DB_DIR is not defined
