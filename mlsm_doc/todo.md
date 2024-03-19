@@ -11873,7 +11873,6 @@ Why do we need to get lifetime distribution ?
 I want to put keys with zero writes or one writes to a good default lifetime bucket
 so that their invalidated time is close to this default lifetime bucket time.
 [Status: Not started]
-
 [Todo]
 Adaptive lifetime bucket creation. 
 Search paper.
@@ -11892,11 +11891,45 @@ it means:
 [Status: Not started]
 
 
+[Todo]
+Figure out why there is no other lifetime bucket index prediction geven by 
+model even the model is already trained.
+
+Reduce short lifetime bucket
+Default 0 -> 4M
+no model:
+wamp: 239.8 / 75.148 = 3.19
+total size: 10.5 GB
+gc input blob: 71973523, gc output blobs: 31137071, gc dropped blobs: 40836452, gc invalid key ratio: 0.567
+
+with model:
+wamp: 237.5 / 75 = 3.1666
+total size: 11.2 GB
+gc input blob: 69644186, gc output blobs: 29469641, gc dropped blobs: 40174545, gc invalid key ratio: 0.577
 
 
 
 
+Default 2 -> 16M
+no model:
+wamp : 205.6/75.148= 2.73593442
+total size: 20.7 GB
+gc input blob: 34828472, gc output blobs: 2475138, gc dropped blobs: 32353334, gc invalid key ratio: 0.929
 
+with model:
+wamp:  205.2 / 75 = 2.736 
+total size: 20.6 GB
+gc input blob: 34981003, gc output blobs: 2625372, gc dropped blobs: 32355631, gc invalid key ratio: 0.925
+Why is there so little gc input ?
+Steps to take:
+1. add model is available info in log
+2. Add model prediction numeric value to training and infer log.
+3. Add default index count and model prediction count to log.
+
+[Status: Ongoing]
+
+Lightgbm python code example for multi class classification.
+https://www.geeksforgeeks.org/multiclass-classification-using-lightgbm/
 
 
 

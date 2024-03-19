@@ -1449,7 +1449,12 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         }
       }
 
-      if(fast_config_handle_ && past_distances_count > 0) {
+      if(booster_handle_){
+        ROCKS_LOG_INFO(info_log_, "Model is available");
+      } else {
+        ROCKS_LOG_INFO(info_log_, "Model is not available");
+      }
+      if(booster_handle_ && past_distances_count > 0) {
 
         std::string inference_params = "num_threads=1 verbosity=0";
         std::vector<double> out_result(LifetimeSequence.size(), 0.0);

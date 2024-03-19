@@ -3065,6 +3065,9 @@ void DBImpl::BackgroundCallDataCollection() {
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
+      uint64_t num_class = std::stoi(training_params_["num_class"]);
+      training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
+      training_data_->WriteTrainingDataForMultiClass(dbname_ + "/train_data.txt" , env_, num_class);
       // if(lightgbm_handle_ != nullptr) {
       //   int res = LGBM_BoosterMerge(*new_model, *lightgbm_handle_);
       //   if(res != 0) {
