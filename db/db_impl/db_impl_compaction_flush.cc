@@ -558,6 +558,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
            static_cast<long unsigned int>(num_cfs));
     // TODO (yanqin): parallelize jobs with threads.
     for (int i = 1; i != num_cfs; ++i) {
+      assert(false);
 
       jobs[i]->SetCompactionTracer(compaction_tracer_);
       // jobs[i]->SetBoosterHandle(lightgbm_handle_);
@@ -3093,8 +3094,10 @@ void DBImpl::BackgroundCallDataCollection() {
 
       {
         std::unique_lock<std::shared_mutex> lock(booster_mutex_ );
-        std::swap(lightgbm_handle_, new_model_ptr);
-        std::swap(lightgbm_fastConfig_, new_config_ptr);
+        lightgbm_handle_ = new_model_ptr;
+        lightgbm_fastConfig_ = new_config_ptr;
+        // std::swap(lightgbm_handle_, new_model_ptr);
+        // std::swap(lightgbm_fastConfig_, new_config_ptr);
         // std::atomic_store(&lightgbm_handle_, new_model_ptr);
         // std::atomic_store(&lightgbm_fastConfig_, new_config_ptr);
 

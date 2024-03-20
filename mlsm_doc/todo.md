@@ -11966,7 +11966,13 @@ avoid invalid pointer accessing .
 
 Add read write mutext to protect booster that shared_ptr poitns to 
 when doing booster update..
+
+At the start of the flush job there is no model.
+But after  a while there is model why is that ?
+Is this because of swap? So I think I need to use lock to protect model call as well.
+Remove swap and change to use assign.
 [Status: Ongoing]
+
 
 [Todo]
 Pay more attention to minority labelled keys.

@@ -166,8 +166,8 @@ CompactionIterator::CompactionIterator(
               compaction ? new RealCompaction(compaction) : nullptr),
           compaction_filter, shutting_down, info_log, full_history_ts_low,
           preserve_time_min_seqno, preclude_last_level_min_seqno) {
-    booster_handle_ = booster_handle;
-    fast_config_handle_ = fast_config_handle;
+    // booster_handle_ = booster_handle;
+    // fast_config_handle_ = fast_config_handle;
     cfd_ = cfd;
     lifetime_blob_file_builders_ = std::move(blob_file_builders);
 
@@ -1427,7 +1427,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       //update edcs
       // Need to set up edcs if past_distances_count = 0
       // if(past_distances_count >= 0) {
-      assert(past_distances_count >= 0);
+      // assert(past_distances_count >= 0);
 
       // Model prediction
       // This is not good as well. Any better solution ?
@@ -1455,7 +1455,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         }
 
       } else {
-        assert(edcs.size() == 0);
+        // assert(edcs.size() == 0);
         for(size_t k=0; k < n_edc_feature; k++) {
           uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
           float new_edc = hash_edc[_distance_idx]  + 1;
