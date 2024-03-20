@@ -1364,6 +1364,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       if(!ok) {
         assert(false);
       }
+      ParsedInternalKey past_key;
+      s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
+      past_seq = past_key.sequence;
+      distance = ikey().sequence - past_seq;
+      assert(distance > 0);
+
+
       std::vector<double> data_to_train;
       std::vector<int32_t> indptr(2);
       indptr[0] = 0;
@@ -1374,8 +1381,9 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       uint32_t this_past_distance = 0;
       uint8_t n_within = 0;
       uint32_t i = 0;
+      data.emplace_back(static_cast<double>(distance));
       assert(past_distances_count <= max_n_past_timestamps);
-      for(i=0; i < past_distances_count ; i++) {
+      for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
         uint64_t past_distance;
         ok = GetVarint64(&prev_value, &past_distance);
         past_distances.emplace_back(past_distance);
@@ -1407,34 +1415,36 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
           data_to_train.emplace_back(edc);
           assert(ok);
         }
-      }
-      //update edcs
-      ParsedInternalKey past_key;
-      s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
-      past_seq = past_key.sequence;
-      distance = ikey().sequence - past_seq;
-      assert(distance > 0);
-
-      // Need to set up edcs if past_distances_count = 0
-      if(past_distances_count > 0) {
-        // This is not good as well. Any better solution ?
-        double inverse_distance = 1.0 / double(edcs[0]);
-        // add training sample with inverse_distance probability
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(0, 1);
-        double prob = dis(gen);
-        if(prob < inverse_distance) {
-          data_to_train.emplace_back(static_cast<double>(distance));
-          s = db_->AddTrainingSample(data_to_train);
-          // s = db_->AddTrainingSample(past_distances,
-          //                        blob_size,
-          //                        n_within,
-          //                        edcs,
-          //                        distance);
-          assert(s.ok()); 
+      } else {
+        for(i=0; i < n_edc_feature; i++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+          float edc = hash_edc[_distance_idx]   ;
+          edcs.emplace_back(edc);
+          data_to_train.emplace_back(edc);
+          assert(ok);
         }
       }
+      //update edcs
+      // Need to set up edcs if past_distances_count = 0
+      // if(past_distances_count >= 0) {
+      assert(past_distances_count >= 0);
+
+      // Model prediction
+      // This is not good as well. Any better solution ?
+      double inverse_distance = 1.0 / double(edcs[0]);
+      // add training sample with inverse_distance probability
+      std::random_device rd;
+      std::mt19937 gen(rd());
+      std::uniform_real_distribution<> dis(0, 1);
+      double prob = dis(gen);
+      if(prob < inverse_distance) {
+        data_to_train.emplace_back(static_cast<double>(distance));
+        s = db_->AddTrainingSample(data_to_train);
+        assert(s.ok()); 
+      }
+
+
+
       if(past_distances_count > 0) {
         assert(edcs.size() == n_edc_feature);
         for(size_t k=0; k < n_edc_feature; k++) {
@@ -1449,13 +1459,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         for(size_t k=0; k < n_edc_feature; k++) {
           uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
           float new_edc = hash_edc[_distance_idx]  + 1;
-          edcs.emplace_back(new_edc);
+          edcs[k] = new_edc;
           indices.emplace_back(max_n_past_timestamps+2+k);
           data.emplace_back(new_edc);
         }
       }
 
-      if(booster_handle_ && past_distances_count > 0) {
+      if(booster_handle_ ) {
 
         std::string inference_params = "num_threads=1 verbosity=0";
         std::vector<double> out_result(LifetimeSequence.size(), 0.0);

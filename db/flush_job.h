@@ -136,8 +136,8 @@ class FlushJob {
   std::unique_ptr<FlushJobInfo> GetFlushJobInfo() const;
 
   std::shared_ptr<CompactionTracer> compaction_tracer_;
-  std::shared_ptr<BoosterHandle> booster_handle_;
-  std::shared_ptr<FastConfigHandle> fast_config_handle_;
+  std::shared_ptr<BoosterHandle> booster_handle_ = nullptr;
+  std::shared_ptr<FastConfigHandle> fast_config_handle_ = nullptr;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
   InternalIterator* internal_iter_ = nullptr;

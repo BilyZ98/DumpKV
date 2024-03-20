@@ -11894,13 +11894,7 @@ it means:
 ```
 [Status: Not started]
 
-[Todo]
-Add prediction to second time write of keys.
-lrb does this as well.
-So let's try. 
 
-Add keys with 2 writes to training sample.
-[Status: Not started]
 
 [Todo]
 Figure out why there is no other lifetime bucket index prediction geven by 
@@ -11942,19 +11936,54 @@ It's because of default predicted result value comparison.
 My code does not set predicted value to 0 if possbile.
 
 Print confusion matrix to get more detail prediction performance in training  . 
-[Status: Ongoing]
+
+Model tends to predict lifetime:1 to lifetime:0 according to log but it's only a 
+small proportion.
+[Status: Done]
 
 Lightgbm python code example for multi class classification.
 https://www.geeksforgeeks.org/multiclass-classification-using-lightgbm/
 
 
+Learn more about shared_ptr creation and deletion in multiple thread.s
+https://stackoverflow.com/questions/14482830/stdshared-ptr-thread-safety
+It's not safe to update shared_ptr in multiple threads.
+
+
+[Todo]
+Plot blob total size and wamp with different default lifetime bucket. 
+[Status: Not started]
+
+[Todo]
+Add prediction to second time write of keys.
+lrb does this as well.
+So let's try. 
+
+Add keys with 2 writes to training sample.
+
+Add default nullptr to booster_ in flush job to 
+avoid invalid pointer accessing .
+[Status: Ongoing]
+
 [Todo]
 Pay more attention to minority labelled keys.
 [Status: Not started]
 
-Learn more about shared_ptr creation and deletion in multiple thread.s
-https://stackoverflow.com/questions/14482830/stdshared-ptr-thread-safety
-It's not safe to update shared_ptr in multiple threads.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
