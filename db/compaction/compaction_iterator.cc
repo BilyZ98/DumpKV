@@ -292,10 +292,14 @@ void CompactionIterator::SeekToFirst() {
   PrepareOutput();
 }
 
+void CompactionIterator::SetBoosterMutex(std::shared_mutex* booster_mutex) {
+  booster_mutex_ = booster_mutex;
+}
 void CompactionIterator::SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle) {
   // booster_handle_ = booster_handle;
   // fast_config_handle_ = fast_config_handle;
 }
+
 
 
 void CompactionIterator::SetKeyMeta(const std::unordered_map<std::string, KeyMeta>* key_metas , std::mutex* key_meta_mutex) {
@@ -1382,13 +1386,14 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       uint8_t n_within = 0;
       uint32_t i = 0;
       data.emplace_back(static_cast<double>(distance));
+      indices.emplace_back(0);
       assert(past_distances_count <= max_n_past_timestamps);
       for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
         uint64_t past_distance;
         ok = GetVarint64(&prev_value, &past_distance);
         past_distances.emplace_back(past_distance);
         this_past_distance +=  past_distance;  
-        indices.emplace_back(i);
+        indices.emplace_back(i+1);
         data.emplace_back(static_cast<double>(past_distance));
         if (this_past_distance < memory_window) {
           ++n_within;
@@ -1466,6 +1471,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       }
 
       if(booster_handle_ ) {
+        assert(indices.size() == data.size());
 
         std::string inference_params = "num_threads=1 verbosity=0";
         std::vector<double> out_result(LifetimeSequence.size(), 0.0);
@@ -1481,22 +1487,30 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       //                                                          data.size(),
       //                                                          &out_len,
       //                                                          out_result.data());
-        int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-                                  static_cast<void *>(indptr.data()),
-                                  C_API_DTYPE_INT32,
-                                  indices.data(),
-                                  static_cast<void *>(data.data()),
-                                  C_API_DTYPE_FLOAT64,
-                                  2,
-                                  data.size(),
-                                  num_features_,  //remove future t
-                                  C_API_PREDICT_NORMAL,
-                                  0,
-                                  32,
-                                  inference_params.c_str(),
-                                  &out_len,
-                                  out_result.data());
-        assert(predict_res == 0);
+      int predict_res = 0;
+      {
+
+    // std::shared_lock<std::shared_mutex> lock(*booster_mutex_);
+       predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+                                static_cast<void *>(indptr.data()),
+                                C_API_DTYPE_INT32,
+                                indices.data(),
+                                static_cast<void *>(data.data()),
+                                C_API_DTYPE_FLOAT64,
+                                2,
+                                data.size(),
+                                num_features_,  //remove future t
+                                C_API_PREDICT_NORMAL,
+                                0,
+                                32,
+                                inference_params.c_str(),
+                                &out_len,
+                                out_result.data());
+
+      }
+        if(predict_res != 0) {
+          assert(false);
+        }
         // uint32_t max_idx = 0;
         double max_val = 0.0;
         for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {

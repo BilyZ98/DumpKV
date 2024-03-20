@@ -9,6 +9,7 @@
 
 #include "db/builder.h"
 
+#include <shared_mutex>
 #include <algorithm>
 #include <cstddef>
 #include <deque>
@@ -248,6 +249,7 @@ Status BuildTable(
     c_iter.SetCompactionTracer(tboptions.compaction_tracer);
     c_iter.SetFeatures(tboptions.features);
     c_iter.SetKeyMeta(tboptions.key_metas, tboptions.key_metas_mutex);
+    c_iter.SetBoosterMutex(tboptions.booster_mutex);
     c_iter.SetDBInternalIterator(tboptions.db_iter);
     c_iter.SetDBImpl(tboptions.db_impl);
     // c_iter.SetModel(tboptions.booster_handle);

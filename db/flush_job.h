@@ -9,6 +9,7 @@
 #pragma once
 
 #include <atomic>
+#include <shared_mutex>
 #include <deque>
 #include <limits>
 #include <list>
@@ -84,6 +85,7 @@ class FlushJob {
 
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) ;
   void SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features);
+  void SetModelAndMutex(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, std::shared_mutex* booster_mutex);
   void SetKeyMetas(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex);
   void SetInternalIterator(InternalIterator* iter);
   void SetBoosterHandleAndConfig(BoosterHandle handle, FastConfigHandle fast_config_handle) {}
@@ -138,6 +140,7 @@ class FlushJob {
   std::shared_ptr<CompactionTracer> compaction_tracer_;
   std::shared_ptr<BoosterHandle> booster_handle_ = nullptr;
   std::shared_ptr<FastConfigHandle> fast_config_handle_ = nullptr;
+  std::shared_mutex* booster_mutex_ = nullptr;
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
   const std::unordered_map<std::string, KeyMeta>* key_metas_ = nullptr;
   InternalIterator* internal_iter_ = nullptr;

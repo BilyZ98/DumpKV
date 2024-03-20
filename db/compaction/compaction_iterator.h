@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <shared_mutex>
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -296,6 +297,8 @@ CompactionIterator(
 
   void SetModelAndConfig(BoosterHandle booster_handle, FastConfigHandle fast_config_handle);
 
+  void SetBoosterMutex(std::shared_mutex* booster_mutex);
+
   void SetKeyMeta(const std::unordered_map<std::string, KeyMeta>* key_metas, std::mutex* key_meta_mutex );
 
   void SetMemTables(const autovector<MemTable*>* mems);
@@ -424,6 +427,7 @@ CompactionIterator(
   std::shared_ptr<CompactionTracer> compaction_tracer_;
 
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features_;
+  std::shared_mutex* booster_mutex_ = nullptr;
   std::shared_ptr<BoosterHandle> booster_handle_ =nullptr;
   std::shared_ptr<FastConfigHandle> fast_config_handle_ =nullptr;
   DBImpl* db_ = nullptr;

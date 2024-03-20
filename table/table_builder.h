@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 
+#include <shared_mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -157,6 +158,7 @@ struct TableBuilderOptions {
   const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features;
   const std::unordered_map<std::string, KeyMeta>* key_metas;  
   DBImpl* db_impl = nullptr;
+  std::shared_mutex* booster_mutex = nullptr;
   std::mutex* key_metas_mutex = nullptr;
   InternalIterator* db_iter = nullptr;
 

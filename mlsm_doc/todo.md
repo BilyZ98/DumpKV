@@ -11971,11 +11971,29 @@ At the start of the flush job there is no model.
 But after  a while there is model why is that ?
 Is this because of swap? So I think I need to use lock to protect model call as well.
 Remove swap and change to use assign.
+
+Turns out it's not shared_ptr issue. It's that I did not add index of first distance 
+to indices.
+Hope this can fix the problem.
+It gets really complicated when there are many data structures that 
+depends on each other.
+
 [Status: Ongoing]
 
 
 [Todo]
 Pay more attention to minority labelled keys.
+auc mu has class_weight parameters.
+I can try this.
+Anyway, I need to finish introduction and background asap.
+Background is not so important.
+What's important is introduction and method part.
+Really don't know if I can finish paper by that time.
+```
+metric:
+auc_mu
+multi_logloss
+```
 [Status: Not started]
 
 

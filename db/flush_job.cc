@@ -209,6 +209,14 @@ void FlushJob::PickMemTable() {
 void FlushJob::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer) {
   compaction_tracer_ = tracer;
 }
+
+void FlushJob::SetModelAndMutex(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, std::shared_mutex* booster_mutex) {
+  booster_handle_ = handle;
+  fast_config_handle_ = fast_config_handle;
+  booster_mutex_ = booster_mutex;
+
+
+}
 void FlushJob::SetModelAndData(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, const std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>>* features) {
   booster_handle_ = handle;
   fast_config_handle_ = fast_config_handle;
@@ -1016,6 +1024,7 @@ Status FlushJob::WriteLevel0Table() {
       tboptions.booster_handle = booster_handle_;
       tboptions.lifetime_bucket_num = db_options_.num_classification;
       tboptions.booster_fast_config_handle = fast_config_handle_;
+      tboptions.booster_mutex = booster_mutex_;
       tboptions.cfd = cfd_;
       tboptions.features = features_;
       tboptions.key_metas = key_metas_;

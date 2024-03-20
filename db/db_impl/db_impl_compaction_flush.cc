@@ -271,7 +271,8 @@ Status DBImpl::FlushMemTableToOutputFile(
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
     {
       std::shared_lock<std::shared_mutex> lock(booster_mutex_);
-      flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
+      flush_job.SetModelAndMutex(lightgbm_handle_, lightgbm_fastConfig_, &booster_mutex_);
+      // flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
     }
     flush_job.SetDBImpl(this);
     // {
