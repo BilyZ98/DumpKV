@@ -11963,6 +11963,9 @@ Add keys with 2 writes to training sample.
 
 Add default nullptr to booster_ in flush job to 
 avoid invalid pointer accessing .
+
+Add read write mutext to protect booster that shared_ptr poitns to 
+when doing booster update..
 [Status: Ongoing]
 
 [Todo]

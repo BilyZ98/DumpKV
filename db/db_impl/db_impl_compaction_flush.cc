@@ -269,10 +269,10 @@ Status DBImpl::FlushMemTableToOutputFile(
     flush_job.SetCompactionTracer(compaction_tracer_);
     // flush_job.SetBoosterHandle(this->lightgbm_handle_);
     // flush_job.SetBoosterHandleAndConfig(lightgbm_handle_, this->lightgbm_fastConfig_);
-    auto local_booster = atomic_load(&lightgbm_handle_);
-    auto local_fastConfig = atomic_load(&lightgbm_fastConfig_);
-    flush_job.SetModelAndData(local_booster, local_fastConfig, &features_);
-    flush_job.SetKeyMetas(&key_metas_, &key_meta_mutex_);
+    {
+      std::shared_lock<std::shared_mutex> lock(booster_mutex_);
+      flush_job.SetModelAndData(lightgbm_handle_, lightgbm_fastConfig_, &features_);
+    }
     flush_job.SetDBImpl(this);
     // {
     //   Arena arena;
@@ -3091,8 +3091,14 @@ void DBImpl::BackgroundCallDataCollection() {
       std::shared_ptr<BoosterHandle> new_model_ptr = std::shared_ptr<BoosterHandle>(new_model, booster_deleter);
       std::shared_ptr<FastConfigHandle> new_config_ptr = std::shared_ptr<FastConfigHandle>(new_config, booster_config_deleter);
 
-      std::atomic_store(&lightgbm_handle_, new_model_ptr);
-      std::atomic_store(&lightgbm_fastConfig_, new_config_ptr);
+      {
+        std::unique_lock<std::shared_mutex> lock(booster_mutex_ );
+        std::swap(lightgbm_handle_, new_model_ptr);
+        std::swap(lightgbm_fastConfig_, new_config_ptr);
+        // std::atomic_store(&lightgbm_handle_, new_model_ptr);
+        // std::atomic_store(&lightgbm_fastConfig_, new_config_ptr);
+
+      }
       // lightgbm_handle_ = new_model_ptr;
       // lightgbm_fastConfig_ = new_config_ptr;
 

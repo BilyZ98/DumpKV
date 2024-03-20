@@ -16,6 +16,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <shared_mutex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -1312,6 +1313,7 @@ class DBImpl : public DB {
 
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
+  std::shared_mutex booster_mutex_;
   std::shared_ptr<BoosterHandle> lightgbm_handle_ = nullptr;
   std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ = nullptr;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
