@@ -1431,21 +1431,22 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       }
       //update edcs
       // Need to set up edcs if past_distances_count = 0
-      // if(past_distances_count >= 0) {
-      // assert(past_distances_count >= 0);
+      if(past_distances_count > 0) {
+        // assert(past_distances_count >= 0);
 
-      // Model prediction
-      // This is not good as well. Any better solution ?
-      double inverse_distance = 1.0 / double(edcs[0]);
-      // add training sample with inverse_distance probability
-      std::random_device rd;
-      std::mt19937 gen(rd());
-      std::uniform_real_distribution<> dis(0, 1);
-      double prob = dis(gen);
-      if(prob < inverse_distance) {
-        data_to_train.emplace_back(static_cast<double>(distance));
-        s = db_->AddTrainingSample(data_to_train);
-        assert(s.ok()); 
+        // Model prediction
+        // This is not good as well. Any better solution ?
+        double inverse_distance = 1.0 / double(edcs[0]);
+        // add training sample with inverse_distance probability
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0, 1);
+        double prob = dis(gen);
+        if(prob < inverse_distance) {
+          data_to_train.emplace_back(static_cast<double>(distance));
+          s = db_->AddTrainingSample(data_to_train);
+          assert(s.ok()); 
+        }
       }
 
 

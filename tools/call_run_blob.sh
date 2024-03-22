@@ -63,7 +63,7 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=$(seq 0 1 4)
+  lifetime_idx_range=$(seq 0 1 3)
   # lifetime_idx_range=(1 3)
   for lifetime_idx in $lifetime_idx_range ; do
   # for lifetime_idx in "${lifetime_idx_range[@]}" ; do
