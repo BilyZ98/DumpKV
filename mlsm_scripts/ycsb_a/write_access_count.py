@@ -10,11 +10,12 @@ import multiprocessing as mp
 
 
 # data_path = "/mnt/nvme1n1/zt/ycsb-workload-gen/data/workloada-run-10000000-10000000.log.formated"
-data_path = "/mnt/nvme1n1/zt/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated"
+# data_path = "/mnt/nvme1n1/zt/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated"
+data_path= "/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated"
 # output_fig_name = "ycsb_a_write_cdf_10M_10M.png"
-output_fig_name = "ycsb_a_write_cdf_workloada_0.2_10M_100M.png"
+output_fig_name = "ycsb_a_write_cdf_workloada_0.99_10M_100M.png"
 # output_fig_95_name = "ycsb_a_write_cdf_zipfian_0.5__10M_10M_95.png"
-output_fig_95_name = "ycsb_a_write_cdf_workloada_0.2_10M_100M_95.png"
+output_fig_95_name = "ycsb_a_write_cdf_workloada_0.99_10M_100M_95.png"
 
 def GetWriteCDFForEachKey():
     # nothing to do
