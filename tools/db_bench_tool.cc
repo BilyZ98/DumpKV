@@ -6573,7 +6573,7 @@ class Benchmark {
     };
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);
-    int64_t val_size = 1000;
+    int64_t val_size = FLAGS_value_size; //1000;
     std::string query_type;
     std::cout << "datas.size(): " << datas.size() << std::endl;
     int i = 0;

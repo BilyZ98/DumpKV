@@ -103,7 +103,7 @@ CompactionIterator::CompactionIterator(
 
   const EnvOptions soptions;
   std::string infer_data_file_path = version_set_->GetDBName() + "/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
-  Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
+  // Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
   assert(s.ok());
 
   // is this ok?
@@ -1531,7 +1531,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
         //
         // maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
-        s = WriteTrainDataToFile(data,maxIndex);
+        // s = WriteTrainDataToFile(data,maxIndex);
         assert(s.ok());
       }
       lifetime_keys_count_[maxIndex] += 1;
