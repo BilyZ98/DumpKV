@@ -907,6 +907,9 @@ DEFINE_bool(optimize_filters_for_hits,
 DEFINE_bool(paranoid_checks, ROCKSDB_NAMESPACE::Options().paranoid_checks,
             "RocksDB will aggressively check consistency of the data.");
 
+DEFINE_bool(paranoid_file_checks, ROCKSDB_NAMESPACE::Options().paranoid_file_checks,
+            "RocksDB will aggressively check the data in the files.");
+
 DEFINE_bool(force_consistency_checks,
             ROCKSDB_NAMESPACE::Options().force_consistency_checks,
             "Runs consistency checks on the LSM every time a change is "
@@ -4600,6 +4603,7 @@ class Benchmark {
     options.optimize_filters_for_hits = FLAGS_optimize_filters_for_hits;
     options.paranoid_checks = FLAGS_paranoid_checks;
     options.force_consistency_checks = FLAGS_force_consistency_checks;
+    options.paranoid_file_checks = FLAGS_paranoid_file_checks;
     options.check_flush_compaction_key_order =
         FLAGS_check_flush_compaction_key_order;
     options.periodic_compaction_seconds = FLAGS_periodic_compaction_seconds;
@@ -6595,6 +6599,7 @@ class Benchmark {
       if (query_type == "READ") {
         // the Get query
         gets++;
+        continue;
 
         if (FLAGS_num_column_families > 1) {
           s = db_with_cfh->db->Get(read_options_,

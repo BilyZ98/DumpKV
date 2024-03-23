@@ -81,6 +81,7 @@ java/javadoc
 scan_build_report/
 t
 LOG
+tools/2024*
 
 db_logs/
 tp2/

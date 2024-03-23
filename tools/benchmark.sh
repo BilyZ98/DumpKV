@@ -259,6 +259,7 @@ use_shared_block_and_blob_cache=${USE_SHARED_BLOCK_AND_BLOB_CACHE:-1}
 blob_cache_size=${BLOB_CACHE_SIZE:-$(( 16 * $G ))}
 blob_cache_numshardbits=${BLOB_CACHE_NUMSHARDBITS:-6}
 prepopulate_blob_cache=${PREPOPULATE_BLOB_CACHE:-0}
+paranoid_file_checks=${PARANOID_FILE_CHECKS:-1}
 
 # This script still works back to RocksDB 6.0
 undef_params="\
@@ -388,7 +389,8 @@ fi
 params_w="$l0_config \
           --max_background_jobs=$max_background_jobs \
           --max_write_buffer_number=8 \
-          --value_theta=10000.0
+          --value_theta=10000.0 \
+          --paranoid_file_checks=$paranoid_file_checks \
           $const_params "
 
 params_bulkload="--max_background_jobs=$max_background_jobs \

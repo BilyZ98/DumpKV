@@ -26,6 +26,7 @@ function call_run_blob() {
    DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    VALUE_SIZE=$cur_value_size \
+   USE_BLOB_CACHE=0 \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -110,35 +111,10 @@ function run_with_gc_dbbench {
     # fi
     # cp $output_text $db_log_dir
     cp ${with_gc_dir}/LOG $db_log_dir
-    # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
-    # if [ ! -d $trace_analye_output_dir ]; then
-    #   mkdir -p $trace_analye_output_dir
-    # fi
-    # op_trace_cmd="$op_trace_analyzer_exe --trace_path=$with_gc_op_trace_file  --output_dir=$with_gc_dir --convert_to_human_readable_trace=true"
-    # echo "op_trace_cmd: ${op_trace_cmd}"
-    # eval $op_trace_cmd
-    # $compaction_trace_analyzer_exe  --compaction_trace_path=$with_gc_compaction_trace_file --compaction_output_dir=$with_gc_dir  
-    # op_human_trace="${with_gc_dir}/trace-human_readable_trace.txt"
-    # compaction_human_trace="${with_gc_dir}/compaction_human_readable_trace.txt" 
 
-    # # lifetime calculation
-    # cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
-    # echo " internal key lifetime python command: $cmd"
-    # # eval $cmd
-    # lifetime calculation
-    # cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
-    # echo " internal key lifetime python command: $cmd"
-    # eval $cmd
+    rm -f ${with_gc_dir}/*.sst ${with_gc_dir}/*.blob
 
-    # calculate space amplification
-    # space_amp_ouput_path="${with_gc_dir}/.txt"
-    # dir_space_path="${with_gc_dir}/dir_size.log"
-    # dir_space_fig_path="${with_gc_dir}/space_amp_chg.png"
-    # cmd="python3 $space_amp_script_path  $op_human_trace  $dir_space_path $dir_space_fig_path"
-    # echo "space amp change cmd is ${cmd}"
-    # eval $cmd
-
-    # calculate space amplification
+        # calculate space amplification
     # exclude file whose filename includes trace
     # total_size=$(ls $with_gc_dir | grep -v trace | awk '{system("du -b " $1)}' | awk '{sum += $1} END {print sum}')
     total_size_without_trace=`du -sh $with_gc_dir --exclude='*trace*'| awk '{print $1}'`
