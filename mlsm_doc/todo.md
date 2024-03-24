@@ -11997,10 +11997,87 @@ multi_logloss
 [Status: Ongoing]
 
 
+[Todo]
+Only one gc job is running at a time. Should we increase the number of gc job?
+[Status: Not started]
 
 
+[Todo]
+Consider delay model prediction to level0-level1 compaction
+
+Consider use this option to delay model prediction to level0-level1 compaction.
+```
+  int blob_file_starting_level = 0;
+```
+
+compaction_job.cc
+```cpp
+std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(db_options_.num_classification  );
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( db_options_.num_classification, nullptr);
+  bool enable_blob_file_builder = mutable_cf_options->enable_blob_files &&
+       sub_compact->compaction->output_level() >=
+           mutable_cf_options->blob_file_starting_level;
+    // mutable_cf_options.enable_blob_files &&
+ 
+```
+builder.cc
+```cpp
+Status BuildTable(
+    const std::string& dbname, VersionSet* versions,
+ 
+    const size_t lifetime_bucket_size = LifetimeSequence.size();
+    std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(lifetime_bucket_size);
+    std::vector<BlobFileBuilder*> blob_file_builders_raw( lifetime_bucket_size, nullptr);
+    bool enable_blob_file_builder = mutable_cf_options.enable_blob_files &&
+         tboptions.level_at_creation >=
+             mutable_cf_options.blob_file_starting_level && blob_file_additions;
 
 
+```
+
+```cpp
+if [ "$enable_blob_files" == "1" ]; then
+  target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
+else
+  target_file_size_base=${TARGET_FILE_SIZE_BASE:-$write_buffer_size}
+fi
+
+max_bytes_for_level_base=${MAX_BYTES_FOR_LEVEL_BASE:-$((8 * target_file_size_base))}
+
+  // Target file size for compaction.
+  // target_file_size_base is per-file size for level-1.
+  // Target file size for level L can be calculated by
+  // target_file_size_base * (target_file_size_multiplier ^ (L-1))
+  // For example, if target_file_size_base is 2MB and
+  // target_file_size_multiplier is 10, then each file on level-1 will
+  // be 2MB, and each file on level 2 will be 20MB,
+  // and each file on level-3 will be 200MB.
+  //
+  // Default: 64MB.
+  //
+  // Dynamically changeable through SetOptions() API
+  uint64_t target_file_size_base = 64 * 1048576;
+
+  // Control maximum total data size for a level.
+  // max_bytes_for_level_base is the max total for level-1.
+  // Maximum number of bytes for level L can be calculated as
+  // (max_bytes_for_level_base) * (max_bytes_for_level_multiplier ^ (L-1))
+  // For example, if max_bytes_for_level_base is 200MB, and if
+  // max_bytes_for_level_multiplier is 10, total data size for level-1
+  // will be 200MB, total file size for level-2 will be 2GB,
+  // and total file size for level-3 will be 20GB.
+  //
+  // Default: 256MB.
+  //
+  // Dynamically changeable through SetOptions() API
+  uint64_t max_bytes_for_level_base = 256 * 1048576;
+
+```
+
+Difference between target_file_size_base and max_bytes_for_level_base.
+
+Decide to set blob_file_starting_level to 1 and delay model prediction to l1
+[Status: Ongoing]
 
 
 
