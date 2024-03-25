@@ -766,7 +766,7 @@ bool Compaction::DoesInputReferenceBlobFiles() const {
   assert(storage_info);
 
   if (storage_info->GetBlobFiles().empty()) {
-    assert(false);
+    // assert(false);
     return false;
   }
 

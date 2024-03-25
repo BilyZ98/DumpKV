@@ -4032,13 +4032,30 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
                             compaction_job_stats, job_context->job_id);
     mutex_.Unlock();
     {
-      // Arena arena;
-      // auto cfd = c->column_family_data();
-      // SuperVersion* sv = cfd->GetSuperVersion();
-      // ReadOptions read_options;
-      // ScopedArenaIterator iter;
+      Arena arena;
+      auto cfd = c->column_family_data();
+      SuperVersion* sv = cfd->GetSuperVersion()->Ref();
+      ReadOptions read_options;
+      read_options.adaptive_readahead = true;
+      ScopedArenaIterator iter;
+      int start_level = 1;
+      iter.set(this->NewInternalIteratorStartingFromLeveli(read_options, 
+                                                           cfd,
+                                                           sv,
+                                                           &arena,
+                                                           kMaxSequenceNumber,
+                                                           false,
+                                                           start_level));
+
       // iter.set(this->NewInternalIterator(read_options, &arena, kMaxSequenceNumber));
       // compaction_job.SetGCIter(iter.get());
+      {
+      std::shared_lock<std::shared_mutex> lock(booster_mutex_);
+      compaction_job.SetModelAndMutex(lightgbm_handle_, lightgbm_fastConfig_, &booster_mutex_);
+      }
+      compaction_job.SetDBImpl(this);
+      compaction_job.SetInternalIterator(iter.get());
+
 
     
       TEST_SYNC_POINT_CALLBACK(

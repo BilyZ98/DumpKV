@@ -12077,6 +12077,15 @@ max_bytes_for_level_base=${MAX_BYTES_FOR_LEVEL_BASE:-$((8 * target_file_size_bas
 Difference between target_file_size_base and max_bytes_for_level_base.
 
 Decide to set blob_file_starting_level to 1 and delay model prediction to l1
+Seems that I don't need to do any source code modification other 
+than set blob_file_starting_level=1
+Oh, actually I need to do seom source code change.
+I need to pass db_iter to compaction iter in compaction job.
+Remove assert(false) in ExtractLargeValueIfNeededImpl()
+because now we can have large value in level0.
+
+Need to remove paranoid_file_checks to avoid put value in block cache.
+Hope this can give use better write performance.
 [Status: Ongoing]
 
 

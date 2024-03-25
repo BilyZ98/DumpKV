@@ -27,6 +27,7 @@ function call_run_blob() {
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    VALUE_SIZE=$cur_value_size \
    USE_BLOB_CACHE=0 \
+   BLOB_FILE_STARTING_LEVEL=1 \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \

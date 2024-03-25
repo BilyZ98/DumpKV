@@ -104,7 +104,7 @@ CompactionIterator::CompactionIterator(
   const EnvOptions soptions;
   std::string infer_data_file_path = version_set_->GetDBName() + "/compaction_infer_data.txt" + std::to_string(env->NowMicros()) ;
   // Status s= env_->NewWritableFile(infer_data_file_path, &train_data_file_, soptions);
-  assert(s.ok());
+  // assert(s.ok());
 
   // is this ok?
   lifetime_blob_file_builders_ = std::move(blob_file_builders);
@@ -150,6 +150,8 @@ CompactionIterator::CompactionIterator(
     std::shared_ptr<BoosterHandle> booster_handle,
     std::shared_ptr<FastConfigHandle> fast_config_handle,
     ColumnFamilyData* cfd,
+    uint64_t num_features,
+    uint64_t default_lifetime_idx,
     const Compaction* compaction, const CompactionFilter* compaction_filter,
     const std::atomic<bool>* shutting_down,
     const std::shared_ptr<Logger> info_log,
@@ -166,9 +168,13 @@ CompactionIterator::CompactionIterator(
               compaction ? new RealCompaction(compaction) : nullptr),
           compaction_filter, shutting_down, info_log, full_history_ts_low,
           preserve_time_min_seqno, preclude_last_level_min_seqno) {
-    // booster_handle_ = booster_handle;
-    // fast_config_handle_ = fast_config_handle;
+    booster_handle_ = booster_handle;
+    fast_config_handle_ = fast_config_handle;
     cfd_ = cfd;
+    default_lifetime_idx_ = default_lifetime_idx;
+    // version_set_ = version_set;
+    lifetime_keys_count_.resize(blob_file_builders.size());
+    num_features_ = num_features;
     lifetime_blob_file_builders_ = std::move(blob_file_builders);
 
     }
@@ -1328,8 +1334,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   // if (!blob_file_builder_) {
   //   return false;
   // }
-  if(lifetime_blob_file_builders_.size() == 0) {
-    assert(false);
+  if(lifetime_blob_file_builders_.size() == 0 || lifetime_blob_file_builders_[default_lifetime_idx_] == nullptr) {
     return false;
   }
 

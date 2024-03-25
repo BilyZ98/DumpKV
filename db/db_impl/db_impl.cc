@@ -1923,7 +1923,49 @@ InternalIterator* DBImpl::NewInternalIteratorStartingFromLevel0(
   return NewErrorInternalIterator<Slice>(s, arena);
 }
 
+InternalIterator* DBImpl::NewInternalIteratorStartingFromLeveli(
+    const ReadOptions& read_options, ColumnFamilyData* cfd,
+    SuperVersion* super_version, Arena* arena, SequenceNumber sequence,
+    bool allow_unprepared_value, int start_level, ArenaWrappedDBIter* db_iter) {
+  InternalIterator* internal_iter;
+  assert(arena != nullptr);
+  // Need to create internal iterator from the arena.
+  MergeIteratorBuilder merge_iter_builder(
+      &cfd->internal_comparator(), arena,
+      !read_options.total_order_seek &&
+          super_version->mutable_cf_options.prefix_extractor != nullptr,
+      read_options.iterate_upper_bound);
+  // Collect iterator for mutable memtable
+  // auto mem_iter = super_version->mem->NewIterator(read_options, arena);
+  Status s;
 
+  TEST_SYNC_POINT_CALLBACK("DBImpl::NewInternalIterator:StatusCallback", &s);
+  if (s.ok()) {
+    // Collect iterators for files in L0 - Ln
+    if (read_options.read_tier != kMemtableTier) {
+      super_version->current->AddIteratorsStartingFromLeveli(read_options, file_options_,
+                                           &merge_iter_builder,
+                                           allow_unprepared_value,
+                                           start_level);
+    }
+    internal_iter = merge_iter_builder.Finish(
+        read_options.ignore_range_deletions ? nullptr : db_iter);
+    if(internal_iter == nullptr) {
+      super_version->Unref();
+      return internal_iter;
+    }
+    SuperVersionHandle* cleanup = new SuperVersionHandle(
+        this, &mutex_, super_version,
+        read_options.background_purge_on_iterator_cleanup ||
+            immutable_db_options_.avoid_unnecessary_blocking_io);
+    internal_iter->RegisterCleanup(CleanupSuperVersionHandle, cleanup, nullptr);
+
+    return internal_iter;
+  } else {
+    CleanupSuperVersion(super_version);
+  }
+  return NewErrorInternalIterator<Slice>(s, arena);
+}
 
 InternalIterator* DBImpl::NewInternalIterator(
     const ReadOptions& read_options, ColumnFamilyData* cfd,

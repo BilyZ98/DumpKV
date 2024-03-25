@@ -807,6 +807,14 @@ class DBImpl : public DB {
                                         bool allow_unprepared_value,
                                         ArenaWrappedDBIter* db_iter = nullptr);
 
+  InternalIterator* NewInternalIteratorStartingFromLeveli(const ReadOptions& read_options,
+                                        ColumnFamilyData* cfd,
+                                        SuperVersion* super_version,
+                                        Arena* arena, SequenceNumber sequence,
+                                        bool allow_unprepared_value,
+                                        int start_level,
+                                        ArenaWrappedDBIter* db_iter = nullptr);
+
 
   LogsWithPrepTracker* logs_with_prep_tracker() {
     return &logs_with_prep_tracker_;

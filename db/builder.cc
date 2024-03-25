@@ -194,7 +194,7 @@ Status BuildTable(
 
     const size_t lifetime_bucket_size = LifetimeSequence.size();
     std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(lifetime_bucket_size);
-    std::vector<BlobFileBuilder*> blob_file_builders_raw( lifetime_bucket_size, nullptr);
+    std::vector<BlobFileBuilder*> blob_file_builders_raw(lifetime_bucket_size, nullptr);
     bool enable_blob_file_builder = mutable_cf_options.enable_blob_files &&
          tboptions.level_at_creation >=
              mutable_cf_options.blob_file_starting_level && blob_file_additions;

@@ -1892,6 +1892,18 @@ double VersionStorageInfo::GetEstimatedCompressionRatioAtLevel(
   return static_cast<double>(sum_data_size_bytes) / sum_file_size_bytes;
 }
 
+void Version::AddIteratorsStartingFromLeveli(const ReadOptions& read_options,
+                           const FileOptions& soptions,
+                           MergeIteratorBuilder* merge_iter_builder,
+                           bool allow_unprepared_value,
+                           int start_level) {
+  assert(storage_info_.finalized_);
+
+  for (int level = start_level; level < storage_info_.num_non_empty_levels(); level++) {
+    AddIteratorsForLevel(read_options, soptions, merge_iter_builder, level,
+                         allow_unprepared_value);
+  }
+}
 void Version::AddIterators(const ReadOptions& read_options,
                            const FileOptions& soptions,
                            MergeIteratorBuilder* merge_iter_builder,

@@ -205,6 +205,10 @@ class CompactionJob {
   IOStatus io_status() const { return io_status_; }
 
   void SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer);
+
+  void SetModelAndMutex(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, std::shared_mutex* booster_mutex);
+  void SetInternalIterator(InternalIterator* iter);
+  void SetDBImpl(DBImpl* db_impl) { db_impl_ = db_impl; }
  protected:
   
   void UpdateCompactionStats();
@@ -372,6 +376,13 @@ class CompactionJob {
   // The Compaction Read and Write priorities are the same for different
   // scenarios, such as write stalled.
   Env::IOPriority GetRateLimiterPriority();
+  DBImpl* db_impl_ = nullptr;
+  std::shared_ptr<BoosterHandle> booster_handle_ = nullptr;
+  std::shared_ptr<FastConfigHandle> fast_config_handle_ = nullptr;
+  std::shared_mutex* booster_mutex_ = nullptr;
+  InternalIterator* internal_iter_ = nullptr;
+
+
 };
 
 // CompactionServiceInput is used the pass compaction information between two

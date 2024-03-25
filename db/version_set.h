@@ -982,6 +982,12 @@ class Version {
                     MergeIteratorBuilder* merger_iter_builder,
                     bool allow_unprepared_value);
 
+  void AddIteratorsStartingFromLeveli(const ReadOptions& read_options,
+                    const FileOptions& soptions,
+                    MergeIteratorBuilder* merger_iter_builder,
+                    bool allow_unprepared_value,
+                    int start_level);
+
   // @param read_options Must outlive any iterator built by
   // `merger_iter_builder`.
   void AddIteratorsForLevel(const ReadOptions& read_options,

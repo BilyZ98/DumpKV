@@ -1250,8 +1250,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   assert(mutable_cf_options);
 
   std::vector<std::string> blob_file_paths;
-  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(db_options_.num_classification  );
-  std::vector<BlobFileBuilder*> blob_file_builders_raw( db_options_.num_classification, nullptr);
+  int num_class = LifetimeSequence.size();
+  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(num_class );
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( num_class, nullptr);
   bool enable_blob_file_builder = mutable_cf_options->enable_blob_files &&
        sub_compact->compaction->output_level() >=
            mutable_cf_options->blob_file_starting_level;
@@ -1321,14 +1322,19 @@ auto c_iter = std::make_unique<CompactionIterator>(
       /*expect_valid_internal_key=*/true, range_del_agg.get(),
       blob_file_builders_raw, db_options_.allow_data_in_errors,
       db_options_.enforce_single_del_contracts, manual_compaction_canceled_,
-      nullptr,
-      nullptr,
+      booster_handle_,
+      fast_config_handle_,
       cfd,
+      db_options_.num_features,
+      db_options_.default_lifetime_idx, 
       sub_compact->compaction, compaction_filter, shutting_down_,
       db_options_.info_log, full_history_ts_low, preserve_time_min_seqno_,
       preclude_last_level_min_seqno_);
 
   c_iter->SetGCBlobFiles(compact_->compaction->GetGCBlobFiles());
+  c_iter->SetBoosterMutex(booster_mutex_);
+  c_iter->SetDBInternalIterator(internal_iter_);
+  c_iter->SetDBImpl(db_impl_);
 
   // auto c_iter = std::make_unique<CompactionIterator>(
   //     input, cfd->user_comparator(), &merge, versions_->LastSequence(),
@@ -2076,7 +2082,17 @@ void CompactionJob::UpdateCompactionJobStats(
                &compaction_job_stats_->largest_output_key_prefix);
   }
 }
+void CompactionJob::SetInternalIterator(InternalIterator* iter) {
+  internal_iter_ =  iter;
+}
 
+void CompactionJob::SetModelAndMutex(std::shared_ptr<BoosterHandle> handle, std::shared_ptr<FastConfigHandle> fast_config_handle, std::shared_mutex* booster_mutex) {
+  booster_handle_ = handle;
+  fast_config_handle_ = fast_config_handle;
+  booster_mutex_ = booster_mutex;
+
+
+}
 void CompactionJob::SetCompactionTracer(std::shared_ptr<CompactionTracer> tracer){
     compaction_tracer_ = (tracer);
   }
