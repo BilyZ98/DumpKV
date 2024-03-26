@@ -142,13 +142,14 @@ features_file_path=${FEATURES_FILE_PATH:-""}
 default_lifetime_idx=${DEFAULT_LIFETIME_IDX:-0}
 
 ycsb_a_run_path=${YCSB_A_RUN_PATH:-""}
+paranoid_file_checks=${PARANOID_FILE_CHECKS:-0}
+# if [ "$enable_blob_files" == "1" ]; then
+#   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
+# else
+#   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$write_buffer_size}
+# fi
 
-if [ "$enable_blob_files" == "1" ]; then
-  target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * write_buffer_size / value_size))}
-else
-  target_file_size_base=${TARGET_FILE_SIZE_BASE:-$write_buffer_size}
-fi
-
+target_file_size_base=${TARGET_FILE_SIZE_BASE:-$write_buffer_size}
 max_bytes_for_level_base=${MAX_BYTES_FOR_LEVEL_BASE:-$((8 * target_file_size_base))}
 
 echo "======================== Benchmark setup ========================"
@@ -199,7 +200,8 @@ ENV_VARS="\
   OP_TRACE_FILE=$op_trace_file \
   IS_REPLAY=$is_replay \
   MODEL_PATH=$model_path \
-  FEATURES_FILE_PATH=$features_file_path "
+  FEATURES_FILE_PATH=$features_file_path \
+  PARANOID_FILE_CHECKS=$paranoid_file_checks "
 # model_path=${MODEL_PATH:-""} 
 # features_file_path=${FEATURES_FILE_PATH:-""}
 

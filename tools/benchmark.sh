@@ -259,7 +259,7 @@ use_shared_block_and_blob_cache=${USE_SHARED_BLOCK_AND_BLOB_CACHE:-1}
 blob_cache_size=${BLOB_CACHE_SIZE:-$(( 16 * $G ))}
 blob_cache_numshardbits=${BLOB_CACHE_NUMSHARDBITS:-6}
 prepopulate_blob_cache=${PREPOPULATE_BLOB_CACHE:-0}
-paranoid_file_checks=${PARANOID_FILE_CHECKS:-1}
+paranoid_file_checks=${PARANOID_FILE_CHECKS:-0}
 
 # This script still works back to RocksDB 6.0
 undef_params="\
@@ -1086,7 +1086,7 @@ function run_ycsb_a {
   local num_features=44
   # gdb --args
   # cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
-  cmd="$time_cmd gdb --args  ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd  ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \

@@ -12086,8 +12086,41 @@ because now we can have large value in level0.
 
 Need to remove paranoid_file_checks to avoid put value in block cache.
 Hope this can give use better write performance.
+
+Looks like it works after copmiling code as release mode.
+
+lsm-tree size increases from 2.64gb to  4.16 GB which is weird.
+
+with model, delay model prediction to l0-l1 compaction
+I see, too many sst files need to be copmacted.
+l0-l1 copmaction is too slow because of this.
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      6/4   584.71 MB   7.8      0.0     0.0      0.0      59.8     59.8       0.0   1.0      0.0    281.1    217.73            161.52       628    0.347       0      0       0.0       0.0
+  L1     94/94  290.71 MB   0.0     86.3    59.2     27.1      41.4     14.3       0.0   1.7     22.5     26.5   3922.79           3890.05       519    7.558     99M   512K       0.0      60.1
+  L2    510/0    1.56 GB   8.0     58.4    13.9     44.4      53.8      9.3       0.1   3.9    196.6    181.0    304.17            251.28      4905    0.062    179M  7468K       0.0       0.0
+  L3    748/0    1.66 GB   1.1     30.9     7.6     23.3      24.8      1.4       0.3   3.3    206.3    165.4    153.29            131.14      2808    0.055    104M    20M       0.0       0.0
+  L4     25/0   81.16 MB   0.0      0.0     0.0      0.0       0.0      0.0       0.1   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0       0.0       0.0
+ Sum   1383/98   4.16 GB   0.0    262.4    80.7     94.8     179.7     84.9       0.5   4.6     49.1     51.9   5466.91           5254.12      8860    0.617    454M    69M      86.8      97.2
+ Int      0/0    0.00 KB   0.0      8.6     2.3      2.8       5.4      2.6       0.0   4.2     40.2     40.6    219.11            209.90       179    1.224   8948K  1821K       3.4       3.3
+
+
+```
+
+Stopped experiment running that uses blob cache and do flush model prediction.
+It's too slow and I don't know why . Maybe it's worth finding out.
+But right now I need to move fast and finish this paper.
+
+Stoppred experiment that runs with no blob cache and do paranoid file checking 
+and do model prediction during flush hwich is very slow compared to l0-l1 
+model prediction.
+
 [Status: Ongoing]
 
+Think about writing data size that is fixed to 100GB instead of fixed write count.
+IT's too large when fixing write count to 50M.
 
 
 
