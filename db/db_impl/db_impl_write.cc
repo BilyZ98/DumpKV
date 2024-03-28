@@ -979,13 +979,13 @@ std::vector<std::vector<std::string>> readCSV(const std::string &filename) {
 }
 
 void DBImpl::InitTrainingParams() {
-
     training_params_ = {
             //don't use alias here. C api may not recongize
             {"boosting",         "gbdt"},
             {"objective",        "multiclass"},
             {"metric",           "multi_logloss"},
             {"num_class",        std::to_string(LifetimeSequence.size()).c_str()}, 
+            // {"class_weights",     ""}
             {"num_iterations",   "32"},
             {"num_leaves",       "32"},
             {"num_threads",      "4"},
@@ -995,6 +995,21 @@ void DBImpl::InitTrainingParams() {
             {"learning_rate",    "0.1"},
             {"verbosity",        "0"},
     };
+    // training_params_ = {
+    //         //don't use alias here. C api may not recongize
+    //         {"boosting",         "gbdt"},
+    //         {"objective",        "multiclass"},
+    //         {"metric",           "multi_logloss"},
+    //         {"num_class",        std::to_string(LifetimeSequence.size()).c_str()}, 
+    //         {"num_iterations",   "32"},
+    //         {"num_leaves",       "32"},
+    //         {"num_threads",      "4"},
+    //         {"feature_fraction", "0.8"},
+    //         {"bagging_freq",     "5"},
+    //         {"bagging_fraction", "0.8"},
+    //         {"learning_rate",    "0.1"},
+    //         {"verbosity",        "0"},
+    // };
 
 }
 Status DBImpl::ReadFeaturesFromFile(const std::string &file_path) {

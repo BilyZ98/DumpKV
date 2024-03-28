@@ -29,7 +29,7 @@ function call_run_blob() {
    USE_BLOB_CACHE=0 \
    BLOB_FILE_STARTING_LEVEL=1 \
    PARANOID_FILE_CHECKS=0 \
-   ./run_blob_bench.sh
+   ./run_blob_bench_small_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
  #   NUM_KEYS=5000000 DB_DIR=/tmp/test_blob \
@@ -67,12 +67,11 @@ gc_threshold_gap='0.2'
 
 function run_with_gc_dbbench {
 
-
   # lifetime_idx_range=$(seq 0 1 3)
   # lifetime_idx_range=(2 1 0)
-  lifetime_idx_range=(1)
+  lifetime_idx_range=( 0)
   # value_sizes=(1024 4096 16384 65536)
-  value_sizes=(1024  )
+  value_sizes=(1024 )
   # lifetime_idx_range=(1 3)
   # for lifetime_idx in $lifetime_idx_range ; do
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do

@@ -12117,26 +12117,86 @@ Stoppred experiment that runs with no blob cache and do paranoid file checking
 and do model prediction during flush hwich is very slow compared to l0-l1 
 model prediction.
 
-[Status: Ongoing]
+Write of LSM-tree increase from 103 GB(std_rocksdb(size of level1 :20M)) to 166 GB(large sst, size of level 1: 700 M)
+Should I decrease target_file_size_base ?
+I need more data.
+[Status: Done]
 
 Think about writing data size that is fixed to 100GB instead of fixed write count.
 IT's too large when fixing write count to 50M.
 
 
+[Todo]
+Need to write scripts to gather data and do plotting
+[Status: Ongoing]
 
 
 
+[Todo]
+Figure out why wamp in report.tsv is higher than that in LOG
+I don't think wamp in report.tsv is correct.
+Cumulative compaction already has the flush write data.
+I will stick to wamp data in compaction stats.
+[Status: Done]
+
+
+Looks like lsm-tree with large sst  files runs much faster 
+
+[Todo]
+Rerun failed experiments
+```
+2024-03-27-03-55-18-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_1_1024$
+2024-03-27-13-16-42-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_0_1024
+```
+[Status: Done]
 
 
 
+[Todo]
+
+Generate ycsb data for each value size.
+100 GB 
+
+0.2, 0.99 zipfian, uniform, latest 
+0.9
+
+Try different recordcount 
+1kB 100GB
+record count: 100M
+opcount : 200M ( 0.5 read, 0.5 update)
+
+4kB 100 GB
+record count: 25M
+opcount: 50M (0.5 read, 0.5 update) 
+
+16kB 100 GB
+record count: 6.25M
+opcount: 12.5M (0.5 read, 0.5 update)
+
+64kB 100 GB
+record count: 1.56M
+opcount: 3.12M (0.5 read, 0.5 update)
+
+200 GB 
+0.2, 0.9 zipfian, uniform, latest
+1kB 200GB
+record count: 200M
+opcount: 400M (0.5 read, 0.5 update)
+
+4kB 200GB
+record count: 50M
+opcount: 100M (0.5 read, 0.5 update)
+
+16kB 200GB
+record count: 12.5M
+opcount: 25M (0.5 read, 0.5 update)
+
+64kB 200GB
+record count: 3.12M
+opcount: 6.25M (0.5 read, 0.5 update)
 
 
-
-
-
-
-
-
+[Status: Ongoing]
 
 
 

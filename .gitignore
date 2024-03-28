@@ -82,6 +82,9 @@ scan_build_report/
 t
 LOG
 tools/2024*
+tools/*default*
+ctb1_mnt
+mlsm_scripts/ycsb_a/log_output
 
 db_logs/
 tp2/
@@ -93,6 +96,7 @@ buckifier/__pycache__
 compile_commands.json
 clang-format-diff.py
 .py3/
+
 
 fuzz/proto/gen/
 fuzz/crash-*

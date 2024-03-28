@@ -25,10 +25,6 @@ function call_run_blob() {
    OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
    DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
-   VALUE_SIZE=$cur_value_size \
-   USE_BLOB_CACHE=0 \
-   BLOB_FILE_STARTING_LEVEL=1 \
-   PARANOID_FILE_CHECKS=0 \
    ./run_blob_bench.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -68,25 +64,18 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  # lifetime_idx_range=$(seq 0 1 3)
-  # lifetime_idx_range=(2 1 0)
-  lifetime_idx_range=(1)
-  # value_sizes=(1024 4096 16384 65536)
-  value_sizes=(1024  )
+  lifetime_idx_range=$(seq 0 1 3)
   # lifetime_idx_range=(1 3)
-  # for lifetime_idx in $lifetime_idx_range ; do
-  for lifetime_idx in "${lifetime_idx_range[@]}" ; do
+  for lifetime_idx in $lifetime_idx_range ; do
   # for lifetime_idx in "${lifetime_idx_range[@]}" ; do
   # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
-  for value_size in "${value_sizes[@]}" ; do
     force_gc_threshold=0.8
 
     echo "lifetime_idx-------------------: $lifetime_idx"
     default_lifetime_idx=$lifetime_idx
-    cur_value_size=$value_size
 
 
-    cur_run_name=${run_name}_${lifetime_idx}_${value_size}
+    cur_run_name=${run_name}_${lifetime_idx}
     # one_run_name=${run_name}_${lifetime_idx}
     # with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${lifetime_idx}
     with_gc_dir=${db_dir}/${cur_run_name}
@@ -117,10 +106,35 @@ function run_with_gc_dbbench {
     # fi
     # cp $output_text $db_log_dir
     cp ${with_gc_dir}/LOG $db_log_dir
+    # trace_analye_output_dir=${with_gc_dir}/trace_analyzer
+    # if [ ! -d $trace_analye_output_dir ]; then
+    #   mkdir -p $trace_analye_output_dir
+    # fi
+    # op_trace_cmd="$op_trace_analyzer_exe --trace_path=$with_gc_op_trace_file  --output_dir=$with_gc_dir --convert_to_human_readable_trace=true"
+    # echo "op_trace_cmd: ${op_trace_cmd}"
+    # eval $op_trace_cmd
+    # $compaction_trace_analyzer_exe  --compaction_trace_path=$with_gc_compaction_trace_file --compaction_output_dir=$with_gc_dir  
+    # op_human_trace="${with_gc_dir}/trace-human_readable_trace.txt"
+    # compaction_human_trace="${with_gc_dir}/compaction_human_readable_trace.txt" 
 
-    rm -f ${with_gc_dir}/*.sst ${with_gc_dir}/*.blob
+    # # lifetime calculation
+    # cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
+    # echo " internal key lifetime python command: $cmd"
+    # # eval $cmd
+    # lifetime calculation
+    # cmd="python3 $internal_key_lifetime_py_path  $op_human_trace $compaction_human_trace $with_gc_dir"
+    # echo " internal key lifetime python command: $cmd"
+    # eval $cmd
 
-        # calculate space amplification
+    # calculate space amplification
+    # space_amp_ouput_path="${with_gc_dir}/.txt"
+    # dir_space_path="${with_gc_dir}/dir_size.log"
+    # dir_space_fig_path="${with_gc_dir}/space_amp_chg.png"
+    # cmd="python3 $space_amp_script_path  $op_human_trace  $dir_space_path $dir_space_fig_path"
+    # echo "space amp change cmd is ${cmd}"
+    # eval $cmd
+
+    # calculate space amplification
     # exclude file whose filename includes trace
     # total_size=$(ls $with_gc_dir | grep -v trace | awk '{system("du -b " $1)}' | awk '{sum += $1} END {print sum}')
     total_size_without_trace=`du -sh $with_gc_dir --exclude='*trace*'| awk '{print $1}'`
@@ -129,7 +143,6 @@ function run_with_gc_dbbench {
     echo "total_size_with_trace: $total_size_with_trace" >> $output_text
     # `du -b $with_gc_dir | awk '{print $1}'`
 
-  done
   done
 
 }
