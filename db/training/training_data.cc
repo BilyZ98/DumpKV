@@ -27,6 +27,8 @@ TrainingData::TrainingData(Arena* arena,
   indptr_.emplace_back(0);
   indices_.reserve(batch_size_ * (num_features + 1));
   data_.reserve(batch_size_ * (num_features + 1));
+  weights_.reserve(batch_size_);
+  label_count_.resize(LifetimeSequence.size(), 0);
 }
 
 Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
@@ -46,6 +48,7 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   }
   // labels_.push_back(log1p(label));
   labels_.push_back(lifetime_index);
+  label_count_[lifetime_index]++;
   indptr_.push_back(counter);
   return Status::OK();
 }
@@ -210,6 +213,27 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                        labels_.size(),
                        C_API_DTYPE_FLOAT32);
   assert(res == 0);
+  
+  uint64_t sample_size = labels_.size();
+  std::vector<float> label_weights(LifetimeSequence.size(), 0);
+  for(size_t i = 0; i < label_count_.size(); ++i) {
+    if(label_count_[i] == 0) {
+      continue;
+    }
+
+    label_weights[i] = float(sample_size) /  label_count_[i] ;
+  }
+  for(size_t i = 0; i < labels_.size(); ++i) {
+    weights_.emplace_back(label_weights[labels_[i]]);
+  }
+
+  res = LGBM_DatasetSetField(trainData,
+                       "weight",
+                       static_cast<void *>(weights_.data()),
+                       weights_.size(),
+                       C_API_DTYPE_FLOAT32);
+
+  assert(res == 0);
 
   // init booster
   res = LGBM_BoosterCreate(trainData, params, new_model_ptr);
@@ -306,6 +330,8 @@ void TrainingData::ClearTrainingData() {
   data_.clear();  
   result_.clear();
   indptr_.emplace_back(0);
+  weights_.clear();
+  label_count_.resize(LifetimeSequence.size(), 0);
   res_short_count_ = 0;
   res_long_count_ = 0;
 }

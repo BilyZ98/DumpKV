@@ -12199,6 +12199,95 @@ opcount: 6.25M (0.5 read, 0.5 update)
 [Status: Ongoing]
 
 
+uniform 10M 100M  0.2
+uniq key count in update
+```
+➜  ycsb_a git:(dev_delay_prediction) ✗ python3 write_access_count.py
+95% write count: 44991690
+top5% write count: 5008859
+
+➜  data git:(master) ✗  awk '$1 ==  "UPDATE" {print $2} ' workloaduniform-load-0.2-10000000-100000000.log_run.formated | sort | uniq -c | wc -l
+9932859
+```
+
+Unfortunately, the LightGBM C API does not directly support setting class weights. However, you can manually adjust the weights of your samples before passing them to the `LGBM_DatasetCreateFromMat` function in the C API.
+
+Here's a general example of how you might do this in C:
+
+```c
+#include <LightGBM/c_api.h>
+
+// Assume you have input data X, labels Y, and weights W
+float* X; // Your feature matrix of size num_data * num_feature
+float* Y; // Your label array of size num_data
+float* W; // Your weight array of size num_data
+int num_data; // Number of data points
+int num_feature; // Number of features
+
+// Create a dataset
+DatasetHandle dataset;
+LGBM_DatasetCreateFromMat(X, C_API_DTYPE_FLOAT32, num_data, num_feature, C_API_IS_ROW_MAJOR, &dataset);
+
+// Set label
+LGBM_DatasetSetField(dataset, "label", Y, num_data, C_API_DTYPE_FLOAT32);
+
+// Set weight
+LGBM_DatasetSetField(dataset, "weight", W, num_data, C_API_DTYPE_FLOAT32);
+
+// Continue with your training...
+```
+
+In this example, `W` is an array of weights that you've calculated based on your class labels. For example, if you have 4 classes with imbalance 2000:1:1:1, you might set the weights for samples of class 1 to 1, and the weights for samples of other classes to 2000¹.
+
+Please note that this is a simplified example and you'll need to adjust it according to your specific use case. Also, remember to handle memory management properly in your C code to avoid leaks. 
+
+
+
+[Todo]
+Set class weights for dataset.
+Sample ratio is dynamically changing. 
+Need to set class weights dynamically.
+```
+2024/03/29-08:38:53.635671 663035 [db/training/training_data.cc:460] Confusion Matrix: 
+20597	8075	40108	2574	
+2794	2385	21773	2581	
+247	195	13960	5136	
+0	0	736	6839	
+```
+[Status: Ongoing]
+
+
+
+[Todo]
+multi thread subcompaction during l0-l1 compaction?
+```cpp
+
+void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
+  // TODO: since we already use C++17, should use
+  // std::optional<const Slice> instead.
+  const std::optional<Slice> start = sub_compact->start;
+  const std::optional<Slice> end = sub_compact->end;
+
+ 
+```
+[Status: Not started]
+
+[Todo]
+Large max bytes for level base
+[Status: Not started]
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

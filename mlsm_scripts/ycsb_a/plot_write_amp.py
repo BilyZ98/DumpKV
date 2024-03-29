@@ -6,7 +6,7 @@ import os
 import csv
 
 # 1. Read the data from the file
-log_dir="./log_output"
+log_dir="./log_output_4096"
 
 large_x = []
 large_y = []

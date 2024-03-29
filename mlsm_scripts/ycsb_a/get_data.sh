@@ -6,7 +6,7 @@ M=$((1024 * K))
 G=$((1024 * M))
 T=$((1024 * G))
 
-output_dir="./log_output"
+output_dir="./log_output_4096"
 if [ ! -d "$output_dir" ]; then
   mkdir -p "$output_dir"
 fi
@@ -106,6 +106,15 @@ log_files_names=(
 2024-03-26-15-37-14-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_2_1024
 2024-03-27-04-48-03-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_1_1024
 2024-03-27-14-44-24-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_0_1024
+
+)
+
+log_files_names=(
+2024-03-26-13-49-00-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_2_4096
+2024-03-27-04-45-50-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_1_4096
+2024-03-27-10-26-40-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_0_4096
+2024-03-26-19-55-00-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_2_4096
+2024-03-27-07-28-11-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_1_4096
 )
 
 test_names=(
@@ -123,6 +132,14 @@ log_files_names=(
 2024-03-26-20-27-27-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-smaller-sst-release-default_0_1024
 2024-03-26-22-11-41-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-large-sst-0.2-agecutoff-release-default_0_1024
 2024-03-26-22-13-37-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-small-sst-0.2-agecutoff-release-default_0_1024
+
+)
+
+log_files_names=(
+2024-03-27-03-28-49-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-small-sst-0.2-agecutoff-release-default_0_4096
+2024-03-26-23-09-17-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-smaller-sst-release-default_0_4096
+2024-03-26-22-45-39-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-release-default_0_4096
+2024-03-27-03-24-51-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-large-sst-0.2-agecutoff-release-default_0_4096
 )
 
 # for i in "${!log_files_names[@]}"; do

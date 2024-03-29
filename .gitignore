@@ -84,7 +84,7 @@ LOG
 tools/2024*
 tools/*default*
 ctb1_mnt
-mlsm_scripts/ycsb_a/log_output
+mlsm_scripts/ycsb_a/log_output*
 
 db_logs/
 tp2/

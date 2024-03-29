@@ -68,11 +68,14 @@ private:
   size_t num_labels_;
   uint64_t batch_size_;
   std::vector<uint64_t> predicted_labes_;
+  std::vector<float> weights_;
+  std::vector<int32_t> label_count_;
 
   uint64_t res_short_count_ = 0;
   uint64_t res_long_count_ = 0;
 
 
+  const std::vector<float> label_weights_map_ = { 1.0, 4.0, 16.0, 64.0};
   // std::vector<double> result_;
 
 

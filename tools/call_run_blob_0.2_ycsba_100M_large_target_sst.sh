@@ -29,7 +29,7 @@ function call_run_blob() {
    USE_BLOB_CACHE=0 \
    BLOB_FILE_STARTING_LEVEL=1 \
    PARANOID_FILE_CHECKS=0 \
-   ./run_blob_bench.sh
+   ./run_blob_bench_large_target_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
  #   NUM_KEYS=5000000 DB_DIR=/tmp/test_blob \

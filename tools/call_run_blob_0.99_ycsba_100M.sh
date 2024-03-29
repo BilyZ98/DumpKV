@@ -46,9 +46,9 @@ fi
 
 # with_gc and without_gc
 db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
-ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
+# ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 # ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
-# ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated
+ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated
 # db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
