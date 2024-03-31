@@ -6,7 +6,7 @@ M=$((1024 * K))
 G=$((1024 * M))
 T=$((1024 * G))
 
-output_dir="./log_output_4096"
+output_dir="./log_output_4096_uniform"
 if [ ! -d "$output_dir" ]; then
   mkdir -p "$output_dir"
 fi
@@ -115,8 +115,25 @@ log_files_names=(
 2024-03-27-10-26-40-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_0_4096
 2024-03-26-19-55-00-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_2_4096
 2024-03-27-07-28-11-more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-small-sst-file-release-default_1_4096
+
 )
 
+# 2024-03-29-06-25-11-0.2-zipfian-100M-ycsba-starting-level1-weighted-dataset-large-sst-file-release-default_2_1024
+# 2024-03-29-09-21-55-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-large-sst-file-release-default_2_1024
+# 2024-03-29-14-44-01-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-little-bit-large-sst-release-default_2_1024
+
+
+log_files_names=(
+2024-03-29-08-52-07-0.2-zipfian-100M-ycsba-starting-level1-weighted-dataset-large-sst-file-release-default_2_4096
+2024-03-29-12-24-35-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-large-sst-file-release-default_2_4096
+2024-03-29-17-16-49-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-little-bit-large-sst-release-default_2_4096
+)
+
+log_files_names=(
+2024-03-28-17-13-43-more_prediction-0.2-uniform-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_2_4096
+2024-03-28-22-13-35-more_prediction-0.2-uniform-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_1_4096
+2024-03-29-03-19-13-more_prediction-0.2-uniform-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_0_4096
+)
 test_names=(
   "large-sst-file-release-default_lifetimeidx_2" 
 )
@@ -140,6 +157,11 @@ log_files_names=(
 2024-03-26-23-09-17-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-smaller-sst-release-default_0_4096
 2024-03-26-22-45-39-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-release-default_0_4096
 2024-03-27-03-24-51-std-rocksdb-kv-sep-0.2-zipfian-100M-ycsba-large-sst-0.2-agecutoff-release-default_0_4096
+)
+
+log_files_names=(
+2024-03-29-01-34-17-std-rocksdb-kv-sep-0.2-uniform-100M-ycsba-large-sst-0.2-agecutoff-release-default_0_4096
+2024-03-29-01-35-45-std-rocksdb-kv-sep-0.2-uniform-100M-ycsba-large-sst-agecutoff-1.0-release-default_0_4096
 )
 
 # for i in "${!log_files_names[@]}"; do

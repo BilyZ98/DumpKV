@@ -12279,6 +12279,116 @@ Large max bytes for level base
 
 
 
+[Todo]
+Experiments that are finished.
+
+more_prediction-0.2-zipfian-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_2_4096
+```
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      5/4   496.51 MB   0.2      0.0     0.0      0.0     203.3    203.3       0.0   1.0      0.0    528.6    393.92            289.23      2097    0.188       0      0       0.0       0.0
+  L1     10/10  797.03 MB   0.0    562.2   202.9    359.3     367.4      8.0       0.0   2.8     91.7     92.8   6278.55           6150.31       523   12.005   1224M    23M       0.0     201.8
+  L2     27/0    1.74 GB   0.3     14.5     6.4      8.1       8.9      0.8       0.9   1.4    268.3    165.9     55.18             53.97        75    0.736     47M    18M       0.0       0.0
+ Sum     42/14   3.01 GB   0.0    847.3   209.2    367.4     579.7    212.2       0.9   4.4    105.3    110.2   8237.09           7869.19      2695    3.056   1338M    82M     270.7     306.8
+ Int      0/0    0.00 KB   0.0      9.1     2.0      3.8       5.8      2.0       0.0   4.7     99.3     99.6     93.39             88.37        26    3.592     13M   934K       3.2       3.2
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0    847.3   209.2    367.4     376.3      8.9       0.0   0.0    110.6     89.2   7843.17           7579.96       598   13.116   1338M    82M     270.7     306.8
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0     203.3    203.3       0.0   0.0      0.0    528.6    393.92            289.23      2097    0.188       0      0       0.0       0.0
+
+Blob file count: 1064, total size: 36.2 GB, garbage size: 0.0 GB, space amp: 1.0
+gc input blob: 66170259, gc output blobs: 25676077, gc dropped blobs: 40494182, gc invalid key ratio: 0.612
+
+```
+
+0.2-zipfian-100M-ycsba-starting-level1-weighted-dataset-large-sst-file-release-default_2_4096
+1 4 16 64 
+
+0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-large-sst-file-release-default_2_4096
+
+0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-little-bit-large-sst-release-default_2_409
+```
+
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+ Sum    463/4    3.13 GB   0.0    658.4   217.0    192.6     412.7    220.1       2.2   3.5     81.1     86.4   8311.40        7263.88      5720    1.453    644M    69M     248.8     288.5
+ Int      0/0    0.00 KB   0.0     42.0    13.0     12.1      25.0     12.9       0.0   3.6     74.5     75.5    577.82            504.63       292    1.979     26M  4236K      17.0      17.6
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0    658.4   217.0    192.6     212.9     20.4       0.0   0.0     91.3     69.5   7386.37           6975.18      3660    2.018    644M    69M     248.8     288.5
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0     199.8    199.8       0.0   0.0      0.0    221.1    925.03            288.69      2060    0.449       0      0       0.0       0.0
+
+Blob file count: 2663, total size: 39.7 GB, garbage size: 0.0 GB, space amp: 1.0
+
+gc input blob: 62094471, gc output blobs: 22287993, gc dropped blobs: 39806478, gc invalid key ratio: 0.641
+
+```
+
+small 4096default 2 
+```
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      5/0   496.53 MB  79.4      0.0     0.0      0.0     187.8    187.8       0.0   1.0      0.0     67.4   2855.61            309.03      1937    1.474       0      0       0.0       0.0
+  L1    639/1   693.65 MB 110.8    329.5   187.3    142.2     152.0      9.8       0.0   1.8     47.1     48.3   7160.81           5394.65       681   10.515     72M    29K       0.0     185.9
+  L2    782/1   617.16 MB  12.3     18.5     6.1     12.4      16.3      3.9       3.0   2.7     58.3     51.4    324.94            109.14      7722    0.042     50M   699K       0.0       0.0
+  L3   1807/0    1.70 GB   4.4     17.7     6.3     11.4      13.7      2.3       0.1   2.2     43.8     33.9    414.01            133.57      6136    0.067     58M    11M       0.0       0.0
+  L4    880/0   644.04 MB   0.2      0.1     0.1      0.0       0.1      0.0       0.6   1.3     48.2     40.6      1.89              0.50        49    0.039    326K    52K       0.0       0.0
+ Sum   4113/2    4.10 GB   0.0    609.9   199.8    166.0     369.9    203.9       3.7   3.5     39.8     42.4  15678.12           8460.29     16525    0.949    241M    49M     244.1     279.9
+ Int      0/0    0.00 KB   0.0     10.8     3.0      2.9       5.8      2.8       0.0   4.0     33.9     33.0    327.67            153.67       225    1.456   3186K   996K       4.9       4.8
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0    609.9   199.8    166.0     182.1     16.1       0.0   0.0     48.7     36.9  12822.52           8151.26     14588    0.879    241M    49M     244.1     279.9
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0     187.8    187.8       0.0   0.0      0.0     67.4   2855.61            309.03      1937    1.474       0      0       0.0       0.0
+
+Blob file count: 1287, total size: 35.8 GB, garbage size: 0.0 GB, space amp: 1.0
+
+Uptime(secs): 28319.4 total, 603.9 interval
+gc input blob: 60531484, gc output blobs: 23347466, gc dropped blobs: 37184018, gc invalid key ratio: 0.614
+```
+This small st file experiment didn't finish. So it does not count
+
+0.99-zipfian-100M-ycsba-starting-level1-balance-weight-dataset-large-sst-file-release-default_2_4096
+
+Looks like little bit large sst is better.
+It has samller write amplification.  wamp drops from 4.4 to 3.5 which is pretty good.
+I think I will go with this setting. Although there is no more blob files.  Number of blob files increase from 1000 to 2663 which is weird..
+
+However, little bit large sst also leads to large total size. 
+[Status: Ongoing]
+
+
+[Todo]
+Get uniform ops_per_sec, wamp and total size
+[Status: Done]
+
+
+[Todo]
+Get figure for 0.99 zipfian for value size 1024 and 4096
+[Status: Not tstarted]
+
+After finishing plotting figures of uniform workload.
+I think I need to continue paper writing and writing code to set up multi threading compaction
+during L0-L1 compaction.
+And I need to update code so that each garbage collection job 
+accumulated enough data before starts.
+This can help reduce number of blob files.
+
+
+
+
+
+
+
+
+
+
+
 
 
 
