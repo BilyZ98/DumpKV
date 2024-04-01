@@ -106,7 +106,8 @@ GarbageCollectionJob::GarbageCollectionJob(
       db_(db),
       write_hint_(Env::WLTH_NOT_SET),
       gc_output_(gc),
-      training_data_queue_(training_data_queue)
+      training_data_queue_(training_data_queue),
+      num_features_(db_options_.num_features)
       {
 
   assert(log_buffer_ != nullptr);
@@ -284,6 +285,204 @@ uint64_t GarbageCollectionJob::GetNextLifetimeIndex(uint64_t cur_seq, uint64_t k
   return std::distance(LifetimeSequence.begin(), new_lifetime_iter);
 
   // return std::distance(LifetimeSequence.begin(), lower_bound_iter);
+
+}
+
+uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
+  uint32_t past_distances_count = 0;
+  std::vector<uint64_t> past_distances;
+  past_distances.reserve(max_n_past_timestamps);
+  std::vector<float> edcs;
+  edcs.reserve(n_edc_feature);
+  uint64_t past_seq;
+  uint64_t distance = 0;
+
+  int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
+  bool get_feat = false;
+  BlobIndex prev_blob_index;
+  Slice prev_value = iter->value();
+  uint64_t blob_index_len = 0;
+  Status s;
+  s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
+  assert(s.ok());
+  prev_value.remove_prefix(blob_index_len);
+  bool ok = GetVarint32(&prev_value, &past_distances_count);
+  // int32_t counter = past_distances_count;
+
+  if(!ok) {
+    assert(false);
+  }
+  ParsedInternalKey past_key;
+  s = ParseInternalKey(iter->key(), &past_key, false);
+  past_seq = past_key.sequence;
+  // uint64_t distance = ikey().sequence - past_seq;
+  // assert(distance > 0);
+
+
+  std::vector<double> data_to_train;
+  std::vector<int32_t> indptr(2);
+  indptr[0] = 0;
+  std::vector<int32_t> indices;
+  indices.reserve(num_features_);
+  std::vector<double> data;
+  data.reserve(num_features_);
+  uint32_t this_past_distance = 0;
+  uint8_t n_within = 0;
+  uint32_t i = 0;
+  // data.emplace_back(static_cast<double>(distance));
+  // indices.emplace_back(0);
+  assert(past_distances_count <= max_n_past_timestamps);
+  for(i=0; i < past_distances_count && i < max_n_past_timestamps; i++) {
+    uint64_t past_distance;
+    ok = GetVarint64(&prev_value, &past_distance);
+    past_distances.emplace_back(past_distance);
+    this_past_distance +=  past_distance;  
+    indices.emplace_back(i);
+    data.emplace_back(static_cast<double>(past_distance));
+    if (this_past_distance < memory_window) {
+      ++n_within;
+    }
+    data_to_train.emplace_back(static_cast<double>(past_distance));
+    assert(ok);
+  }
+
+  uint64_t blob_size = prev_blob_index.size();
+  indices.emplace_back(max_n_past_timestamps);
+  data.emplace_back(static_cast<double>(blob_size));
+  data_to_train.emplace_back(static_cast<double>(blob_size));
+
+  indices.emplace_back(max_n_past_timestamps + 1);
+  data.emplace_back(static_cast<double>(n_within));
+  data_to_train.emplace_back(static_cast<double>(n_within));
+  // counter += 2;
+
+  if(past_distances_count> 0) {
+    for(i=0; i < n_edc_feature; i++) {
+      float edc;
+      ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+      edcs.emplace_back(edc);
+      data_to_train.emplace_back(edc);
+      assert(ok);
+    }
+  } else {
+    for(i=0; i < n_edc_feature; i++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+      float edc = hash_edc[_distance_idx]   ;
+      edcs.emplace_back(edc);
+      data_to_train.emplace_back(edc);
+      assert(ok);
+    }
+  }
+  //update edcs
+  // Need to set up edcs if past_distances_count = 0
+  if(past_distances_count > 0) {
+    // assert(past_distances_count >= 0);
+
+    // Model prediction
+    // This is not good as well. Any better solution ?
+    double inverse_distance = 1.0 / double(edcs[0]);
+    // add training sample with inverse_distance probability
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0, 1);
+    double prob = dis(gen);
+    if(prob < inverse_distance) {
+      data_to_train.emplace_back(static_cast<double>(distance));
+      s = db_->AddTrainingSample(data_to_train);
+      assert(s.ok()); 
+    }
+  }
+
+
+
+  if(past_distances_count > 0) {
+    assert(edcs.size() == n_edc_feature);
+    for(size_t k=0; k < n_edc_feature; k++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
+      indices.emplace_back(max_n_past_timestamps+2+k);
+      data.emplace_back(edcs[k]);
+    }
+
+  } else {
+    // assert(edcs.size() == 0);
+    for(size_t k=0; k < n_edc_feature; k++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      float new_edc = hash_edc[_distance_idx]  + 1;
+      edcs[k] = new_edc;
+      indices.emplace_back(max_n_past_timestamps+2+k);
+      data.emplace_back(new_edc);
+    }
+  }
+
+  if(booster_handle_ ) {
+    assert(indices.size() == data.size());
+
+    std::string inference_params = "num_threads=1 verbosity=0";
+    std::vector<double> out_result(LifetimeSequence.size(), 0.0);
+    int64_t out_len ;
+    assert(data.size() <= num_features_);
+    indptr[1] = data.size();
+  // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
+  //                                                         static_cast<void *>(indptr.data()),
+  //                                                          C_API_DTYPE_INT32,
+  //                                                          indices.data(),
+  //                                                         static_cast<void *>(data.data()),
+  //                                                          2,
+  //                                                          data.size(),
+  //                                                          &out_len,
+  //                                                          out_result.data());
+  int predict_res = 0;
+  {
+
+// std::shared_lock<std::shared_mutex> lock(*booster_mutex_);
+   predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+                            static_cast<void *>(indptr.data()),
+                            C_API_DTYPE_INT32,
+                            indices.data(),
+                            static_cast<void *>(data.data()),
+                            C_API_DTYPE_FLOAT64,
+                            2,
+                            data.size(),
+                            num_features_,  //remove future t
+                            C_API_PREDICT_NORMAL,
+                            0,
+                            32,
+                            inference_params.c_str(),
+                            &out_len,
+                            out_result.data());
+
+  }
+    if(predict_res != 0) {
+      assert(false);
+    }
+    // uint32_t max_idx = 0;
+    double max_val = 0.0;
+    for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
+      data.emplace_back(out_result[res_idx]);
+      if(out_result[res_idx] > max_val) {
+        max_val = out_result[res_idx];
+        maxIndex = res_idx;
+      }
+    }
+    // double orig_value = std::expm1(out_result[0]);
+    // auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
+    // if(lower_bound_iter == std::end(LifetimeSequence)) {
+    //   maxIndex = LifetimeSequence.size() - 1;
+    // } else {
+    //   maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+    // }
+    //
+    // maxIndex = out_result[0] > 0.5 ? 1 : 0;
+
+    // s = WriteTrainDataToFile(data,maxIndex);
+    assert(s.ok());
+  }
+  lifetime_keys_count_[maxIndex] += 1;
+
+  // count new past_distances
+  past_distances_count += 1;
+
 
 }
 Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {

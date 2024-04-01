@@ -12428,6 +12428,7 @@ that predicts long lifetime to short.
 
 [Todo]
 Add wrongly predicted keys to training sample
+Need to figure out add what keys to training data set.
 [Status: Not started]
 
 [Todo]
@@ -12522,6 +12523,8 @@ Block cache entry stats(count,size,portion): DataBlock(2094619,15.83 GB,98.9127%
 ```
 I don't know why there is such a diff in terms of total size between fixed sst size and 
 dynamic small sst file size.
+
+
 [Status: Done]
 
 

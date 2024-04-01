@@ -112,6 +112,8 @@ public:
 protected:
   Status ProcessGarbageCollection(InternalIterator* iter);
 
+  uint64_t GetNewLifetimeIndex(InternalIterator* iter);
+
   bool GetKeyMeta(const Slice& key, const Slice& value, std::vector<double>& key_meta);
 
   uint64_t GetNextLifetimeIndex(uint64_t cur_seq, uint64_t key_seq );
@@ -184,6 +186,7 @@ protected:
   std::unordered_map<uint64_t, uint64_t> blob_file_map_;
 
   moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue_;
+  int32_t  num_features_ = 0;
 
 };
 

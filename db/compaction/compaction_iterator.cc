@@ -1347,9 +1347,10 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   } else {
     bool is_iter_valid = false;
     if(db_internal_iter_) {
-      db_internal_iter_->Seek(key());
-      is_iter_valid = db_internal_iter_->Valid(); 
+      // db_internal_iter_->Seek(key());
+      // is_iter_valid = db_internal_iter_->Valid(); 
     }
+    // int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
     int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
     // int maxIndex = std::max(LifetimeSequence.size() -2 , 0ul);
     uint32_t past_distances_count = 0;
@@ -1360,378 +1361,191 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     uint64_t past_seq;
     uint64_t distance = 0;
     if(is_iter_valid && db_internal_iter_->user_key().compare(user_key()) == 0) {
-      bool get_feat = false;
-      BlobIndex prev_blob_index;
-      Slice prev_value = db_internal_iter_->value();
-      uint64_t blob_index_len = 0;
-      s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
-      assert(s.ok());
-      prev_value.remove_prefix(blob_index_len);
-      bool ok = GetVarint32(&prev_value, &past_distances_count);
-      // int32_t counter = past_distances_count;
+      assert(false);
+    //   bool get_feat = false;
+    //   BlobIndex prev_blob_index;
+    //   Slice prev_value = db_internal_iter_->value();
+    //   uint64_t blob_index_len = 0;
+    //   s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
+    //   assert(s.ok());
+    //   prev_value.remove_prefix(blob_index_len);
+    //   bool ok = GetVarint32(&prev_value, &past_distances_count);
+    //   // int32_t counter = past_distances_count;
 
-      if(!ok) {
-        assert(false);
-      }
-      ParsedInternalKey past_key;
-      s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
-      past_seq = past_key.sequence;
-      distance = ikey().sequence - past_seq;
-      assert(distance > 0);
-
-
-      std::vector<double> data_to_train;
-      std::vector<int32_t> indptr(2);
-      indptr[0] = 0;
-      std::vector<int32_t> indices;
-      indices.reserve(num_features_);
-      std::vector<double> data;
-      data.reserve(num_features_);
-      uint32_t this_past_distance = 0;
-      uint8_t n_within = 0;
-      uint32_t i = 0;
-      data.emplace_back(static_cast<double>(distance));
-      indices.emplace_back(0);
-      assert(past_distances_count <= max_n_past_timestamps);
-      for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
-        uint64_t past_distance;
-        ok = GetVarint64(&prev_value, &past_distance);
-        past_distances.emplace_back(past_distance);
-        this_past_distance +=  past_distance;  
-        indices.emplace_back(i+1);
-        data.emplace_back(static_cast<double>(past_distance));
-        if (this_past_distance < memory_window) {
-          ++n_within;
-        }
-        data_to_train.emplace_back(static_cast<double>(past_distance));
-        assert(ok);
-      }
-
-      uint64_t blob_size = prev_blob_index.size();
-      indices.emplace_back(max_n_past_timestamps);
-      data.emplace_back(static_cast<double>(blob_size));
-      data_to_train.emplace_back(static_cast<double>(blob_size));
-
-      indices.emplace_back(max_n_past_timestamps + 1);
-      data.emplace_back(static_cast<double>(n_within));
-      data_to_train.emplace_back(static_cast<double>(n_within));
-      // counter += 2;
-
-      if(past_distances_count> 0) {
-        for(i=0; i < n_edc_feature; i++) {
-          float edc;
-          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
-          edcs.emplace_back(edc);
-          data_to_train.emplace_back(edc);
-          assert(ok);
-        }
-      } else {
-        for(i=0; i < n_edc_feature; i++) {
-          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
-          float edc = hash_edc[_distance_idx]   ;
-          edcs.emplace_back(edc);
-          data_to_train.emplace_back(edc);
-          assert(ok);
-        }
-      }
-      //update edcs
-      // Need to set up edcs if past_distances_count = 0
-      if(past_distances_count > 0) {
-        // assert(past_distances_count >= 0);
-
-        // Model prediction
-        // This is not good as well. Any better solution ?
-        double inverse_distance = 1.0 / double(edcs[0]);
-        // add training sample with inverse_distance probability
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(0, 1);
-        double prob = dis(gen);
-        if(prob < inverse_distance) {
-          data_to_train.emplace_back(static_cast<double>(distance));
-          s = db_->AddTrainingSample(data_to_train);
-          assert(s.ok()); 
-        }
-      }
+    //   if(!ok) {
+    //     assert(false);
+    //   }
+    //   ParsedInternalKey past_key;
+    //   s = ParseInternalKey(db_internal_iter_->key(), &past_key, false);
+    //   past_seq = past_key.sequence;
+    //   distance = ikey().sequence - past_seq;
+    //   assert(distance > 0);
 
 
+    //   std::vector<double> data_to_train;
+    //   std::vector<int32_t> indptr(2);
+    //   indptr[0] = 0;
+    //   std::vector<int32_t> indices;
+    //   indices.reserve(num_features_);
+    //   std::vector<double> data;
+    //   data.reserve(num_features_);
+    //   uint32_t this_past_distance = 0;
+    //   uint8_t n_within = 0;
+    //   uint32_t i = 0;
+    //   data.emplace_back(static_cast<double>(distance));
+    //   indices.emplace_back(0);
+    //   assert(past_distances_count <= max_n_past_timestamps);
+    //   for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
+    //     uint64_t past_distance;
+    //     ok = GetVarint64(&prev_value, &past_distance);
+    //     past_distances.emplace_back(past_distance);
+    //     this_past_distance +=  past_distance;  
+    //     indices.emplace_back(i+1);
+    //     data.emplace_back(static_cast<double>(past_distance));
+    //     if (this_past_distance < memory_window) {
+    //       ++n_within;
+    //     }
+    //     data_to_train.emplace_back(static_cast<double>(past_distance));
+    //     assert(ok);
+    //   }
 
-      if(past_distances_count > 0) {
-        assert(edcs.size() == n_edc_feature);
-        for(size_t k=0; k < n_edc_feature; k++) {
-          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-          edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
-          indices.emplace_back(max_n_past_timestamps+2+k);
-          data.emplace_back(edcs[k]);
-        }
+    //   uint64_t blob_size = prev_blob_index.size();
+    //   indices.emplace_back(max_n_past_timestamps);
+    //   data.emplace_back(static_cast<double>(blob_size));
+    //   data_to_train.emplace_back(static_cast<double>(blob_size));
 
-      } else {
-        // assert(edcs.size() == 0);
-        for(size_t k=0; k < n_edc_feature; k++) {
-          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-          float new_edc = hash_edc[_distance_idx]  + 1;
-          edcs[k] = new_edc;
-          indices.emplace_back(max_n_past_timestamps+2+k);
-          data.emplace_back(new_edc);
-        }
-      }
+    //   indices.emplace_back(max_n_past_timestamps + 1);
+    //   data.emplace_back(static_cast<double>(n_within));
+    //   data_to_train.emplace_back(static_cast<double>(n_within));
+    //   // counter += 2;
 
-      if(booster_handle_ ) {
-        assert(indices.size() == data.size());
+    //   if(past_distances_count> 0) {
+    //     for(i=0; i < n_edc_feature; i++) {
+    //       float edc;
+    //       ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+    //       edcs.emplace_back(edc);
+    //       data_to_train.emplace_back(edc);
+    //       assert(ok);
+    //     }
+    //   } else {
+    //     for(i=0; i < n_edc_feature; i++) {
+    //       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+    //       float edc = hash_edc[_distance_idx]   ;
+    //       edcs.emplace_back(edc);
+    //       data_to_train.emplace_back(edc);
+    //       assert(ok);
+    //     }
+    //   }
+    //   //update edcs
+    //   // Need to set up edcs if past_distances_count = 0
+    //   if(past_distances_count > 0) {
+    //     // assert(past_distances_count >= 0);
 
-        std::string inference_params = "num_threads=1 verbosity=0";
-        std::vector<double> out_result(LifetimeSequence.size(), 0.0);
-        int64_t out_len ;
-        assert(data.size() <= num_features_);
-        indptr[1] = data.size();
-      // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
-      //                                                         static_cast<void *>(indptr.data()),
-      //                                                          C_API_DTYPE_INT32,
-      //                                                          indices.data(),
-      //                                                         static_cast<void *>(data.data()),
-      //                                                          2,
-      //                                                          data.size(),
-      //                                                          &out_len,
-      //                                                          out_result.data());
-      int predict_res = 0;
-      {
-
-    // std::shared_lock<std::shared_mutex> lock(*booster_mutex_);
-       predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-                                static_cast<void *>(indptr.data()),
-                                C_API_DTYPE_INT32,
-                                indices.data(),
-                                static_cast<void *>(data.data()),
-                                C_API_DTYPE_FLOAT64,
-                                2,
-                                data.size(),
-                                num_features_,  //remove future t
-                                C_API_PREDICT_NORMAL,
-                                0,
-                                32,
-                                inference_params.c_str(),
-                                &out_len,
-                                out_result.data());
-
-      }
-        if(predict_res != 0) {
-          assert(false);
-        }
-        // uint32_t max_idx = 0;
-        double max_val = 0.0;
-        for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
-          data.emplace_back(out_result[res_idx]);
-          if(out_result[res_idx] > max_val) {
-            max_val = out_result[res_idx];
-            maxIndex = res_idx;
-          }
-        }
-        // double orig_value = std::expm1(out_result[0]);
-        // auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
-        // if(lower_bound_iter == std::end(LifetimeSequence)) {
-        //   maxIndex = LifetimeSequence.size() - 1;
-        // } else {
-        //   maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
-        // }
-        //
-        // maxIndex = out_result[0] > 0.5 ? 1 : 0;
-
-        // s = WriteTrainDataToFile(data,maxIndex);
-        assert(s.ok());
-      }
-      lifetime_keys_count_[maxIndex] += 1;
-
-      // count new past_distances
-      past_distances_count += 1;
-    
-      // if(fast_config_handle_ ) {
-      //   assert(lifetime_blob_file_builders_.size() > 0);
-      //   assert(num_features_ > 0);
-      //   assert(version_set_);
-      //   std::vector<double> feature_vec;
-      //   // Todo: get features from memtable
-
-      //   auto key_str = user_key().ToString();
-      //   key_metas_mutex_->lock();
-      //   if(key_metas_->find(key_str) == key_metas_->end()) {
-      //     maxIndex = 0;
-      //     // add new key meta.
-
-      //     key_metas_mutex_->unlock();
-      //   } else {
-      //     auto& key_meta = key_metas_->at(key_str);
-      //     std::vector<int32_t> indptr(2);
-      //     indptr[0] = 0;
-
-      //     // int32_t indices[compaction_->real_compaction()->immutable_options()->num_features];
-      //     // double data[compaction_->real_compaction()->immutable_options()->num_features];
-      //     std::vector<int32_t> indices;
-      //     indices.reserve(num_features_);
-      //     std::vector<double> data;
-      //     data.reserve(num_features_);
-      //     int32_t counter =0;
-
-      //     // uint64_t delta = version_set_->LastSequence() - key_meta->last_seq;
-      //     // const VersionSet* const version_set = compaction_->real_compaction()->input_version()->version_set();
-      //     uint64_t cur_seq = version_set_->LastSequence();
-      //     // uint64_t delta = cur_seq - key_meta.past_sequence_;
-      //     // indices.emplace_back(0);
-      //     // data.emplace_back(static_cast<double>(delta));
-      //     // counter++;
-      //     
-
-      //     uint8_t j = 0;
-      //     uint32_t this_past_distance = 0;
-      //     uint8_t n_within = 0;
-      //     if (key_meta._extra) {
-      //       for (j = 0; j < key_meta._extra->_past_distance_idx && j < max_n_past_distances; ++j) {
-      //         uint8_t past_distance_idx = (key_meta._extra->_past_distance_idx - 1 - j) % max_n_past_distances;
-      //         uint32_t &past_distance = key_meta._extra->_past_distances[past_distance_idx];
-      //         this_past_distance += past_distance;
-      //         // indices[feature_idx] = j + 1;
-      //         indices.emplace_back(j  );
-      //         // data[feature_idx++] = past_distance;
-      //         data.emplace_back(static_cast<double>(past_distance));
-      //         if (this_past_distance < memory_window) {
-      //             ++n_within;
-      //         }
-      //       }
-      //     }
-      //     counter += j;
-
-      //     indices.emplace_back(max_n_past_timestamps);
-      //     data.emplace_back(static_cast<double>(key_meta.size_));
-      //     counter++;
-      //     // indices[feature_idx] = max_n_past_timestamps;
-      //     // data[feature_idx++] = key_meta.size_;
-
-      //     indices.emplace_back(max_n_past_timestamps + 1);
-      //     data.emplace_back(static_cast<double>(n_within));
-      //     counter++;
-      //     // indices[feature_idx] = max_n_past_timestamps + 1;
-      //     // data[feature_idx++] = n_within;
-
-
-      //     if (key_meta._extra) {
-      //       for (int k = 0; k < n_edc_feature; ++k) {
-      //         // indices[feature_idx] = max_n_past_timestamps +  2 + k;
-      //         indices.emplace_back(max_n_past_timestamps +  2 + k);
-      //         // uint32_t _distance_idx = std::min(uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
-      //         //                              max_hash_edc_idx);
-      //         // data[feature_idx++] = key_meta._extra->_edc[k] * hash_edc[_distance_idx];
-      //         //
-      //         // uint32_t _distance_idx = std::min(uint32_t(key_meta.past_sequence_ - key_meta.past_sequqence_2_) / edc_windows[k],
-      //         //                              max_hash_edc_idx);
-      //         // data.emplace_back(key_meta._extra->_edc[k] * hash_edc[_distance_idx]);
-      //         data.emplace_back(key_meta._extra->_edc[k]);
-      //       }
-      //     } else {
-      //       // data[feature_idx++] = hash_edc[_distance_idx];
-      //       for(int k = 0; k < n_edc_feature; ++k) {
-
-      //         indices.emplace_back(max_n_past_timestamps +  2 + k);
-      //         uint32_t _distance_idx = std::min(uint32_t(key_meta.past_sequence_ - key_meta.past_sequqence_2_) / edc_windows[k],
-      //                                      max_hash_edc_idx);
-      //         // uint32_t _distance_idx = std::min(uint32_t(cur_seq - key_meta.past_sequence_) / edc_windows[k],
-      //         //                              max_hash_edc_idx);
-      //         // data.emplace_back(hash_edc[_distance_idx]);
-      //         data.emplace_back(0);
-      //       }
-      //     }
-
-      //     key_metas_mutex_->unlock();
-      //     counter += n_edc_feature;
-      //     indptr[1] = counter;
+    //     // Model prediction
+    //     // This is not good as well. Any better solution ?
+    //     double inverse_distance = 1.0 / double(edcs[0]);
+    //     // add training sample with inverse_distance probability
+    //     std::random_device rd;
+    //     std::mt19937 gen(rd());
+    //     std::uniform_real_distribution<> dis(0, 1);
+    //     double prob = dis(gen);
+    //     if(prob < inverse_distance) {
+    //       data_to_train.emplace_back(static_cast<double>(distance));
+    //       s = db_->AddTrainingSample(data_to_train);
+    //       assert(s.ok()); 
+    //     }
+    //   }
 
 
 
-      //     // bool get_feat = GetFeatures(&feature_vec);
-      //     
-      //     // if(!get_feat) {
-      //     //   fprintf(stderr, " should get feat for seq %lu \n", ikey().sequence); 
-      //     //   // return false;
-      //     //   assert(false);
-      //     // }
-      //     //
-      //     //
-      //     //LIGHTGBM_C_EXPORT int LGBM_BoosterPredictForCSRSingleRowFast(FastConfigHandle fastConfig_handle,
-      //                                                            // const void* indptr,
-      //                                                            // const int indptr_type,
-      //                                                            // const int32_t* indices,
-      //                                                            // const void* data,
-      //                                                            // const int64_t nindptr,
-      //                                                            // const int64_t nelem,
-      //                                                            // int64_t* out_len,
-      //                                                            // double* out_result);
+    //   if(past_distances_count > 0) {
+    //     assert(edcs.size() == n_edc_feature);
+    //     for(size_t k=0; k < n_edc_feature; k++) {
+    //       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+    //       edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
+    //       indices.emplace_back(max_n_past_timestamps+2+k);
+    //       data.emplace_back(edcs[k]);
+    //     }
 
+    //   } else {
+    //     // assert(edcs.size() == 0);
+    //     for(size_t k=0; k < n_edc_feature; k++) {
+    //       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+    //       float new_edc = hash_edc[_distance_idx]  + 1;
+    //       edcs[k] = new_edc;
+    //       indices.emplace_back(max_n_past_timestamps+2+k);
+    //       data.emplace_back(new_edc);
+    //     }
+    //   }
 
-      //     int64_t out_len = 0;
-      //     uint64_t classification_num = lifetime_blob_file_builders_.size();
-      //     assert(classification_num >= 1);
-      //     // std::vector<double> out_result(classification_num, 0.0);
-      //     std::vector<double> out_result(1, 0.0);
+    //   if(booster_handle_ ) {
+    //     assert(indices.size() == data.size());
 
-      //     // std::string inference_params = "num_threads=1";
-      //     std::unordered_map<std::string, std::string>  training_params = {
-      //           //don't use alias here. C api may not recongize
-      //           {"boosting",         "gbdt"},
-      //           {"objective",        "binary"},
-      //           {"num_iterations",   "32"},
-      //           {"num_leaves",       "32"},
-      //           {"bagging_freq",     "5"},
-      //           {"bagging_fraction", "0.8"},
-      //           {"learning_rate",    "0.1"},
-      //           {"verbosity",        "0"},
-      //   };
-      //   std::string params_string;
-      //   for (const auto& kv : training_params) {
-      //     params_string += kv.first + "=" + kv.second + " ";
-      //       // converted_params.push_back(kv.first + "=" + kv.second);
-      //   }
-      //   auto params = params_string.c_str();
+    //     std::string inference_params = "num_threads=1 verbosity=0";
+    //     std::vector<double> out_result(LifetimeSequence.size(), 0.0);
+    //     int64_t out_len ;
+    //     assert(data.size() <= num_features_);
+    //     indptr[1] = data.size();
+    //   // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
+    //   //                                                         static_cast<void *>(indptr.data()),
+    //   //                                                          C_API_DTYPE_INT32,
+    //   //                                                          indices.data(),
+    //   //                                                         static_cast<void *>(data.data()),
+    //   //                                                          2,
+    //   //                                                          data.size(),
+    //   //                                                          &out_len,
+    //   //                                                          out_result.data());
+    //   int predict_res = 0;
+    //   {
 
-      //   int predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-      //                             static_cast<void *>(indptr.data()),
-      //                             C_API_DTYPE_INT32,
-      //                             indices.data(),
-      //                             static_cast<void *>(data.data()),
-      //                             C_API_DTYPE_FLOAT64,
-      //                             2,
-      //                             data.size(),
-      //                             num_features_,  //remove future t
-      //                             C_API_PREDICT_NORMAL,
-      //                             0,
-      //                             32,
-      //                             params,
-      //                             &out_len,
-      //                             out_result.data());
-      //     // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
-      //     //                                                          indptr, C_API_DTYPE_INT32,
-      //     //                                                          indices,
-      //     //                                                          data,
-      //     //                                                          2,
-      //     //                                                          feature_idx,
-      //     //                                                          &out_len,
-      //     //                                                          out_result.data());
-      //     //
-      //     // assert(fast_config_handle_);
-      //     // int predict_res =  LGBM_BoosterPredictForMatSingleRowFast(
-      //     //     fast_config_handle_.get(), feature_vec.data(), &out_len, out_result.data());
-      //     if(predict_res != 0) {
-      //       fprintf(stderr, " predict error \n");
-      //       assert(false);
-      //     }
-      //     s = WriteTrainDataToFile(data,out_result[0]);
-      //     if(!s.ok()) {
-      //       fprintf(stderr, " write train data to file error \n");
-      //       assert(false);
-      //     }
+    // // std::shared_lock<std::shared_mutex> lock(*booster_mutex_);
+    //    predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+    //                             static_cast<void *>(indptr.data()),
+    //                             C_API_DTYPE_INT32,
+    //                             indices.data(),
+    //                             static_cast<void *>(data.data()),
+    //                             C_API_DTYPE_FLOAT64,
+    //                             2,
+    //                             data.size(),
+    //                             num_features_,  //remove future t
+    //                             C_API_PREDICT_NORMAL,
+    //                             0,
+    //                             32,
+    //                             inference_params.c_str(),
+    //                             &out_len,
+    //                             out_result.data());
 
-      //     // int maxIndex = std::distance(out_result.begin(), std::max_element(out_result.begin(), out_result.end()));
-      //     maxIndex = out_result[0] > 0.5 ? 1: 0;
-      //     lifetime_keys_count_[maxIndex] += 1;
-      //   }
-      // }
+    //   }
+    //     if(predict_res != 0) {
+    //       assert(false);
+    //     }
+    //     // uint32_t max_idx = 0;
+    //     double max_val = 0.0;
+    //     for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
+    //       data.emplace_back(out_result[res_idx]);
+    //       if(out_result[res_idx] > max_val) {
+    //         max_val = out_result[res_idx];
+    //         maxIndex = res_idx;
+    //       }
+    //     }
+    //     // double orig_value = std::expm1(out_result[0]);
+    //     // auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
+    //     // if(lower_bound_iter == std::end(LifetimeSequence)) {
+    //     //   maxIndex = LifetimeSequence.size() - 1;
+    //     // } else {
+    //     //   maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+    //     // }
+    //     //
+    //     // maxIndex = out_result[0] > 0.5 ? 1 : 0;
+
+    //     // s = WriteTrainDataToFile(data,maxIndex);
+    //     assert(s.ok());
+    //   }
+    //   lifetime_keys_count_[maxIndex] += 1;
+
+    //   // count new past_distances
+    //   past_distances_count += 1;
+    // 
     } else {
       // no previous key write  
       // write past_distances_count = 0 to file.
@@ -1739,11 +1553,13 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       assert(past_distances_count == 0);
     }
    
+    lifetime_keys_count_[maxIndex] += 1;
     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
 
     past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
     PutVarint32(&blob_index_, past_distances_count);
     if(past_distances_count > 0) {
+      assert(false);
       PutVarint64(&blob_index_, distance ); 
       // write past_distances to value
       for(size_t i = 0; i < past_distances_count-1; i++) {
