@@ -214,26 +214,26 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
                        C_API_DTYPE_FLOAT32);
   assert(res == 0);
   
-  uint64_t sample_size = labels_.size();
-  std::vector<float> label_weights(LifetimeSequence.size(), 0);
-  for(size_t i = 0; i < label_count_.size(); ++i) {
-    if(label_count_[i] == 0) {
-      continue;
-    }
+  // uint64_t sample_size = labels_.size();
+  // std::vector<float> label_weights(LifetimeSequence.size(), 0);
+  // for(size_t i = 0; i < label_count_.size(); ++i) {
+  //   if(label_count_[i] == 0) {
+  //     continue;
+  //   }
 
-    label_weights[i] = float(sample_size) /  label_count_[i] ;
-  }
-  for(size_t i = 0; i < labels_.size(); ++i) {
-    weights_.emplace_back(label_weights[labels_[i]]);
-  }
+  //   label_weights[i] = float(sample_size) /  label_count_[i] ;
+  // }
+  // for(size_t i = 0; i < labels_.size(); ++i) {
+  //   weights_.emplace_back(label_weights[labels_[i]]);
+  // }
 
-  res = LGBM_DatasetSetField(trainData,
-                       "weight",
-                       static_cast<void *>(weights_.data()),
-                       weights_.size(),
-                       C_API_DTYPE_FLOAT32);
+  // res = LGBM_DatasetSetField(trainData,
+  //                      "weight",
+  //                      static_cast<void *>(weights_.data()),
+  //                      weights_.size(),
+  //                      C_API_DTYPE_FLOAT32);
 
-  assert(res == 0);
+  // assert(res == 0);
 
   // init booster
   res = LGBM_BoosterCreate(trainData, params, new_model_ptr);

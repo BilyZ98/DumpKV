@@ -12380,20 +12380,179 @@ accumulated enough data before starts.
 This can help reduce number of blob files.
 
 
+[Todo]
+Plot figure with other db
+
+target sst file size : 100 M
+0.2 zipfian
+1024, 4096
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-14-44-01-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-little-bit-large-sst-release-default_2_1024
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-09-21-55-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-large-sst-file-release-default_2_1024
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-17-16-49-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-little-bit-large-sst-release-default_2_4096
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-12-24-35-0.2-zipfian-100M-ycsba-starting-level1-balance-weighted-dataset-large-sst-file-release-default_2_4096
+
+0.99 zipfian 
+1024 4096
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-09-25-31-0.99-zipfian-100M-ycsba-starting-level1-balance-weight-dataset-large-sst-file-release-default_2_1024
+/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools/2024-03-29-12-26-48-0.99-zipfian-100M-ycsba-starting-level1-balance-weight-dataset-large-sst-file-release-default_2_4096
+
+[Status: Ongoing]
+
+
+[Todo]
+
+Draw figures
+1. dumpkv arch
+2. dumpkv gc process
+3. dumpkv lazy value pointer pudate process
+4. sotrage overhead for features ( table )
+
+Do I need a model training and data collection process?
+
+
+[Status: Ongoing]
+
+
+[Todo]
+0.2 zipfian 
+Unique key count: 5.5M 
+Total size : 20.9808349609 GB
+[Status: Not started]
+
+
+[Todo]
+Try to increase prediction accuracy.
+I think I can tolerate some misprediction
+that predicts long lifetime to short.
+[Status: Not started]
+
+[Todo]
+Add wrongly predicted keys to training sample
+[Status: Not started]
+
+[Todo]
+Increase training sample from 128 k to 256 k or 512k.
+Seems it does not work.
+No wamp decrease, no total size decrease.
+What's weird is that total size higher with 256k training sample and little bit 
+large sst file size.
+
+little bit large ( 8M)
+```
+Uptime(secs): 13227.3 total, 47.0 interval
+Cumulative writes: 49M writes, 49M keys, 49M commit groups, 1.0 writes per commit group, ingest: 201.72 GB, 15.62 MB/s
+Cumulative WAL: 49M writes, 49M syncs, 1.00 writes per sync, written: 201.72 GB, 15.62 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 138K writes, 138K keys, 138K commit groups, 1.0 writes per commit group, ingest: 576.37 MB, 12.27 MB/s
+Interval WAL: 138K writes, 138K syncs, 1.00 writes per sync, written: 0.56 GB, 12.27 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      3/3   297.93 MB   0.0      0.0     0.0      0.0     201.6    201.6       0.0   1.0      0.0    187.8   1099.19            295.76      2079    0.529       0      0       0.0       0.0
+  L1     33/33  256.12 MB   0.0    337.4   200.8    136.5     150.7     14.1       0.4   1.8     62.6     65.3   5517.68           5166.17      1685    3.275    449M  1557K       0.0     201.2
+  L2    205/0    1.59 GB   3.3     69.8    14.2     55.6      62.9      7.3       0.1   4.5    187.7    170.2    380.84            303.85      1926    0.198    223M    18M       0.0       0.4
+  L3    295/0    1.66 GB   0.4     12.8     5.1      7.7       8.7      1.0       0.7   1.7    168.2    113.8     78.13             58.93       737    0.106     43M    14M       0.0       0.0
+ Sum    536/36   3.79 GB   0.0    674.1   220.1    199.9     423.9    224.0       1.2   3.6     80.9     86.7   8534.95           7039.15      6427    1.328    778M    72M     254.1     298.6
+ Int      0/0    0.00 KB   0.0     34.4     9.3      9.1      18.7      9.6       0.0   3.7     71.0     69.0    496.02            385.13       198    2.505     27M  3449K      16.0      14.7
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0    674.1   220.1    199.9     222.3     22.4       0.0   0.0     92.8     71.7   7435.76           6743.38      4348    1.710    778M    72M     254.1     298.6
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0     201.6    201.6       0.0   0.0      0.0    187.8   1099.19            295.76      2079    0.529       0      0       0.0       0.0
+
+Blob file count: 3299, total size: 44.5 GB, garbage size: 0.0 GB, space amp: 1.0
+
+Uptime(secs): 13227.3 total, 601.3 interval
+Flush(GB): cumulative 201.604, interval 8.921
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 625.44 GB write, 48.42 MB/s write, 420.01 GB read, 32.52 MB/s read, 7075.8 seconds
+Interval compaction: 27.42 GB write, 46.70 MB/s write, 18.40 GB read, 31.34 MB/s read, 376.6 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+Block cache LRUCache@0x556d501e7ff0#3370879 capacity: 16.00 GB usage: 16.00 GB table_size: 4194304 occupancy: 59872 collections: 23 last_copies: 0 last_secs: 0.597564 secs_since: 0
+Block cache entry stats(count,size,portion): DataBlock(2098538,15.83 GB,98.9144%) Misc(5,33.75 KB,0.000201166%)
+
+
+```
+
+Fix sst file size(30M)
+```
+Uptime(secs): 12611.7 total, 41.3 interval
+Cumulative writes: 48M writes, 48M keys, 48M commit groups, 1.0 writes per commit group, ingest: 196.49 GB, 15.95 MB/s
+Cumulative WAL: 48M writes, 48M syncs, 1.00 writes per sync, written: 196.49 GB, 15.95 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 169K writes, 169K keys, 169K commit groups, 1.0 writes per commit group, ingest: 706.79 MB, 17.11 MB/s
+Interval WAL: 169K writes, 169K syncs, 1.00 writes per sync, written: 0.69 GB, 17.11 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      3/3   297.91 MB   0.0      0.0     0.0      0.0     196.4    196.4       0.0   1.0      0.0    444.7    452.21            281.21      2025    0.223       0      0       0.0       0.0
+  L1      8/8   227.57 MB   0.0    341.3   196.1    145.2     157.7     12.4       0.0   1.8     69.8     72.2   5007.77           4824.39       674    7.430    521M  7705K       0.0     195.6
+  L2     69/0    1.75 GB   0.9     56.3    11.9     44.4      45.8      1.4       0.3   3.9    237.0    193.0    243.09            221.78       425    0.572    185M    34M       0.0       0.0
+ Sum     80/11   2.26 GB   0.0    656.7   208.0    189.6     399.8    210.2       0.3   3.5     94.8    100.4   7093.00           6507.11      3124    2.270    770M    80M     259.2     295.5
+ Int      0/0    0.00 KB   0.0     37.6    10.6     10.5      21.1     10.6       0.0   3.8     90.8     91.1    423.68            390.25       159    2.665     40M  4789K      16.5      16.6
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop Rblob(GB) Wblob(GB)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Low      0/0    0.00 KB   0.0    656.7   208.0    189.6     203.5     13.9       0.0   0.0    101.3     76.9   6640.79           6225.89      1099    6.043    770M    80M     259.2     295.5
+High      0/0    0.00 KB   0.0      0.0     0.0      0.0     196.4    196.4       0.0   0.0      0.0    444.7    452.21            281.21      2025    0.223       0      0       0.0       0.0
+
+Blob file count: 1211, total size: 36.3 GB, garbage size: 0.0 GB, space amp: 1.0
+
+Uptime(secs): 12611.7 total, 600.6 interval
+Flush(GB): cumulative 196.368, interval 9.891
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 595.42 GB write, 48.35 MB/s write, 397.58 GB read, 32.28 MB/s read, 5703.1 seconds
+Interval compaction: 30.95 GB write, 52.77 MB/s write, 21.07 GB read, 35.92 MB/s read, 329.8 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+Block cache LRUCache@0x56074dd99ff0#3397390 capacity: 16.00 GB usage: 16.00 GB table_size: 4194304 occupancy: 51272 collections: 22 last_copies: 0 last_secs: 0.615633 secs_since: 0
+Block cache entry stats(count,size,portion): DataBlock(2094619,15.83 GB,98.9127%) Misc(2,8.61 KB,5.13159e-05%)
+
+```
+I don't know why there is such a diff in terms of total size between fixed sst size and 
+dynamic small sst file size.
+[Status: Done]
+
+
+[Todo]
+Accumulate training sample or refit existing model
+[Status: Not started]
+
+[Todo]
+Use model to give prediction to keys in gc.
+[Status: Not started]
+
+[Todo]
+Remove weighted sample to get lower total size.
+[Status: Ongoing]
+
+[Todo]
+Too many fragmented blob files.
+[Status: Not started]
 
 
 
+[Todo]
+Do kv sep in flush process.
+This aims to reduce write amplifcation.
+[Status: Not started]
 
 
-
-
-
-
-
-
-
-
-
+[Todo]
+Do parallel compaction during l0-l1 compaction.
+This aims to increase compaction througput.
+[Status: Not started]
 
 
 

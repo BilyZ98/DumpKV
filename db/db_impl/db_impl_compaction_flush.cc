@@ -3060,7 +3060,8 @@ void DBImpl::BackgroundCallDataCollection() {
     Status s = training_data_->AddTrainingSample(data, label);
     assert(s.ok());
 
-    const uint64_t threshold = 128000;
+    // const uint64_t threshold = 128000;
+    const uint64_t threshold = 256000;
     if(training_data_->GetNumTrainingSamples() >= threshold) {
 
       BoosterHandle *new_model = new BoosterHandle();
