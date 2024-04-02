@@ -27,7 +27,7 @@ function call_run_blob() {
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    VALUE_SIZE=$cur_value_size \
    USE_BLOB_CACHE=0 \
-   BLOB_FILE_STARTING_LEVEL=1 \
+   BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
    ./run_blob_bench_fix_sst_size.sh
 
@@ -71,7 +71,7 @@ function run_with_gc_dbbench {
 
   # lifetime_idx_range=$(seq 0 1 3)
   # lifetime_idx_range=(2 1 0)
-  lifetime_idx_range=(2 1)
+  lifetime_idx_range=(1 )
   # value_sizes=(1024 4096 16384 65536)
   value_sizes=(4096 1024)
   # lifetime_idx_range=(1 3)

@@ -3555,6 +3555,11 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
                              0);
 
    
+    std::shared_ptr<BoosterHandle> lightgbm_handle=nullptr;
+    {
+      std::shared_lock<std::shared_mutex> lock(booster_mutex_);
+      lightgbm_handle = lightgbm_handle_;
+    }
     GarbageCollectionJob gc_job(job_context->job_id,
                                 gc.get(),
                                 immutable_db_options_,
@@ -3575,7 +3580,8 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
                                 &compaction_job_stats,
                                 thread_pri,
                                 this,
-                                &training_data_queue_);
+                                &training_data_queue_,
+                                lightgbm_handle);
 
     gc_job.Prepare();
     mutex_.Unlock();

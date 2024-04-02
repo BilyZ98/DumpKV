@@ -83,7 +83,8 @@ GarbageCollectionJob::GarbageCollectionJob(
      CompactionJobStats* compaction_job_stats,
     Env::Priority thread_pri,
     DBImpl* db,
-    moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue)
+    moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue,
+     std::shared_ptr<BoosterHandle> booster_handle)
     : gc_(gc),
       db_options_(db_options),
       mutable_db_options_copy_(mutable_db_options),
@@ -107,12 +108,17 @@ GarbageCollectionJob::GarbageCollectionJob(
       write_hint_(Env::WLTH_NOT_SET),
       gc_output_(gc),
       training_data_queue_(training_data_queue),
-      num_features_(db_options_.num_features)
+      num_features_(db_options_.num_features),
+      default_lifetime_idx_(db_options_.default_lifetime_idx),
+      booster_handle_( booster_handle) 
       {
 
   assert(log_buffer_ != nullptr);
   // assert(compaction_job_stats_ != nullptr);
-
+  lifetime_keys_count_.resize(LifetimeSequence.size());
+  for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
+    lifetime_keys_count_[i] = 0;
+  }
 }
 
 GarbageCollectionJob::~GarbageCollectionJob() {
@@ -164,7 +170,6 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
 
 
 
-
   auto vstorage = cfd->current()->storage_info();
   const auto& blob_files = vstorage->GetBlobFiles();
   const auto& lifetime_blob_files = vstorage->GetLifetimeBlobFiles();
@@ -193,6 +198,14 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
     }
     
   }
+
+  std::string gc_key_count = "gc key count ";
+  for(size_t i = 0; i < lifetime_keys_count_.size(); i++){
+    gc_key_count += std::to_string(i) + ":" + std::to_string(lifetime_keys_count_[i]) + " ";
+  }
+  ROCKS_LOG_INFO(
+      db_options_.info_log, "%s",gc_key_count.c_str());
+
 
 
   CleanupGarbageCollection();
@@ -315,8 +328,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   ParsedInternalKey past_key;
   s = ParseInternalKey(iter->key(), &past_key, false);
   past_seq = past_key.sequence;
-  // uint64_t distance = ikey().sequence - past_seq;
-  // assert(distance > 0);
+  distance = versions_->LastSequence()- past_seq;
+  assert(distance > 0);
 
 
   std::vector<double> data_to_train;
@@ -329,15 +342,15 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint32_t this_past_distance = 0;
   uint8_t n_within = 0;
   uint32_t i = 0;
-  // data.emplace_back(static_cast<double>(distance));
-  // indices.emplace_back(0);
+  data.emplace_back(static_cast<double>(distance));
+  indices.emplace_back(0);
   assert(past_distances_count <= max_n_past_timestamps);
-  for(i=0; i < past_distances_count && i < max_n_past_timestamps; i++) {
+  for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
     uint64_t past_distance;
     ok = GetVarint64(&prev_value, &past_distance);
     past_distances.emplace_back(past_distance);
     this_past_distance +=  past_distance;  
-    indices.emplace_back(i);
+    indices.emplace_back(i+1);
     data.emplace_back(static_cast<double>(past_distance));
     if (this_past_distance < memory_window) {
       ++n_within;
@@ -354,7 +367,6 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   indices.emplace_back(max_n_past_timestamps + 1);
   data.emplace_back(static_cast<double>(n_within));
   data_to_train.emplace_back(static_cast<double>(n_within));
-  // counter += 2;
 
   if(past_distances_count> 0) {
     for(i=0; i < n_edc_feature; i++) {
@@ -375,47 +387,24 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   }
   //update edcs
   // Need to set up edcs if past_distances_count = 0
-  if(past_distances_count > 0) {
-    // assert(past_distances_count >= 0);
+  // if(past_distances_count > 0) {
 
-    // Model prediction
-    // This is not good as well. Any better solution ?
-    double inverse_distance = 1.0 / double(edcs[0]);
-    // add training sample with inverse_distance probability
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0, 1);
-    double prob = dis(gen);
-    if(prob < inverse_distance) {
-      data_to_train.emplace_back(static_cast<double>(distance));
-      s = db_->AddTrainingSample(data_to_train);
-      assert(s.ok()); 
-    }
-  }
+  //   // Model prediction
+  //   // This is not good as well. Any better solution ?
+  //   double inverse_distance = 1.0 / double(edcs[0]);
+  //   // add training sample with inverse_distance probability
+  //   std::random_device rd;
+  //   std::mt19937 gen(rd());
+  //   std::uniform_real_distribution<> dis(0, 1);
+  //   double prob = dis(gen);
+  //   if(prob < inverse_distance) {
+  //     data_to_train.emplace_back(static_cast<double>(distance));
+  //     s = db_->AddTrainingSample(data_to_train);
+  //     assert(s.ok()); 
+  //   }
+  // }
 
-
-
-  if(past_distances_count > 0) {
-    assert(edcs.size() == n_edc_feature);
-    for(size_t k=0; k < n_edc_feature; k++) {
-      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-      edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
-      indices.emplace_back(max_n_past_timestamps+2+k);
-      data.emplace_back(edcs[k]);
-    }
-
-  } else {
-    // assert(edcs.size() == 0);
-    for(size_t k=0; k < n_edc_feature; k++) {
-      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-      float new_edc = hash_edc[_distance_idx]  + 1;
-      edcs[k] = new_edc;
-      indices.emplace_back(max_n_past_timestamps+2+k);
-      data.emplace_back(new_edc);
-    }
-  }
-
-  if(booster_handle_ ) {
+    if(booster_handle_ ) {
     assert(indices.size() == data.size());
 
     std::string inference_params = "num_threads=1 verbosity=0";
@@ -423,40 +412,28 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     int64_t out_len ;
     assert(data.size() <= num_features_);
     indptr[1] = data.size();
-  // int predict_res = LGBM_BoosterPredictForCSRSingleRowFast(*(fast_config_handle_.get()), 
-  //                                                         static_cast<void *>(indptr.data()),
-  //                                                          C_API_DTYPE_INT32,
-  //                                                          indices.data(),
-  //                                                         static_cast<void *>(data.data()),
-  //                                                          2,
-  //                                                          data.size(),
-  //                                                          &out_len,
-  //                                                          out_result.data());
-  int predict_res = 0;
-  {
+    int predict_res = 0;
+    {
+     predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
+                              static_cast<void *>(indptr.data()),
+                              C_API_DTYPE_INT32,
+                              indices.data(),
+                              static_cast<void *>(data.data()),
+                              C_API_DTYPE_FLOAT64,
+                              2,
+                              data.size(),
+                              num_features_,  //remove future t
+                              C_API_PREDICT_NORMAL,
+                              0,
+                              32,
+                              inference_params.c_str(),
+                              &out_len,
+                              out_result.data());
 
-// std::shared_lock<std::shared_mutex> lock(*booster_mutex_);
-   predict_res =  LGBM_BoosterPredictForCSR(*(booster_handle_.get()),
-                            static_cast<void *>(indptr.data()),
-                            C_API_DTYPE_INT32,
-                            indices.data(),
-                            static_cast<void *>(data.data()),
-                            C_API_DTYPE_FLOAT64,
-                            2,
-                            data.size(),
-                            num_features_,  //remove future t
-                            C_API_PREDICT_NORMAL,
-                            0,
-                            32,
-                            inference_params.c_str(),
-                            &out_len,
-                            out_result.data());
-
-  }
+    }
     if(predict_res != 0) {
       assert(false);
     }
-    // uint32_t max_idx = 0;
     double max_val = 0.0;
     for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
       data.emplace_back(out_result[res_idx]);
@@ -479,9 +456,10 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     assert(s.ok());
   }
   lifetime_keys_count_[maxIndex] += 1;
+  return maxIndex;
 
   // count new past_distances
-  past_distances_count += 1;
+  // past_distances_count += 1;
 
 
 }
@@ -629,7 +607,8 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
           parsed_ikey.sequence == parsed_blob_key.sequence &&
           parsed_ikey.type == rocksdb::kTypeBlobIndex) {
 
-          next_lifetime_label = GetNextLifetimeIndex(versions_->LastSequence(), parsed_ikey.sequence);
+          next_lifetime_label = GetNewLifetimeIndex(iter);
+          // next_lifetime_label = GetNextLifetimeIndex(versions_->LastSequence(), parsed_ikey.sequence);
           // std::vector<double> key_meta;
           // bool ok = GetKeyMeta(find_internal_key, iter->value(), key_meta);
           // if(ok) {
@@ -754,17 +733,16 @@ void GarbageCollectionJob::LogGarbageCollection() {
   ROCKS_LOG_INFO(
         db_options_.info_log, "start gc job");
 
-    auto stream = event_logger_->Log();
-    stream << "job" << job_id_ << "event"
-           << "gc_started";
+  auto stream = event_logger_->Log();
+  stream << "job" << job_id_ << "event"
+         << "gc_started";
 
-    stream << "gc_files"  ;
-    stream.StartArray();
-    for(const auto& blob_file : *(gc_->inputs())) {
-      stream <<  blob_file->GetBlobFileNumber();
-    }
-    stream.EndArray();
-
+  stream << "gc_files"  ;
+  stream.StartArray();
+  for(const auto& blob_file : *(gc_->inputs())) {
+    stream <<  blob_file->GetBlobFileNumber();
+  }
+  stream.EndArray();
 
   log_buffer_->FlushBufferToLog();
 

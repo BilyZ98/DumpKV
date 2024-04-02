@@ -1335,6 +1335,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
   //   return false;
   // }
   if(lifetime_blob_file_builders_.size() == 0 || lifetime_blob_file_builders_[default_lifetime_idx_] == nullptr) {
+    assert(false);
     return false;
   }
 
@@ -1557,7 +1558,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
 
     past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
-    PutVarint32(&blob_index_, past_distances_count);
+    // PutVarint32(&blob_index_, past_distances_count);
     if(past_distances_count > 0) {
       assert(false);
       PutVarint64(&blob_index_, distance ); 
@@ -1634,30 +1635,191 @@ uint64_t CompactionIterator::GetLifetimeLabelFromTTL(uint64_t orig_lifetime_labe
   return new_lifetime_label; 
 }
 
+Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
+  key_meta_str_.clear();
+  // this means that this key is newly inserted in flush.
+  // We need to add past_distance_count to it.
+  bool is_iter_valid = false;
+  if(db_internal_iter_) {
+    db_internal_iter_->Seek(key());
+    is_iter_valid = db_internal_iter_->Valid(); 
+  }
+  if(!is_iter_valid) {
+    PutVarint32(&key_meta_str_, 0);
+    return key_meta_str_;
+  }
+  ParsedInternalKey parsed_previous_key;
+  Status s = ParseInternalKey(db_internal_iter_->key(), &parsed_previous_key, false);
+  if(!s.ok()) {
+    assert(false);
+  }
+  uint32_t past_distances_count = 0;
+  std::vector<uint64_t> past_distances;
+  past_distances.reserve(max_n_past_timestamps);
+  std::vector<float> edcs;
+  edcs.reserve(n_edc_feature);
+  uint64_t past_seq;
+  uint64_t distance = 0;
+
+  if(is_iter_valid && parsed_previous_key.user_key.compare(user_key()) ==0 ) {
+    if(  parsed_previous_key.sequence < ikey().sequence  ) {
+      bool get_feat = false;
+      BlobIndex prev_blob_index;
+      Slice prev_value = db_internal_iter_->value();
+      uint64_t blob_index_len = 0;
+      s = prev_blob_index.DecodeFromWithKeyMeta(prev_value, &blob_index_len);
+      assert(s.ok());
+      prev_value.remove_prefix(blob_index_len);
+      bool ok = GetVarint32(&prev_value, &past_distances_count);
+
+      if(!ok) {
+        assert(false);
+      }
+      past_seq = parsed_previous_key.sequence;
+      distance = ikey().sequence - past_seq;
+      assert(distance > 0);
+
+      std::vector<double> data_to_train;
+      uint32_t this_past_distance = 0;
+      uint8_t n_within = 0;
+      uint32_t i = 0;
+      assert(past_distances_count <= max_n_past_timestamps);
+      for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
+        uint64_t past_distance;
+        ok = GetVarint64(&prev_value, &past_distance);
+        past_distances.emplace_back(past_distance);
+        this_past_distance +=  past_distance;  
+        if(this_past_distance < memory_window) {
+          ++n_within;
+        }
+        data_to_train.emplace_back(static_cast<double>(past_distance));
+        assert(ok);
+      }
+
+      uint64_t blob_size = prev_blob_index.size();
+      data_to_train.emplace_back(static_cast<double>(blob_size));
+
+      data_to_train.emplace_back(static_cast<double>(n_within));
+
+      if(past_distances_count> 0) {
+        for(i=0; i < n_edc_feature; i++) {
+          float edc;
+          ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+          edcs.emplace_back(edc);
+          data_to_train.emplace_back(edc);
+          assert(ok);
+        }
+      } else {
+        for(i=0; i < n_edc_feature; i++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
+          float edc = hash_edc[_distance_idx]   ;
+          edcs.emplace_back(edc);
+          data_to_train.emplace_back(edc);
+        }
+      }
+      //update edcs
+      // Need to set up edcs if past_distances_count = 0
+      if(past_distances_count > 0) {
+        // Model prediction
+        // This is not good as well. Any better solution ?
+        double inverse_distance = 1.0 / double(edcs[0]);
+        // add training sample with inverse_distance probability
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0, 1);
+        double prob = dis(gen);
+        if(prob < inverse_distance) {
+          data_to_train.emplace_back(static_cast<double>(distance));
+          s = db_->AddTrainingSample(data_to_train);
+          assert(s.ok()); 
+        }
+      }
+
+      if(past_distances_count > 0) {
+        assert(edcs.size() == n_edc_feature);
+        for(size_t k=0; k < n_edc_feature; k++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+          edcs[k] = edcs[k] * hash_edc[_distance_idx] + 1;
+        }
+      } else {
+        // assert(edcs.size() == 0);
+        for(size_t k=0; k < n_edc_feature; k++) {
+          uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+          float new_edc = hash_edc[_distance_idx]  + 1;
+          edcs[k] = new_edc;
+        }
+      }
+      // count new past_distances
+      past_distances_count += 1;
+    } else {
+      assert(false);
+    }
+  } else {
+    assert(past_distances_count == 0);
+  }
+
+  past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
+  PutVarint32(&key_meta_str_, past_distances_count);
+  if(past_distances_count > 0) {
+    PutVarint64(&key_meta_str_, distance ); 
+    // write past_distances to value
+    for(size_t i = 0; i < past_distances_count-1; i++) {
+      PutVarint64(&key_meta_str_, past_distances[i]);
+    }
+    // write edcs to value
+    // Need to update edcs
+    for(int i = 0; i < n_edc_feature; i++) {
+      PutFixed32(&key_meta_str_, *reinterpret_cast<uint32_t*>(&edcs[i]));
+    }
+  }
+  Slice res(key_meta_str_.data() , key_meta_str_.size());
+  return res;
+}
+
 void CompactionIterator::UpdateValueBlobIndexIfNeeded() {
 
+  // This must be called in compaction job.
+  // So db_internal_iter must not have iterator of level 0
   assert(ikey_.type == kTypeBlobIndex);
   Slice orig_blob_index_slice = value_;
   assert(compaction_);
   const Version* const version = compaction_.get()->input_version();
   BlobIndex orig_blob_index;
-  uint64_t orig_blob_index_len;
+  uint64_t orig_blob_index_len=0;
   Status s= orig_blob_index.DecodeFromWithKeyMeta(orig_blob_index_slice, &orig_blob_index_len);
   assert(s.ok());
-  Slice orig_blob_without_key_meta(orig_blob_index_slice.data() ,  orig_blob_index_len);
-  Slice orig_blob_key_meta(orig_blob_index_slice.data() + orig_blob_index_len, orig_blob_index_slice.size() - orig_blob_index_len);
-  const Slice latest_blob_index_slice = version->GetLatestBlobIndex(orig_blob_index.file_number(),
-                                                                       orig_blob_without_key_meta);
+  
+  const uint64_t key_meta_len = orig_blob_index_slice.size() - orig_blob_index_len;
+  Slice res;
+  if(key_meta_len == 0 ) {
+    res = CollectKeyFeatures(orig_blob_index_slice);
+  }
 
+  Slice orig_blob_without_key_meta(orig_blob_index_slice.data() ,  orig_blob_index_len);
+  Slice blob_key_meta;
+  if(key_meta_len ==  0 ) {
+    blob_key_meta = res;
+    assert(blob_key_meta.size() > 0);
+  } else {
+    blob_key_meta = Slice(orig_blob_index_slice.data() + orig_blob_index_len, key_meta_len);
+  }
+
+  // Slice orig_blob_key_meta(orig_blob_index_slice.data() + orig_blob_index_len, orig_blob_index_slice.size() - orig_blob_index_len);
+  Slice latest_blob_index_slice = version->GetLatestBlobIndex(orig_blob_index.file_number(),
+                                                                       orig_blob_without_key_meta);
+  
   if(latest_blob_index_slice.empty() || orig_blob_without_key_meta.compare(latest_blob_index_slice) == 0) {
-    return;
+    if(key_meta_len > 0) {
+      return;
+    }
+    latest_blob_index_slice = orig_blob_without_key_meta;
   } else {
     num_blob_nidex_updated_++;  
-    blob_index_.clear();
-    blob_index_.append(latest_blob_index_slice.data(), latest_blob_index_slice.size());
-    blob_index_.append(orig_blob_key_meta.data(), orig_blob_key_meta.size());
-    value_ = blob_index_;
   }
+  blob_index_.clear();
+  blob_index_.append(latest_blob_index_slice.data(), latest_blob_index_slice.size());
+  blob_index_.append(blob_key_meta.data(), blob_key_meta.size());
+  value_ = blob_index_;
 
 }
 

@@ -12542,6 +12542,7 @@ Remove weighted sample to get lower total size.
 
 [Todo]
 Too many fragmented blob files.
+Accumulate specified amount of blob files before start gc.
 [Status: Not started]
 
 
@@ -12549,13 +12550,60 @@ Too many fragmented blob files.
 [Todo]
 Do kv sep in flush process.
 This aims to reduce write amplifcation.
-[Status: Not started]
+Remove db_internal_iter->Seek() in ExtractLargeValueIfNeededImpl()
+So now it should be really fast for flush process to to finish.
+Now I put value to default lifetime bucket.  
+I need to modify garbage collection code to do model prediciton during 
+garbage collection.
 
+For now I just call model prediction for all keys during gc.
+Later I think I can call model prediction for keys 
+that are written during flush?
+
+Training samples are added to dataset during l0-l1 compaction process. 
+Garbage collection job is only responsible for key lifespan
+prediction.
+
+Do I need to add latest_seq - last_seq in garbage collection job ?
+Let's do that for now.
+Maybe later I can do adjsutment.
+Need to set num_features and booster_handle of garbage collection job.
+
+Need to fix assertion false . This assertion false shows that 
+key_meta_len is 0 even though key is at level 1.
+Update blob_file_starting_level from 1 to 0 to fix this issue.
+
+Size of level0 file is 30M , why is that ?
+Oh, actually it's expected.
+Key value separation is done in flush process.
+
+
+No gc key count in garbage collection log.
+Why is that?
+However, I do see lifetime_blob_0 files are created.
+Why do logs not show this?
+I see, LogGarbagecollection is called before garbage collection starts.
+
+
+All gc key count is zero . Why is that?
+It should not happen for default_1 lifetime. 
+[Status: Ongoing]
+
+[Todo]
+Log write rate of garbage collection job.
+It should not be fast.
+[Stats: Not started]
 
 [Todo]
 Do parallel compaction during l0-l1 compaction.
 This aims to increase compaction througput.
 [Status: Not started]
+
+Doing lower level  scan can get us lifespan information for past keys.
+However, these obsolete keys should be dropped. What should I do?
+It could happen that old keys are dropped in the same compaction process 
+with new keys. So there is chance that new keys lose previous write
+information.
 
 
 

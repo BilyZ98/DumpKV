@@ -89,7 +89,8 @@ public:
                        CompactionJobStats* compaction_job_stats,
                        Env::Priority thread_pri,
                        DBImpl* db,
-                      moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue
+                      moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue,
+                       std::shared_ptr<BoosterHandle> booster_handle
                        );
 
 
@@ -186,8 +187,11 @@ protected:
   std::unordered_map<uint64_t, uint64_t> blob_file_map_;
 
   moodycamel::BlockingConcurrentQueue<std::vector<double>>* training_data_queue_;
-  int32_t  num_features_ = 0;
+  uint64_t  num_features_ = 0;
+  uint64_t default_lifetime_idx_=0;
+  std::shared_ptr<BoosterHandle> booster_handle_ = nullptr;
 
+  std::vector<uint64_t> lifetime_keys_count_;
 };
 
 }

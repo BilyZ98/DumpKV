@@ -377,6 +377,7 @@ CompactionIterator(
   // algorithm is also called from here.
   void GarbageCollectBlobIfNeeded();
 
+  Slice CollectKeyFeatures(Slice orig_blob_index_slice );
   void UpdateValueBlobIndexIfNeeded();
 
   // Invoke compaction filter if needed.
@@ -602,6 +603,7 @@ CompactionIterator(
   const SequenceNumber preclude_last_level_min_seqno_ = kMaxSequenceNumber;
 
   uint64_t num_blob_nidex_updated_ = 0;
+  std::string key_meta_str_;
 
   void AdvanceInputIter() { input_.Next(); }
 
