@@ -27,9 +27,9 @@ function call_run_blob() {
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    VALUE_SIZE=$cur_value_size \
    USE_BLOB_CACHE=0 \
-   BLOB_FILE_STARTING_LEVEL=1 \
+   BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
-   ./run_blob_bench.sh
+   ./run_blob_bench_fix_sst_size.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
  #   NUM_KEYS=5000000 DB_DIR=/tmp/test_blob \
@@ -71,9 +71,9 @@ function run_with_gc_dbbench {
 
   # lifetime_idx_range=$(seq 0 1 3)
   # lifetime_idx_range=(2 1 0)
-  lifetime_idx_range=(2)
+  lifetime_idx_range=(0)
   # value_sizes=(1024 4096 16384 65536)
-  value_sizes=(1024  4096)
+  value_sizes=(4096 1024)
   # lifetime_idx_range=(1 3)
   # for lifetime_idx in $lifetime_idx_range ; do
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do
@@ -124,10 +124,10 @@ function run_with_gc_dbbench {
         # calculate space amplification
     # exclude file whose filename includes trace
     # total_size=$(ls $with_gc_dir | grep -v trace | awk '{system("du -b " $1)}' | awk '{sum += $1} END {print sum}')
-    total_size_without_trace=`du -sh $with_gc_dir --exclude='*trace*'| awk '{print $1}'`
-    echo "total_size: $total_size_without_trace" >> $output_text
-    total_size_with_trace=`du -sh $with_gc_dir | awk '{print $1}'`
-    echo "total_size_with_trace: $total_size_with_trace" >> $output_text
+    # total_size_without_trace=`du -sh $with_gc_dir --exclude='*trace*'| awk '{print $1}'`
+    # echo "total_size: $total_size_without_trace" >> $output_text
+    # total_size_with_trace=`du -sh $with_gc_dir | awk '{print $1}'`
+    # echo "total_size_with_trace: $total_size_with_trace" >> $output_text
     # `du -b $with_gc_dir | awk '{print $1}'`
 
   done
