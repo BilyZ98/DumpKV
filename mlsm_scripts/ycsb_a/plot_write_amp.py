@@ -4,9 +4,11 @@ import numpy as np
 import pandas as pd
 import os
 import csv
+import sys
 
+arg1 = sys.argv[1]
 # 1. Read the data from the file
-log_dir="./log_output_4096_uniform"
+log_dir=arg1
 
 large_x = []
 large_y = []

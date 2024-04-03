@@ -6,7 +6,7 @@ M=$((1024 * K))
 G=$((1024 * M))
 T=$((1024 * G))
 
-output_dir="./log_output_4096_uniform"
+output_dir="./log_output_4096"
 if [ ! -d "$output_dir" ]; then
   mkdir -p "$output_dir"
 fi
@@ -134,12 +134,17 @@ log_files_names=(
 2024-03-28-22-13-35-more_prediction-0.2-uniform-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_1_4096
 2024-03-29-03-19-13-more_prediction-0.2-uniform-100M-ycsba-no-train-data-log-only-write-no-blob-cache-blob-file-starting-level1-no-paranoid-file-checks-large-sst-file-release-default_0_4096
 )
+
+log_files_names=(
+2024-04-02-07-33-51-0.2-zipfian-100M-ycsba-flush-kv-sep-256k-fix-sst-size-release-default_0_4096
+ 2024-04-02-11-36-47-0.2-zipfian-100M-ycsba-flush-kv-sep-256k-fix-sst-size-no-delta0-release-default_0_4096
+)
 test_names=(
   "large-sst-file-release-default_lifetimeidx_2" 
 )
 
 
-src_dir="/mnt/nvme/zt/rocksdb_kv_sep_delay_prediction/tools"
+src_dir="../..//tools"
 call_get_data 
 
 
@@ -170,7 +175,7 @@ log_files_names=(
 # done
 # exit
 call_get_data
-
+python3 ./plot_write_amp.py "$output_dir"
 
 
 
