@@ -294,6 +294,9 @@ class VersionStorageInfo {
   void ComputeFilesMarkedForForcedBlobGCWithLifetime(
     double blob_garbage_collection_age_cutoff
   );
+  void ComputeBlobsMarkedForForcedGC(
+    DBImpl* db_impl,
+      double blob_garbage_collection_age_cutoff);
 
   void ComputeBlobsMarkedForForcedGC(
       double blob_garbage_collection_age_cutoff);
@@ -1308,6 +1311,8 @@ class VersionSet {
 
   virtual ~VersionSet();
 
+
+  void SetDBImpl(DBImpl* db_impl) { db_impl_ = db_impl; }
   Status LogAndApplyToDefaultColumnFamily(
       VersionEdit* edit, InstrumentedMutex* mu,
       FSDirectory* dir_contains_current_file, bool new_descriptor_log = false,
@@ -1800,6 +1805,7 @@ class VersionSet {
 
   std::string db_session_id_;
 
+  DBImpl* db_impl_ = nullptr;
  private:
   // REQUIRES db mutex at beginning. may release and re-acquire db mutex
   Status ProcessManifestWrites(std::deque<ManifestWriter>& writers,

@@ -3877,6 +3877,42 @@ bool VersionStorageInfo::ShouldGC(uint64_t creation_seq, uint64_t lifetime_ttl) 
   return elapsed_seq >= lifetime_ttl;
 
 }
+void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
+  DBImpl* db_impl,
+    double blob_garbage_collection_age_cutoff) {
+  blob_files_marked_for_gc_.clear();
+  assert(db_impl != nullptr);
+
+  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+  db_impl->GetLifetimeSequence(lifetime_seqs);
+  const auto& lifetime_sequence = *(lifetime_seqs.get());
+
+  assert(lifetime_sequence.size() == LifetimeSequence.size());
+  assert(lifetime_sequence[0] > 0);
+  for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
+    if(lifetime_blob_files_[lifetime_idx].empty()) {
+      continue;
+    }
+
+    assert(lifetime_idx < lifetime_sequence.size());
+    uint64_t lifetime_ttl = lifetime_sequence[lifetime_idx];
+    for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {
+      if(blob_file->GetBeingGCed()) {
+        // this blob file is already being GCed
+        continue;
+      } 
+
+      bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
+      if(should_gc) {
+        blob_files_marked_for_gc_.emplace_back(blob_file );
+      } else {
+        // this blob file is not supposed to be GCed
+        // break;
+      }
+    }
+  }
+}
+
 
 void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       double blob_garbage_collection_age_cutoff) {
@@ -5388,7 +5424,8 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
       *column_family_data->ioptions(),
       *column_family_data->GetLatestMutableCFOptions());
 
-  v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
+  // v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
+  v->storage_info()->ComputeBlobsMarkedForForcedGC(db_impl_, 1.0);
 
   // Mark v finalized
   v->storage_info_.SetFinalized();

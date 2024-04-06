@@ -2838,7 +2838,7 @@ void DBImpl::SchedulePendingPurge(std::string fname, std::string dir_to_sync,
 void DBImpl::BGWorkDataCollection(void* arg) {
   DataCollectionThreadArg dca = *(reinterpret_cast<DataCollectionThreadArg*>(arg));
   delete reinterpret_cast<DataCollectionThreadArg*>(arg);
-  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::BOTTOM);
+  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::LOW);
   static_cast_with_check<DBImpl>(dca.db_)->BackgroundCallDataCollection();
 
 
@@ -3048,9 +3048,9 @@ static void booster_config_deleter(FastConfigHandle* booster_config) {
 }
 
 void DBImpl::BackgroundCallDataCollection() {
-  while(!shutting_down_.load(std::memory_order_acquire)) {
+  while(!shutting_down_.load(std::memory_order_relaxed)) {
     std::vector<double> data;
-    std::int64_t timeout = 10;
+    std::int64_t timeout = 100;
     bool get_data =  training_data_queue_.wait_dequeue_timed(data, timeout);
     if(!get_data) {
       continue;
@@ -3060,18 +3060,28 @@ void DBImpl::BackgroundCallDataCollection() {
     Status s = training_data_->AddTrainingSample(data, label);
     assert(s.ok());
 
-    // const uint64_t threshold = 128000;
-    const uint64_t threshold = 256000;
+    const uint64_t threshold = 128000;
+    // const uint64_t threshold = 256000;
+    // const uint64_t threshold = 1;
     if(training_data_->GetNumTrainingSamples() >= threshold) {
 
       BoosterHandle *new_model = new BoosterHandle();
       uint64_t start_time = env_->NowMicros();
+      std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+      GetLifetimeSequence(lifetime_seqs);
+      const std::vector<SequenceNumber> &lifetime_seqs_data = *lifetime_seqs.get();
+      s = training_data_->ConvertLabels(lifetime_seqs_data[0]); 
       training_data_->TrainModel(new_model, training_params_);
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
-      uint64_t num_class = std::stoi(training_params_["num_class"]);
-      training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
+      // uint64_t num_class = std::stoi(training_params_["num_class"]);
+      uint64_t num_class = 2;
+      if(num_class > 2) {
+        training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
+      } else {
+        training_data_->LogKeyRatio(immutable_db_options_);
+      }
       // training_data_->WriteTrainingDataForMultiClass(dbname_ + "/train_data.txt" , env_, num_class);
       // if(lightgbm_handle_ != nullptr) {
       //   int res = LGBM_BoosterMerge(*new_model, *lightgbm_handle_);

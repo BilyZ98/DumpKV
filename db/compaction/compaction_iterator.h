@@ -77,7 +77,7 @@ class SequenceIterWrapper : public InternalIterator {
 };
 extern const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap;
 extern const std::vector<uint64_t> LifetimeSecs; 
-extern const std::vector<uint64_t> LifetimeSequence; 
+extern std::vector<uint64_t> LifetimeSequence; 
 
 
 class CompactionIterator {

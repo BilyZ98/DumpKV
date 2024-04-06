@@ -115,7 +115,11 @@ GarbageCollectionJob::GarbageCollectionJob(
 
   assert(log_buffer_ != nullptr);
   // assert(compaction_job_stats_ != nullptr);
-  lifetime_keys_count_.resize(LifetimeSequence.size());
+  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+  db_->GetLifetimeSequence(lifetime_seqs);
+
+  lifetime_keys_count_.resize(lifetime_seqs->size());
+
   for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
     lifetime_keys_count_[i] = 0;
   }
@@ -296,9 +300,6 @@ uint64_t GarbageCollectionJob::GetNextLifetimeIndex(uint64_t cur_seq, uint64_t k
     assert(false);
   }
   return std::distance(LifetimeSequence.begin(), new_lifetime_iter);
-
-  // return std::distance(LifetimeSequence.begin(), lower_bound_iter);
-
 }
 
 uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
@@ -310,7 +311,11 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint64_t past_seq;
   uint64_t distance = 0;
 
-  int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
+  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+  db_->GetLifetimeSequence(lifetime_seqs);
+
+
+  int maxIndex = std::min(default_lifetime_idx_, lifetime_seqs->size() - 1);
   bool get_feat = false;
   BlobIndex prev_blob_index;
   Slice prev_value = iter->value();
@@ -408,7 +413,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     assert(indices.size() == data.size());
 
     std::string inference_params = "num_threads=1 verbosity=0";
-    std::vector<double> out_result(LifetimeSequence.size(), 0.0);
+    std::vector<double> out_result(lifetime_seqs->size(), 0.0);
+
     int64_t out_len ;
     assert(data.size() <= num_features_);
     indptr[1] = data.size();
@@ -434,23 +440,17 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     if(predict_res != 0) {
       assert(false);
     }
-    double max_val = 0.0;
-    for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
-      data.emplace_back(out_result[res_idx]);
-      if(out_result[res_idx] > max_val) {
-        max_val = out_result[res_idx];
-        maxIndex = res_idx;
-      }
-    }
-    // double orig_value = std::expm1(out_result[0]);
-    // auto lower_bound_iter = std::lower_bound(std::begin(LifetimeSequence), std::end(LifetimeSequence), orig_value);
-    // if(lower_bound_iter == std::end(LifetimeSequence)) {
-    //   maxIndex = LifetimeSequence.size() - 1;
-    // } else {
-    //   maxIndex = std::distance(std::begin(LifetimeSequence), lower_bound_iter);
+    // double max_val = 0.0;
+    // for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
+    //   data.emplace_back(out_result[res_idx]);
+    //   if(out_result[res_idx] > max_val) {
+    //     max_val = out_result[res_idx];
+    //     maxIndex = res_idx;
+    //   }
     // }
-    //
-    // maxIndex = out_result[0] > 0.5 ? 1 : 0;
+
+    
+    maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);
     assert(s.ok());
@@ -499,9 +499,15 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   // auto write_options = WriteOptions();
   WriteBatch wb;
 
+  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+  db_->GetLifetimeSequence(lifetime_seqs);
+  size_t lifetime_seqs_size = lifetime_seqs->size();
+
+
+
   std::vector<std::string> blob_file_paths;
-  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(LifetimeSequence.size() );
-  std::vector<BlobFileBuilder*> blob_file_builders_raw( LifetimeSequence.size(), nullptr);
+  std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(lifetime_seqs_size);
+  std::vector<BlobFileBuilder*> blob_file_builders_raw( lifetime_seqs_size, nullptr);
     // auto vstorage = cfd_->current()->storage_info();
 
     // auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
@@ -526,7 +532,6 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   std::string blob_index_str;
   std::string prev_blob_index_str;
 
-  std::vector<uint64_t> oldest_blob_file_creation_time(LifetimeSequence.size(), std::numeric_limits<uint64_t>::max());
 
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
@@ -674,11 +679,6 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       }
     }
     s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded() ;
-    //
-    // s = blob_file_builders[next_lifetime_label]->CloseBlobFileIfNeeded(oldest_blob_file_creation_time[next_lifetime_label]) ;
-    // if(!blob_file_builders[next_lifetime_label]->IsBlobFileOpen()) {
-    //   oldest_blob_file_creation_time[next_lifetime_label] = std::numeric_limits<uint64_t>::max();
-    // }
 
     assert(s.ok());
     

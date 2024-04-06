@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <shared_mutex>
 
 #include "db/arena_wrapped_db_iter.h"
 #include "db/builder.h"
@@ -301,6 +302,10 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
+  std::vector<SequenceNumber> ini_lifetime_sequence = {4 * 1024 * 1024, 8*1024*1024}  ;
+  lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
+  // SetLifetimeSequence(ini_lifetime_sequence);
+  versions_->SetDBImpl(this);
 }
 
 Status DBImpl::Resume() {
@@ -2105,6 +2110,30 @@ bool DBImpl::ShouldReferenceSuperVersion(const MergeContext& merge_context) {
              merge_context.GetOperands().size();
 }
 
+void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
+  histogram_.Add(lifetime);
+  lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
+
+  if(lifetime_count_.load(std::memory_order_relaxed) > lifetiem_sequence_refresh_limit_) {
+    uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
+    uint64_t p75 =static_cast<uint64_t>(histogram_.Percentile(75));
+    uint64_t p90 =static_cast<uint64_t>(histogram_.Percentile(90));
+    uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
+    uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
+    std::vector<SequenceNumber> seqs = {p75, p90};
+    SetLifetimeSequence(seqs);
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p75: %lu, p90: %lu, p95: %lu, p99: %lu",p50, p75, p90, p95, p99);
+    lifetime_count_.store(0, std::memory_order_relaxed);
+  }
+}
+void DBImpl::GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs)  {
+  std::shared_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);    
+  seqs = lifetime_sequence_;
+}
+void DBImpl::SetLifetimeSequence(const std::vector<SequenceNumber>& seqs) {
+  std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
+  lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+}
 Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
                        GetImplOptions& get_impl_options) {
   assert(get_impl_options.value != nullptr ||

@@ -1250,7 +1250,9 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   assert(mutable_cf_options);
 
   std::vector<std::string> blob_file_paths;
-  int num_class = LifetimeSequence.size();
+  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+  db_impl_->GetLifetimeSequence(lifetime_seqs);
+  int num_class = lifetime_seqs->size();
   std::vector<std::unique_ptr<BlobFileBuilder>> blob_file_builders(num_class );
   std::vector<BlobFileBuilder*> blob_file_builders_raw( num_class, nullptr);
   bool enable_blob_file_builder = mutable_cf_options->enable_blob_files &&

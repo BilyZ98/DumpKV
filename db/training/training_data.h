@@ -25,7 +25,7 @@ namespace ROCKSDB_NAMESPACE {
 
 class Arena;
 
-extern const std::vector<uint64_t> LifetimeSequence; 
+extern  std::vector<uint64_t> LifetimeSequence; 
 class TrainingData{
 public:
   TrainingData(Arena* arena, size_t num_features, 
@@ -34,7 +34,8 @@ public:
   Status TrainModel(BoosterHandle* new_model,  const std::unordered_map<std::string, std::string>& training_params ); 
   // Status AddTrainingSample()
 
-Status AddTrainingSample(const std::vector<double>& data, const double& label ) ;
+  Status ConvertLabels(uint64_t threshold);
+  Status AddTrainingSample(const std::vector<double>& data, const double& label ) ;
   Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
                            const uint64_t& blob_size,
                            const uint8_t& n_within,
@@ -52,7 +53,7 @@ Status AddTrainingSample(const std::vector<double>& data, const double& label ) 
   Status WriteTrainingData(const std::string& file_path, Env* env  );
   Status WriteTrainingDataForMultiClass(const std::string& file_path, Env* env, uint64_t num_class);
 
-  uint64_t GetNumTrainingSamples() const { return labels_.size(); } 
+  uint64_t GetNumTrainingSamples() const { return numeric_labels_.size(); } 
 
 private:
   void printConfusionMatrix(const std::vector<int>& y_true, const std::vector<int>& y_pred,
@@ -60,6 +61,7 @@ private:
 
   Arena* arena_;
   std::vector<float> labels_;
+  std::vector<uint64_t> numeric_labels_;
   std::vector<int32_t> indptr_;
   std::vector<int32_t> indices_;
   std::vector<double> data_;

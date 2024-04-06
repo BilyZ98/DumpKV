@@ -23,6 +23,7 @@ TrainingData::TrainingData(Arena* arena,
       batch_size_(batch_size){
 
   labels_.reserve(batch_size_);
+  numeric_labels_.reserve(batch_size_);
   indptr_.reserve(batch_size_ + 1);
   indptr_.emplace_back(0);
   indices_.reserve(batch_size_ * (num_features + 1));
@@ -31,6 +32,18 @@ TrainingData::TrainingData(Arena* arena,
   label_count_.resize(LifetimeSequence.size(), 0);
 }
 
+Status TrainingData::ConvertLabels(uint64_t threshold) {
+
+  labels_.clear();
+  for(size_t i = 0; i < numeric_labels_.size(); ++i) {
+    if(numeric_labels_[i] > threshold) {
+      labels_.push_back(1.0);
+    } else {
+      labels_.push_back(0.0);
+    }
+  }
+  return Status::OK();
+}
 Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
 
   int32_t counter = indptr_.back();
@@ -41,14 +54,16 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   }
   assert(data.size() <= num_features_);
   uint64_t label_uint64_t = static_cast<uint64_t>(label);
-  const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
-  uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
-  if(lifetime_index == LifetimeSequence.size()) {
-    lifetime_index = LifetimeSequence.size() - 1;
-  }
+  // const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
+  // uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
+  // if(lifetime_index == LifetimeSequence.size()) {
+  //   lifetime_index = LifetimeSequence.size() - 1;
+  // }
+  //
   // labels_.push_back(log1p(label));
-  labels_.push_back(lifetime_index);
-  label_count_[lifetime_index]++;
+  // labels_.push_back(lifetime_index);
+  numeric_labels_.emplace_back(label_uint64_t);
+  // label_count_[lifetime_index]++;
   indptr_.push_back(counter);
   return Status::OK();
 }
@@ -254,12 +269,16 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
     }
   }
 
-  size_t num_class = stoi(training_params.at("num_class"));
+  size_t num_class = 2;
   int64_t len;
   // std::vector<double> result(indptr_.size() - 1);
-  uint64_t result_size = (indptr_.size()-1) * num_class;
+  uint64_t result_size = 0;
+  if(num_class > 2) {
+    result_size = (indptr_.size()-1) * num_class;
+  } else {
+    result_size = indptr_.size() - 1;
+  }
   predicted_labes_.resize(indptr_.size() - 1);
-  // result_.resize(indptr_.size() - 1);
   result_.resize(result_size);
   res = LGBM_BoosterPredictForCSR(*new_model_ptr,
                             static_cast<void *>(indptr_.data()),
@@ -296,18 +315,15 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 
     }
 
+  } else {
+  for(size_t i = 0; i < result_.size(); ++i) {
+    if(result_[i] > 0.5) {
+      res_long_count_++;
+    } else {
+      res_short_count_++;
+    }
   }
-  // for(size_t i = 0; i < result.size(); ++i) {
-  //   if(result[i] > 0.5) {
-  //     res_long_count_++;
-  //   } else {
-  //     res_short_count_++;
-  //   }
-  //   // fprintf(stdout, "%f\n", result[i]);
-  //   // std::cout << result[i] << std::endl;
-  // }
-  // fprintf(stdout, "short_count: %lu, long_count: %lu\n", res_short_count_, res_long_count_);
-
+  }
   if(res != 0) {
     assert(false);
     return Status::Incomplete("LGBM_BoosterPredictForCSR failed");
@@ -325,6 +341,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 
 void TrainingData::ClearTrainingData() {
   labels_.clear();
+  numeric_labels_.clear();
   indptr_.clear();
   indices_.clear();
   data_.clear();  

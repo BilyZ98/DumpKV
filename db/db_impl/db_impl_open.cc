@@ -1767,7 +1767,7 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
  uint32_t max_hash_edc_idx;
 // set memory window to cur_max_sequence * 2?
 // Do we nreally need this?
- uint32_t memory_window = 6710886;
+ uint32_t memory_window = 67108864;
  uint8_t base_edc_window = 10;
  std::vector<uint32_t> edc_windows;
 
@@ -2109,14 +2109,6 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
     s = impl->StartPeriodicTaskScheduler();
   }
 
-  if(s.ok()) {
-    DataCollectionThreadArg* dta = new DataCollectionThreadArg;
-    dta->db_ = impl;
-    impl->env_->StartThread(&impl->BGWorkDataCollection, dta);
-    // s = impl->env_->StartThread(&impl->StartCollectingTrainingData, impl); 
-
-  }
-
   if (s.ok()) {
     s = impl->RegisterRecordSeqnoTimeWorker();
   }
@@ -2152,6 +2144,15 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   } else {
     printf("failed to load key range, msg: %s\n", s.ToString().c_str());
   }
+
+  if(s.ok()) {
+    DataCollectionThreadArg* dta = new DataCollectionThreadArg;
+    dta->db_ = impl;
+    impl->env_->StartThread(&impl->BGWorkDataCollection, dta);
+    // s = impl->env_->StartThread(&impl->StartCollectingTrainingData, impl); 
+
+  }
+
 
   if (!s.ok()) {
     for (auto* h : *handles) {
