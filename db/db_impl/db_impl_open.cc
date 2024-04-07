@@ -1768,7 +1768,7 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
 // set memory window to cur_max_sequence * 2?
 // Do we nreally need this?
  uint32_t memory_window = 67108864;
- uint8_t base_edc_window = 10;
+ uint8_t base_edc_window = 20;
  std::vector<uint32_t> edc_windows;
 
 
