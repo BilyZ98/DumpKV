@@ -1325,7 +1325,7 @@ class DBImpl : public DB {
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
   std::atomic<uint64_t> lifetime_count_{0};
-  const uint64_t lifetiem_sequence_refresh_limit_ = 1 * 1024 * 1024 ;
+  const uint64_t lifetiem_sequence_refresh_limit_ = 4 * 1024 * 1024 ;
   std::shared_mutex lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
   HistogramImpl histogram_;

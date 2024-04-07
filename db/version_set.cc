@@ -3903,7 +3903,8 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       } 
 
       bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
-      if(should_gc) {
+      bool file_size_too_small = blob_file->GetBlobFileSize() <= (db_impl->GetOptions().blob_file_size >> 4);
+      if(should_gc || file_size_too_small) {
         blob_files_marked_for_gc_.emplace_back(blob_file );
       } else {
         // this blob file is not supposed to be GCed

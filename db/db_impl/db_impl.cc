@@ -2109,23 +2109,32 @@ bool DBImpl::ShouldReferenceSuperVersion(const MergeContext& merge_context) {
          (num_bytes >> kLog2AvgBytesForSvRef) >=
              merge_context.GetOperands().size();
 }
-
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
 
   if(lifetime_count_.load(std::memory_order_relaxed) > lifetiem_sequence_refresh_limit_) {
+    std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
     uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
+    uint64_t p60 =static_cast<uint64_t>(histogram_.Percentile(60));
     uint64_t p75 =static_cast<uint64_t>(histogram_.Percentile(75));
+    uint64_t p80 = static_cast<uint64_t>(histogram_.Percentile(80));
     uint64_t p90 =static_cast<uint64_t>(histogram_.Percentile(90));
     uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
     uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
-    std::vector<SequenceNumber> seqs = {p75, p90};
-    SetLifetimeSequence(seqs);
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p75: %lu, p90: %lu, p95: %lu, p99: %lu",p50, p75, p90, p95, p99);
+    std::vector<SequenceNumber> seqs = {p60, p90};
+    // SetLifetimeSequence(seqs);
+    lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu",
+                   p50, p60, p75, p80, p90, p95, p99);
     lifetime_count_.store(0, std::memory_order_relaxed);
+
+    // histogram_.Clear();
   }
+  
 }
+
 void DBImpl::GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs)  {
   std::shared_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);    
   seqs = lifetime_sequence_;

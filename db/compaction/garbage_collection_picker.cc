@@ -33,17 +33,20 @@ GarbageCollection* GarbageCollectionPicker::PickGarbageCollection(
       LogBuffer* log_buffer)  {
   input_blob_files_.clear();
 
+  uint64_t total_blob_file_size = 0;
   for(auto& blob_file: vstorage->BlobFilesMarkedForForcedBlobGC()) {
     // assert(!blob_file->GetBeingGCed());
     if(blob_file->GetBeingGCed()) {
       continue;
     }
+    total_blob_file_size += blob_file->GetBlobFileSize();
     input_blob_files_.push_back(blob_file);
 
     // blob_file->SetBeingGCed();
   }
 
-  if(input_blob_files_.empty()) {
+
+  if(input_blob_files_.empty() || total_blob_file_size < mutable_cf_options.blob_file_size ) {
     return nullptr;
   }
   GarbageCollection* garbage_collection = new GarbageCollection(
