@@ -296,6 +296,7 @@ class VersionStorageInfo {
   );
   void ComputeBlobsMarkedForForcedGC(
     DBImpl* db_impl,
+    const MutableCFOptions& mutable_cf_options,
       double blob_garbage_collection_age_cutoff);
 
   void ComputeBlobsMarkedForForcedGC(

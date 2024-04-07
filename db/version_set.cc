@@ -3879,6 +3879,7 @@ bool VersionStorageInfo::ShouldGC(uint64_t creation_seq, uint64_t lifetime_ttl) 
 }
 void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
   DBImpl* db_impl,
+  const MutableCFOptions& mutable_cf_options,
     double blob_garbage_collection_age_cutoff) {
   blob_files_marked_for_gc_.clear();
   assert(db_impl != nullptr);
@@ -3903,7 +3904,7 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       } 
 
       bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
-      bool file_size_too_small = blob_file->GetBlobFileSize() <= (db_impl->GetOptions().blob_file_size >> 4);
+      bool file_size_too_small = blob_file->GetBlobFileSize() <= (mutable_cf_options.blob_file_size >> 4);
       if(should_gc || file_size_too_small) {
         blob_files_marked_for_gc_.emplace_back(blob_file );
       } else {
@@ -5426,7 +5427,7 @@ void VersionSet::AppendVersion(ColumnFamilyData* column_family_data,
       *column_family_data->GetLatestMutableCFOptions());
 
   // v->storage_info()->ComputeBlobsMarkedForForcedGC(1.0);
-  v->storage_info()->ComputeBlobsMarkedForForcedGC(db_impl_, 1.0);
+  v->storage_info()->ComputeBlobsMarkedForForcedGC(db_impl_,*column_family_data->GetLatestMutableCFOptions(), 1.0);
 
   // Mark v finalized
   v->storage_info_.SetFinalized();
