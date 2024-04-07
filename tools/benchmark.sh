@@ -1086,7 +1086,7 @@ function run_ycsb_a {
   local num_features=44
   # gdb --args
   # cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
-  cmd="$time_cmd   ./db_bench --benchmarks=$benchmarks,stats \
+  cmd="$time_cmd  gdb --args ./db_bench --benchmarks=$benchmarks,stats \
        --use_existing_db=0 \
        --sync=$syncval \
        $params_w \
