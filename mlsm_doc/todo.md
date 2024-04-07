@@ -13167,9 +13167,242 @@ Accumulate specified amount of blob files before start gc.
 
 
 
+[Todo]
+Figure out why write in L1 with 4096 value size is 
+```cpp
+void InternalStats::DumpCFStatsNoFileHistogram(bool is_periodic,
+                                               std::string* value) {
+  char buf[2000];
+  // Per-ColumnFamily stats
+  PrintLevelStatsHeader(buf, sizeof(buf), cfd_->GetName(), "Level");
+  value->append(buf);
+  for (int l = 0; l < number_levels_; ++l) {
+    if (levels_stats.find(l) != levels_stats.end()) {
+      PrintLevelStats(buf, sizeof(buf), "L" + std::to_string(l),
+                      levels_stats[l]);
+      value->append(buf);
+    }
+  }
+
+ void InternalStats::DumpCFMapStats(
+    const VersionStorageInfo* vstorage,
+    std::map<int, std::map<LevelStatType, double>>* levels_stats,
+    CompactionStats* compaction_stats_sum) {
+  assert(vstorage);
+
+  int num_levels_to_check =
+      (cfd_->ioptions()->compaction_style != kCompactionStyleFIFO)
+          ? vstorage->num_levels() - 1
+          : 1;
+
+  // Compaction scores are sorted based on its value. Restore them to the
+  // level order
+  std::vector<double> compaction_score(number_levels_, 0);
+  for (int i = 0; i < num_levels_to_check; ++i) {
+    compaction_score[vstorage->CompactionScoreLevel(i)] =
+        vstorage->CompactionScore(i);
+  }
+  // Count # of files being compacted for each level
+  std::vector<int> files_being_compacted(number_levels_, 0);
+  for (int level = 0; level < number_levels_; ++level) {
+    for (auto* f : vstorage->LevelFiles(level)) {
+      if (f->being_compacted) {
+        ++files_being_compacted[level];
+      }
+    }
+  }
+
+  int total_files = 0;
+  int total_files_being_compacted = 0;
+  double total_file_size = 0;
+  uint64_t flush_ingest = cf_stats_value_[BYTES_FLUSHED];
+  uint64_t add_file_ingest = cf_stats_value_[BYTES_INGESTED_ADD_FILE];
+  uint64_t curr_ingest = flush_ingest + add_file_ingest;
+  for (int level = 0; level < number_levels_; level++) {
+    int files = vstorage->NumLevelFiles(level);
+    total_files += files;
+    total_files_being_compacted += files_being_compacted[level];
+    if (comp_stats_[level].micros > 0 || comp_stats_[level].cpu_micros > 0 ||
+        files > 0) {
+      compaction_stats_sum->Add(comp_stats_[level]);
+      total_file_size += vstorage->NumLevelBytes(level);
+      uint64_t input_bytes;
+      if (level == 0) {
+        input_bytes = curr_ingest;
+      } else {
+        input_bytes = comp_stats_[level].bytes_read_non_output_levels +
+                      comp_stats_[level].bytes_read_blob;
+      }
+      double w_amp =
+          (input_bytes == 0)
+              ? 0.0
+              : static_cast<double>(comp_stats_[level].bytes_written +
+                                    comp_stats_[level].bytes_written_blob) /
+                    input_bytes;
+      std::map<LevelStatType, double> level_stats;
+      PrepareLevelStats(&level_stats, files, files_being_compacted[level],
+                        static_cast<double>(vstorage->NumLevelBytes(level)),
+                        compaction_score[level], w_amp, comp_stats_[level]);
+      (*levels_stats)[level] = level_stats;
+    }
+  }
+  compaction_stats_sum->Add(gc_stats_);
+  // Cumulative summary
+  double w_amp = (0 == curr_ingest)
+                     ? 0.0
+                     : (compaction_stats_sum->bytes_written +
+                        compaction_stats_sum->bytes_written_blob) /
+                           static_cast<double>(curr_ingest);
+  // Stats summary across levels
+  std::map<LevelStatType, double> sum_stats;
+  // compaction_stats_sum->bytes_read_blob += gc_stats_.bytes_read_blob;
+  PrepareLevelStats(&sum_stats, total_files, total_files_being_compacted,
+                    total_file_size, 0, w_amp, *compaction_stats_sum);
+  (*levels_stats)[-1] = sum_stats;  //  -1 is for the Sum level
+}
+
+void PrepareLevelStats(std::map<LevelStatType, double>* level_stats,
+                       int num_files, int being_compacted,
+                       double total_file_size, double score, double w_amp,
+                       const InternalStats::CompactionStats& stats) {
+  const uint64_t bytes_read = stats.bytes_read_non_output_levels +
+                              stats.bytes_read_output_level +
+                              stats.bytes_read_blob;
+  const uint64_t bytes_written = stats.bytes_written + stats.bytes_written_blob;
+  const int64_t bytes_new = stats.bytes_written - stats.bytes_read_output_level;
+  const double elapsed = (stats.micros + 1) / kMicrosInSec;
+
+  (*level_stats)[LevelStatType::NUM_FILES] = num_files;
+  (*level_stats)[LevelStatType::COMPACTED_FILES] = being_compacted;
+  (*level_stats)[LevelStatType::SIZE_BYTES] = total_file_size;
+  (*level_stats)[LevelStatType::SCORE] = score;
+  (*level_stats)[LevelStatType::READ_GB] = bytes_read / kGB;
+  (*level_stats)[LevelStatType::RN_GB] =
+      stats.bytes_read_non_output_levels / kGB;
+  (*level_stats)[LevelStatType::RNP1_GB] = stats.bytes_read_output_level / kGB;
+  (*level_stats)[LevelStatType::WRITE_GB] = stats.bytes_written / kGB;
+  (*level_stats)[LevelStatType::W_NEW_GB] = bytes_new / kGB;
+  (*level_stats)[LevelStatType::MOVED_GB] = stats.bytes_moved / kGB;
+  (*level_stats)[LevelStatType::WRITE_AMP] = w_amp;
+ 
+```
+
+
+```cpp
+Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
+  assert(compact_);
+
+  AutoThreadOperationStageUpdater stage_updater(
+      ThreadStatus::STAGE_COMPACTION_INSTALL);
+  db_mutex_->AssertHeld();
+  Status status = compact_->status;
+
+  ColumnFamilyData* cfd = compact_->compaction->column_family_data();
+  assert(cfd);
+
+  int output_level = compact_->compaction->output_level();
+  cfd->internal_stats()->AddCompactionStats(output_level, thread_pri_,
+                                            compaction_stats_);
+
+  void AddCompactionStats(int level, Env::Priority thread_pri,
+                          const CompactionStatsFull& comp_stats_full) {
+    AddCompactionStats(level, thread_pri, comp_stats_full.stats);
+    if (comp_stats_full.has_penultimate_level_output) {
+      per_key_placement_comp_stats_.Add(
+          comp_stats_full.penultimate_level_stats);
+    }
+  }
 
 
 
+  void AddCompactionStats(int level, Env::Priority thread_pri,
+                          const CompactionStats& stats) {
+    comp_stats_[level].Add(stats);
+    comp_stats_by_pri_[thread_pri].Add(stats);
+  }
+
+ 
+```
+
+```cpp
+Status CompactionJob::Run() {
+  AutoThreadOperationStageUpdater stage_updater(
+      ThreadStatus::STAGE_COMPACTION_RUN);
+  TEST_SYNC_POINT("CompactionJob::Run():Start");
+  log_buffer_->FlushBufferToLog();
+  LogCompaction();
+
+
+  compact_->AggregateCompactionStats(compaction_stats_, *compaction_job_stats_);
+
+    void CompactionState::AggregateCompactionStats(
+        InternalStats::CompactionStatsFull& compaction_stats,
+        CompactionJobStats& compaction_job_stats) {
+      for (const auto& sc : sub_compact_states) {
+        sc.AggregateCompactionStats(compaction_stats);
+        compaction_job_stats.Add(sc.compaction_job_stats);
+      }
+    }
+
+        void SubcompactionState::AggregateCompactionStats(
+            InternalStats::CompactionStatsFull& compaction_stats) const {
+          compaction_stats.stats.Add(compaction_outputs_.stats_);
+          if (HasPenultimateLevelOutputs()) {
+            compaction_stats.has_penultimate_level_output = true;
+            compaction_stats.penultimate_level_stats.Add(
+                penultimate_level_outputs_.stats_);
+          }
+        }
+
+            void Add(const CompactionOutputsStats& stats) {
+              this->num_output_files += static_cast<int>(stats.num_output_files);
+              this->num_output_records += stats.num_output_records;
+              this->bytes_written += stats.bytes_written;
+              this->bytes_written_blob += stats.bytes_written_blob;
+              this->num_output_files_blob +=
+                  static_cast<int>(stats.num_output_files_blob);
+            }
+
+
+```
+
+```cpp
+Status CompactionOutputs::Finish(const Status& intput_status,
+     
+                            const SeqnoToTimeMapping& seqno_time_mapping) {
+  FileMetaData* meta = GetMetaData();
+  assert(meta != nullptr);
+  Status s = intput_status;
+  if (s.ok()) {
+    std::string seqno_time_mapping_str;
+    seqno_time_mapping.Encode(seqno_time_mapping_str, meta->fd.smallest_seqno,
+                              meta->fd.largest_seqno, meta->file_creation_time);
+    builder_->SetSeqnoTimeTableProperties(seqno_time_mapping_str,
+                                          meta->oldest_ancester_time);
+    s = builder_->Finish();
+
+  } else {
+    builder_->Abandon();
+  }
+  Status io_s = builder_->io_status();
+  if (s.ok()) {
+    s = io_s;
+  } else {
+    io_s.PermitUncheckedError();
+  }
+  const uint64_t current_bytes = builder_->FileSize();
+  if (s.ok()) {
+    meta->fd.file_size = current_bytes;
+    meta->marked_for_compaction = builder_->NeedCompact();
+  }
+  current_output().finished = true;
+  stats_.bytes_written += current_bytes;
+  stats_.num_output_files = outputs_.size();
+
+  return s;
+}
+```
+[Status: Ongoing]
 
 
 
