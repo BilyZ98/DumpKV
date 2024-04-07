@@ -13402,7 +13402,16 @@ Status CompactionOutputs::Finish(const Status& intput_status,
   return s;
 }
 ```
-[Status: Ongoing]
+[Status: Done]
+
+
+[Todo]
+Use p60 and p 80
+[Status: Not started]
+
+[Todo]
+Update edc to do prediction during gc
+[Status: Not started]
 
 
 
