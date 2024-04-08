@@ -375,8 +375,11 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
 
   if(past_distances_count> 0) {
     for(i=0; i < n_edc_feature; i++) {
-      float edc;
+      float edc = 0;
       ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
+
+      uint32_t _distance_idx = std::min(uint32_t(distance) / edc_windows[i], max_hash_edc_idx);
+      edc = edc * hash_edc[_distance_idx];
       edcs.emplace_back(edc);
       data_to_train.emplace_back(edc);
       assert(ok);
