@@ -3080,6 +3080,7 @@ void DBImpl::BackgroundCallDataCollection() {
       if(num_class > 2) {
         training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
       } else {
+        training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
         training_data_->LogKeyRatio(immutable_db_options_);
       }
       // training_data_->WriteTrainingDataForMultiClass(dbname_ + "/train_data.txt" , env_, num_class);

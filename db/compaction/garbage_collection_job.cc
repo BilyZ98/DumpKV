@@ -123,12 +123,40 @@ GarbageCollectionJob::GarbageCollectionJob(
   for (size_t i = 0; i < lifetime_keys_count_.size(); i++) {
     lifetime_keys_count_[i] = 0;
   }
+
+  const EnvOptions soptions;
+  std::string infer_data_file_path = dbname_ + "/compaction_infer_data.txt" + std::to_string(env_->NowMicros()) ;
+  Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
+  assert(s.ok());
+
+
 }
 
 GarbageCollectionJob::~GarbageCollectionJob() {
+  if(infer_data_file_ != nullptr) {
+
+    infer_data_file_->Close();
+  }
+}
+Status GarbageCollectionJob::WriteInferDataToFile(const std::vector<double>& data, double label) {
+  Status s;
+  if(!infer_data_file_) {
+    assert(false);
+    return s;
+  }
+  for(size_t i = 0; i < data.size(); i++) {
+    std::string data_with_sep = std::to_string(data[i]) + " ";
+    s = infer_data_file_->Append(data_with_sep);
+    
+  }
+  if(!s.ok()) {
+    return s;
+  }
+  std::string label_str = std::to_string(label) + "\n";
+  s = infer_data_file_->Append(label_str);
+  return s;
 
 }
-
 void GarbageCollectionJob::Prepare() {
 
 }
@@ -379,17 +407,21 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
       ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
 
       uint32_t _distance_idx = std::min(uint32_t(distance) / edc_windows[i], max_hash_edc_idx);
+      data_to_train.emplace_back(edc);
       edc = edc * hash_edc[_distance_idx];
       edcs.emplace_back(edc);
-      data_to_train.emplace_back(edc);
+      data.emplace_back(edc);
+      indices.emplace_back(i + max_n_past_timestamps + 2);
       assert(ok);
     }
   } else {
     for(i=0; i < n_edc_feature; i++) {
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[i]), max_hash_edc_idx);
       float edc = hash_edc[_distance_idx]   ;
-      edcs.emplace_back(edc);
       data_to_train.emplace_back(edc);
+      edcs.emplace_back(edc);
+      data.emplace_back(edc);
+      indices.emplace_back(i + max_n_past_timestamps + 2);
       assert(ok);
     }
   }
@@ -411,7 +443,20 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   //     assert(s.ok()); 
   //   }
   // }
+  if(past_distances_count == 0) {
+    data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0, 1);
+    double prob = dis(gen);
+    if( prob < 0.1) {
+      s = db_->AddTrainingSample(data_to_train);
+      assert(s.ok());
+    }
 
+
+  }
+    
     if(booster_handle_ ) {
     assert(indices.size() == data.size());
 
@@ -452,7 +497,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     //   }
     // }
 
-    
+    s = WriteInferDataToFile(data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);

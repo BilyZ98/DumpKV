@@ -24,6 +24,7 @@ TrainingData::TrainingData(Arena* arena,
 
   labels_.reserve(batch_size_);
   numeric_labels_.reserve(batch_size_);
+  random_access_times_.reserve(batch_size_);
   indptr_.reserve(batch_size_ + 1);
   indptr_.emplace_back(0);
   indices_.reserve(batch_size_ * (num_features + 1));
@@ -44,15 +45,31 @@ Status TrainingData::ConvertLabels(uint64_t threshold) {
   }
   return Status::OK();
 }
+// Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
+
+//   int32_t counter = indptr_.back();
+//   for(size_t i = 0; i < data.size(); ++i) {
+//     indices_.emplace_back(i);
+//     data_.emplace_back(data[i]);
+//     counter++;
+//   }
+//   assert(data.size() <= num_features_);
+//   uint64_t label_uint64_t = static_cast<uint64_t>(label);
+//   // const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
+//   // uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
+//   // if(lifetime_index == LifetimeSequence.size()) {
+//   //   lifetime_index = LifetimeSequence.size() - 1;
+//   // }
+//   //
+//   // labels_.push_back(log1p(label));
+//   // labels_.push_back(lifetime_index);
+//   numeric_labels_.emplace_back(label_uint64_t);
+//   // label_count_[lifetime_index]++;
+//   indptr_.push_back(counter);
+//   return Status::OK();
+// }
 Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
 
-  int32_t counter = indptr_.back();
-  for(size_t i = 0; i < data.size(); ++i) {
-    indices_.emplace_back(i);
-    data_.emplace_back(data[i]);
-    counter++;
-  }
-  assert(data.size() <= num_features_);
   uint64_t label_uint64_t = static_cast<uint64_t>(label);
   // const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
   // uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
@@ -62,8 +79,47 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   //
   // labels_.push_back(log1p(label));
   // labels_.push_back(lifetime_index);
-  numeric_labels_.emplace_back(label_uint64_t);
-  // label_count_[lifetime_index]++;
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<uint64_t> dis(0, label_uint64_t);
+  uint64_t random_access_time = dis(gen);
+  random_access_times_.emplace_back(random_access_time);
+
+  uint64_t new_label = label_uint64_t - random_access_time;
+  numeric_labels_.emplace_back(new_label);
+
+  // Need to update edc as well.
+  int32_t counter = indptr_.back();
+  indices_.emplace_back(0);
+  data_.emplace_back(random_access_time);
+  counter++;
+  size_t i = 0;
+  for(; i < data.size()-n_edc_feature; ++i) {
+    indices_.emplace_back(i+1);
+    data_.emplace_back(data[i]);
+    counter++;
+  }
+  uint64_t distance = random_access_time;
+
+  if(i > 0) {
+    for(size_t k=0; k < n_edc_feature; k++, i++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      float new_edc = data[i] * hash_edc[_distance_idx];
+      indices_.emplace_back(i+1);
+      data_.emplace_back(new_edc);
+      counter++;
+    }
+  } else {
+    for(size_t k=0; k < n_edc_feature; k++, i++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      float new_edc = hash_edc[_distance_idx];
+      indices_.emplace_back(i+1);
+      data_.emplace_back(new_edc);
+      counter++;
+    }
+  }
+  assert(data.size() <= num_features_);
+
   indptr_.push_back(counter);
   return Status::OK();
 }
@@ -342,6 +398,7 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 void TrainingData::ClearTrainingData() {
   labels_.clear();
   numeric_labels_.clear();
+  random_access_times_.clear();
   indptr_.clear();
   indices_.clear();
   data_.clear();  
@@ -417,7 +474,7 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
       }
     }
 
-    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(result_[i]) + "\n";
+    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(numeric_labels_[i]) + " " + std::to_string(result_[i]) + "\n";
     s = file->Append(label_str);
     if (!s.ok()) {
       return s;

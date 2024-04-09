@@ -62,6 +62,7 @@ private:
   Arena* arena_;
   std::vector<float> labels_;
   std::vector<uint64_t> numeric_labels_;
+  std::vector<uint64_t> random_access_times_;
   std::vector<int32_t> indptr_;
   std::vector<int32_t> indices_;
   std::vector<double> data_;
