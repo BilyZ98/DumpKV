@@ -653,6 +653,7 @@ class DBImpl : public DB {
   void HistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
+  uint64_t GetShortLifetimeThreshold() const;
   // Function that Get and KeyMayExist call with no_io true or false
   // Note: 'value_found' from KeyMayExist propagates here
   // This function is also called by GetMergeOperands
@@ -1328,6 +1329,7 @@ class DBImpl : public DB {
   const uint64_t lifetiem_sequence_refresh_limit_ = 4 * 1024 * 1024 ;
   std::shared_mutex lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
+  std::atomic<uint64_t> short_lifetime_threshold_{0};
   HistogramImpl histogram_;
   std::shared_mutex booster_mutex_;
   std::shared_ptr<BoosterHandle> lightgbm_handle_ = nullptr;

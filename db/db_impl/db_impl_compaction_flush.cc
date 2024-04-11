@@ -3057,7 +3057,7 @@ void DBImpl::BackgroundCallDataCollection() {
     }
     double label = data.back();
     data.pop_back();
-    Status s = training_data_->AddTrainingSample(data, label);
+    Status s = training_data_->AddTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
     assert(s.ok());
 
     const uint64_t threshold = 128000;

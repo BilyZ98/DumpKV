@@ -983,7 +983,7 @@ void DBImpl::InitTrainingParams() {
             //don't use alias here. C api may not recongize
             {"boosting",         "gbdt"},
             {"objective",        "binary"},
-            {"metric",           "auc"},
+            {"metric",           "binary_logloss"},
             {"num_iterations",   "32"},
             {"num_leaves",       "32"},
             {"num_threads",      "4"},

@@ -68,20 +68,20 @@ Status TrainingData::ConvertLabels(uint64_t threshold) {
 //   indptr_.push_back(counter);
 //   return Status::OK();
 // }
-Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label ) {
+Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label,
+                                      const uint64_t& short_lifetime_threshold ) {
 
   uint64_t label_uint64_t = static_cast<uint64_t>(label);
-  // const auto& lifetime_index_label_iter = std::lower_bound(LifetimeSequence.begin(), LifetimeSequence.end(), label_uint64_t) ;
-  // uint32_t lifetime_index = std::distance(LifetimeSequence.begin(), lifetime_index_label_iter); 
-  // if(lifetime_index == LifetimeSequence.size()) {
-  //   lifetime_index = LifetimeSequence.size() - 1;
-  // }
-  //
-  // labels_.push_back(log1p(label));
-  // labels_.push_back(lifetime_index);
+  if(label_uint64_t < short_lifetime_threshold) {
+    return Status::OK();
+    // starting_point = label_uint64_t - short_lifetime_threshold;
+  }
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<uint64_t> dis(0, label_uint64_t);
+  uint64_t starting_point = 0;
+
+  starting_point = short_lifetime_threshold;
+  std::uniform_int_distribution<uint64_t> dis(starting_point, label_uint64_t);
   uint64_t random_access_time = dis(gen);
   random_access_times_.emplace_back(random_access_time);
 

@@ -304,7 +304,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   }
   std::vector<SequenceNumber> ini_lifetime_sequence = {4 * 1024 * 1024, 8*1024*1024}  ;
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
-  // SetLifetimeSequence(ini_lifetime_sequence);
+  short_lifetime_threshold_ = ini_lifetime_sequence[0];
   versions_->SetDBImpl(this);
 }
 
@@ -2109,6 +2109,10 @@ bool DBImpl::ShouldReferenceSuperVersion(const MergeContext& merge_context) {
          (num_bytes >> kLog2AvgBytesForSvRef) >=
              merge_context.GetOperands().size();
 }
+
+uint64_t DBImpl::GetShortLifetimeThreshold() const {
+  return short_lifetime_threshold_.load(std::memory_order_relaxed);
+}
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
@@ -2125,6 +2129,7 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     std::vector<SequenceNumber> seqs = {p60, p90};
     // SetLifetimeSequence(seqs);
     lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+    short_lifetime_threshold_.store(p60, std::memory_order_relaxed);
 
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu",
                    p50, p60, p75, p80, p90, p95, p99);
@@ -2142,6 +2147,7 @@ void DBImpl::GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& s
 void DBImpl::SetLifetimeSequence(const std::vector<SequenceNumber>& seqs) {
   std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+  short_lifetime_threshold_.store(seqs[0], std::memory_order_relaxed);
 }
 Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
                        GetImplOptions& get_impl_options) {

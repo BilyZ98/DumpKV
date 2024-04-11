@@ -35,7 +35,8 @@ public:
   // Status AddTrainingSample()
 
   Status ConvertLabels(uint64_t threshold);
-  Status AddTrainingSample(const std::vector<double>& data, const double& label ) ;
+  Status AddTrainingSample(const std::vector<double>& data, const double& label,
+                           const uint64_t& short_lifetime_threshold ) ;
   Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
                            const uint64_t& blob_size,
                            const uint8_t& n_within,
