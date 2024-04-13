@@ -59,6 +59,19 @@ public:
 private:
   void printConfusionMatrix(const std::vector<int>& y_true, const std::vector<int>& y_pred,
                             int num_classes, std::stringstream& ss);
+  void print_binary_confusion_matrix(const std::vector<int>& y_true, const std::vector<int>& y_pred,
+                                   std::stringstream& ss);
+  double calculate_precision(int TP, int FP) {
+      return static_cast<double>(TP) / (TP + FP);
+  }
+
+  double calculate_recall(int TP, int FN) {
+      return static_cast<double>(TP) / (TP + FN);
+  }
+
+  double calculate_f1_score(double precision, double recall) {
+      return 2 * ((precision * recall) / (precision + recall));
+  }
 
   Arena* arena_;
   std::vector<float> labels_;

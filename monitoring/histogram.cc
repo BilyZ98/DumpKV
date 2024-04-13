@@ -175,6 +175,14 @@ double HistogramStat::StandardDeviation() const {
   return std::sqrt(std::max(variance, 0.0));
 }
 
+void HistogramStat::ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const {
+  for (unsigned int b = 0; b < num_buckets_; b++) {
+    uint64_t bucket_value = bucket_at(b);
+    if (bucket_value > 0) {
+      res.emplace_back(bucketMapper.BucketLimit(b), bucket_value);
+    }
+  }
+}
 std::string HistogramStat::ToString() const {
   uint64_t cur_num = num();
   std::string r;
@@ -264,6 +272,8 @@ double HistogramImpl::StandardDeviation() const {
 }
 
 std::string HistogramImpl::ToString() const { return stats_.ToString(); }
+
+void HistogramImpl::ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const { return stats_.ToVector(res); }
 
 void HistogramImpl::Data(HistogramData* const data) const { stats_.Data(data); }
 

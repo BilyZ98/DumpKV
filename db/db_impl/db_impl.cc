@@ -2113,6 +2113,40 @@ bool DBImpl::ShouldReferenceSuperVersion(const MergeContext& merge_context) {
 uint64_t DBImpl::GetShortLifetimeThreshold() const {
   return short_lifetime_threshold_.load(std::memory_order_relaxed);
 }
+std::pair<uint64_t, uint64_t> DBImpl::getPointWithSlopeClosestToOneInCDF(const std::vector<std::pair<uint64_t, uint64_t>>& histogram) {
+  uint64_t cumulativeSum = 0;
+  double minDiff = std::numeric_limits<double>::max();
+  std::pair<uint64_t, uint64_t> closestPoint = {-1, -1};
+  std::vector<double> slopes;
+  
+
+  for (size_t i = 1; i < histogram.size(); ++i) {
+    cumulativeSum += histogram[i-1].second;
+    int dx = histogram[i].first - histogram[i-1].first;
+    int dy = cumulativeSum - (i > 1 ? histogram[i-2].second : 0);
+
+    if (dx != 0) {
+      double slope = static_cast<double>(dy) / dx;
+      double diff = std::abs(slope - 1);
+      slopes.push_back(slope);
+
+      if (diff < minDiff) {
+          minDiff = diff;
+          closestPoint = histogram[i];
+      }
+    }
+  }
+
+  // std::cout<<"minDiff: "<<minDiff<<std::endl;
+  std::string res;
+  for (size_t i = 0; i < slopes.size(); ++i) {
+    res += std::to_string(slopes[i]) + ", ";
+  }
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Slopes: %s, mindiff: %lf, close point first: %ld, close point sec: %ld",
+                 res.c_str(),
+                 minDiff, closestPoint.first, closestPoint.second);
+  return closestPoint;
+}
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
@@ -2134,7 +2168,9 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu",
                    p50, p60, p75, p80, p90, p95, p99);
     lifetime_count_.store(0, std::memory_order_relaxed);
-
+    std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
+    histogram_.ToVector(cdf);
+    getPointWithSlopeClosestToOneInCDF(cdf);
     // histogram_.Clear();
   }
   

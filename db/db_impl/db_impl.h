@@ -650,6 +650,8 @@ class DBImpl : public DB {
     int* number_of_operands = nullptr;
   };
 
+
+  std::pair<uint64_t, uint64_t> getPointWithSlopeClosestToOneInCDF(const std::vector<std::pair<uint64_t, uint64_t>>& histogram) ;
   void HistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);

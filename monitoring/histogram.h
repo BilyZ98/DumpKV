@@ -72,6 +72,7 @@ struct HistogramStat {
   double StandardDeviation() const;
   void Data(HistogramData* const data) const;
   std::string ToString() const;
+  void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const;
 
   // To be able to use HistogramStat as thread local variable, it
   // cannot have dynamic allocated member. That's why we're
@@ -95,6 +96,7 @@ class Histogram {
   virtual void Add(uint64_t value) = 0;
   virtual void Merge(const Histogram&) = 0;
 
+  virtual void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const = 0; 
   virtual std::string ToString() const = 0;
   virtual const char* Name() const = 0;
   virtual uint64_t min() const = 0;
@@ -120,6 +122,7 @@ class HistogramImpl : public Histogram {
   virtual void Merge(const Histogram& other) override;
   void Merge(const HistogramImpl& other);
 
+  virtual void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const  override;;
   virtual std::string ToString() const override;
   virtual const char* Name() const override { return "HistogramImpl"; }
   virtual uint64_t min() const override { return stats_.min(); }

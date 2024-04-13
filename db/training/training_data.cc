@@ -248,6 +248,33 @@ Status TrainingData::AddTrainingSample(const KeyMeta& key_meta, uint64_t cur_seq
 
 
 
+void TrainingData::print_binary_confusion_matrix(const std::vector<int>& y_true, const std::vector<int>& y_pred,
+                                   std::stringstream& ss) {
+  int TP = 0, FP = 0, TN = 0, FN = 0;
+
+  for (size_t i = 0; i < y_true.size(); i++) {
+      if (y_true[i] == 1 && y_pred[i] == 1)
+          TP++;
+      else if (y_true[i] == 0 && y_pred[i] == 1)
+          FP++;
+      else if (y_true[i] == 1 && y_pred[i] == 0)
+          FN++;
+      else if (y_true[i] == 0 && y_pred[i] == 0)
+          TN++;
+  }
+
+  ss << "Confusion Matrix: \n";
+  ss << "TP: " << TP << ", FP: " << FP << "\n";
+  ss << "FN: " << FN << ", TN: " << TN << "\n";
+
+  double precision = calculate_precision(TP, FP);
+  double recall = calculate_recall(TP, FN);
+  double f1_score = calculate_f1_score(precision, recall);
+  ss << "Precision: " << precision << "\n";
+  ss << "Recall: " << recall << "\n";
+  ss << "F1 Score: " << f1_score << "\n";
+
+}
 Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unordered_map<std::string, std::string>& training_params )  {
   // Convert unordered_map to key=value format
   std::string params_string;
@@ -568,6 +595,28 @@ Status TrainingData::LogKeyRatio(const ImmutableDBOptions& ioptions) {
           "key label ratio 0: %lu, 1: %lu"
           " res_short_count: %lu, res_long_count: %lu",
           short_count, long_count, res_short_count_, res_long_count_);
+
+  std::stringstream ss;
+  std::vector<int> labels_int(labels_.size());
+  for(size_t i = 0; i < labels_.size(); ++i) {
+    if(labels_[i] > 0.5) {
+      labels_int[i] = 1;
+    } else {
+      labels_int[i] = 0;
+    }
+  }
+  std::vector<int> predicted_result_int(result_.size());
+  assert(labels_int.size() == predicted_result_int.size());
+  for(size_t i = 0; i < result_.size(); ++i) {
+    if(result_[i] > 0.5) {
+      predicted_result_int[i] = 1;
+    } else {
+      predicted_result_int[i] = 0;
+    }
+  }
+
+  print_binary_confusion_matrix(labels_int, predicted_result_int, ss);
+  ROCKS_LOG_INFO(ioptions.info_log, "Confusion Matrix: \n%s", ss.str().c_str());
   return Status::OK();
 
 }
