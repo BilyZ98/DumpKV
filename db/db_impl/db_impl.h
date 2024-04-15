@@ -8,6 +8,15 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
+#include <Eigen/Dense>
+// #include "util/Eigen/src/Core//DenseCoeffsBase.h"
+#include <gsl/gsl_multifit.h>
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
+#include <gsl/gsl_roots.h>
+
+
+
 #include <atomic>
 #include <deque>
 #include <functional>
@@ -652,6 +661,7 @@ class DBImpl : public DB {
 
 
   std::pair<uint64_t, uint64_t> getPointWithSlopeClosestToOneInCDF(const std::vector<std::pair<uint64_t, uint64_t>>& histogram) ;
+  void CDFAddLifetime(uint64_t lifetime);
   void HistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
@@ -1299,6 +1309,63 @@ class DBImpl : public DB {
   bool seq_per_batch() const { return seq_per_batch_; }
 
  protected:
+  double GetSlope1Point(std::vector<double>& x, std::vector<double>& y);
+  template<typename T>
+  std::vector<T> polyfit_Eigen(const std::vector<T> &xValues, const std::vector<T> &yValues, const int degree, const std::vector<T>& weights = std::vector<T>(), bool useJacobi = true)
+  {
+      using namespace Eigen;
+      
+      bool useWeights = weights.size() > 0 && weights.size() == xValues.size();
+      
+      int numCoefficients = degree + 1;
+      size_t nCount = xValues.size();
+      
+      MatrixXf X(nCount, numCoefficients);
+      MatrixXf Y(nCount, 1);
+      
+      // fill Y matrix
+      for (size_t i = 0; i < nCount; i++)
+      {
+          if (useWeights)
+              Y(i, 0) = yValues[i] * weights[i];
+          else
+              Y(i, 0) = yValues[i];
+      }
+      
+      // fill X matrix (Vandermonde matrix)
+      for (size_t nRow = 0; nRow < nCount; nRow++)
+      {
+          T nVal = 1.0f;
+          for (int nCol = 0; nCol < numCoefficients; nCol++)
+          {
+              if (useWeights)
+                  X(nRow, nCol) = nVal * weights[nRow];
+              else
+                  X(nRow, nCol) = nVal;
+              nVal *= xValues[nRow];
+          }
+      }
+      
+      VectorXf coefficients;
+      if (useJacobi)
+          coefficients = X.jacobiSvd(ComputeThinU | ComputeThinV).solve(Y);
+      else
+          coefficients = X.colPivHouseholderQr().solve(Y);
+      
+      return std::vector<T>(coefficients.data(), coefficients.data() + numCoefficients);
+  }
+  std::vector<double> polyder(const std::vector<double>& coeffs) {
+      std::vector<double> result;
+      int n = coeffs.size();
+      for (int i = 1; i < n; ++i) {
+          result.push_back(i * coeffs[i]);
+      }
+      return result;
+  }
+
+
+  std::vector<double> derivative_ ;
+ 
   const std::string dbname_;
   // TODO(peterd): unify with VersionSet::db_id_
   std::string db_id_;
@@ -1332,6 +1399,12 @@ class DBImpl : public DB {
   std::shared_mutex lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
   std::atomic<uint64_t> short_lifetime_threshold_{0};
+  const uint64_t lifetime_cdf_threshold_ = 4 * 1024 * 1024;
+  std::shared_ptr<std::vector<uint64_t>> new_lifetimes_ = nullptr;
+  std::shared_ptr< std::vector<uint64_t>> old_lifetimes_ = nullptr;
+  std::atomic<uint64_t> slope1_point_{0};
+  std::atomic<uint64_t> slope_point5_point_{0};
+  const std::string lifetime_store_name_ = "lifetime_store.txt";
   HistogramImpl histogram_;
   std::shared_mutex booster_mutex_;
   std::shared_ptr<BoosterHandle> lightgbm_handle_ = nullptr;
@@ -1798,6 +1871,12 @@ class DBImpl : public DB {
     Env::Priority thread_pri_;
   };
 
+  struct CDFLifetimeThreadArg {
+    DBImpl* db_;
+
+    Env::Priority thread_pri_;
+  };
+
   // Information for a manual compaction
   struct ManualCompactionState {
     ManualCompactionState(ColumnFamilyData* _cfd, int _input_level,
@@ -2153,6 +2232,7 @@ class DBImpl : public DB {
   // Runs a pre-chosen universal compaction involving bottom level in a
   // separate, bottom-pri thread pool.
   static void BGWorkBottomCompaction(void* arg);
+  static void BGWorkGetSlope1Point(void *arg);
   static void BGWorkFlush(void* arg);
   static void BGWorkPurge(void* arg);
   static void BGWorkDataCollection(void* arg);
@@ -2163,6 +2243,7 @@ class DBImpl : public DB {
 
   void BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                 Env::Priority thread_pri);
+  void BackgroundCallGetSlope1Point(Env::Priority thread_pri);
   void BackgroundCallFlush(Env::Priority thread_pri);
   void BackgroundCallDataCollection();
   void BackgroundCallPurge();

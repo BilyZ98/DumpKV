@@ -305,6 +305,8 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   std::vector<SequenceNumber> ini_lifetime_sequence = {4 * 1024 * 1024, 8*1024*1024}  ;
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
   short_lifetime_threshold_ = ini_lifetime_sequence[0];
+  new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
+  new_lifetimes_->reserve(lifetime_cdf_threshold_);
   versions_->SetDBImpl(this);
 }
 
@@ -2146,6 +2148,186 @@ std::pair<uint64_t, uint64_t> DBImpl::getPointWithSlopeClosestToOneInCDF(const s
                  res.c_str(),
                  minDiff, closestPoint.first, closestPoint.second);
   return closestPoint;
+}
+
+// Function to calculate CDF
+// static  void calculateCDF(std::vector<uint64_t>& points, std::vector<double>& cdf) {
+//     // std::vector<double> cdf(points.size());
+//     std::sort(points.begin(), points.end());
+//     for (size_t i = 0; i < points.size(); i++) {
+//       cdf[i] = i + 1;
+//         // cdf[i] = (i + 1) / static_cast<double>(points.size());
+//     }
+//     // return cdf;
+// }
+
+// Function to find the point where the slope of the CDF is approximately 1
+// static double findSlopeOne(const std::vector<uint64_t>& points, const std::vector<double>& cdf) {
+
+//     for (size_t i = 1; i < points.size(); i++) {
+//         double slope = (cdf[i] - cdf[i - 1]) / (points[i] - points[i - 1]);
+//         if (std::abs(slope - 1.0) < 0.01) {  // Adjust this value based on the precision you need
+//             return points[i];
+//         }
+//     }
+//     return -1;  // Return -1 if no such point is found
+// }
+
+// static double findSlopePoint5(const std::vector<uint64_t>& points, const std::vector<double>& cdf) {
+//     for (size_t i = 1; i < points.size(); i++) {
+//         double slope = (cdf[i] - cdf[i - 1]) / (points[i] - points[i - 1]);
+//         if (std::abs(slope - 0.5) < 0.01) {  // Adjust this value based on the precision you need
+//             return points[i];
+//         }
+//     }
+//     return -1;  // Return -1 if no such point is found
+// }
+//
+// double find_derivative_equals_one(Eigen::VectorXd x, Eigen::VectorXd y) {
+//     int degree = 2; // Degree of polynomial for curve fitting
+//     int dataSize = x.size();
+
+//     gsl_multifit_linear_workspace *ws = gsl_multifit_linear_alloc(dataSize, degree + 1);
+//     gsl_matrix *X = gsl_matrix_alloc(dataSize, degree + 1);
+//     gsl_vector *Y = gsl_vector_alloc(dataSize);
+//     gsl_vector *c = gsl_vector_alloc(degree + 1);
+//     gsl_matrix *cov = gsl_matrix_alloc(degree + 1, degree + 1);
+
+//     for(int i = 0; i < dataSize; i++) {
+//         for(int j = 0; j < degree + 1; j++) {
+//             gsl_matrix_set(X, i, j, pow(x[i], j));
+//         }
+//         gsl_vector_set(Y, i, y[i]);
+//     }
+
+//     double chisq;
+//     gsl_multifit_linear(X, Y, c, cov, &chisq, ws);
+
+//     // The coefficients of the fitted curve are now stored in 'c'
+//     double a = gsl_vector_get(c, 0);
+//     double b = gsl_vector_get(c, 1);
+//     double cc = gsl_vector_get(c, 2);
+
+//     // The derivative of a quadratic function ax^2 + bx + c is 2ax + b.
+//     // Setting this equal to 1 and solving for x gives x = (1 - b) / (2a)
+//     double x_at_derivative_one = (1 - b) / (2 * a);
+
+//     gsl_multifit_linear_free(ws);
+//     gsl_matrix_free(X);
+//     gsl_vector_free(Y);
+//     gsl_vector_free(c);
+//     gsl_matrix_free(cov);
+
+//     return x_at_derivative_one;
+// }
+
+// static uint64_t getSlope1Point(std::vector<uint64_t>& x ) {
+//  uint64_t max_lifetime =0;;
+//   
+//   std::sort(x.begin(), x.end());
+//   max_lifetime = x.back();
+
+//   std::vector<double> x_double(x.size());
+//   std::vector<double> y_double(x.size());
+//   // std::cout << "max_lifetime: " << max_lifetime << std::endl;
+//   for(size_t i = 0; i < x.size(); ++i) {
+//     x_double[i] = static_cast<double>(x[i]) / static_cast<double>(max_lifetime); 
+//   }
+//   uint64_t count = x.size();
+//   for(size_t i = 0; i < count; ++i) {
+//     y_double[i] = static_cast<double>(i) / static_cast<double>(count);
+//   }
+//   size_t slope1_index = 0;
+//   size_t window_size = 1000;
+//   // std::cout << x[0] << " " << x.back() << std::endl;
+//   for(size_t i = window_size; i < x.size(); i += window_size) {
+//     double dy = static_cast<double>(y_double[i]) - static_cast<double>(y_double[i - window_size]);
+//     double dx = x_double[i] - x_double[i - window_size];
+//     if(dx > 0.0 && std::abs(dy / dx - 1.0) < 0.1) {
+//       slope1_index = i;
+//     }
+//   }
+//   // std::cout << "slope1_index: " << slope1_index << std::endl;
+//   // std::cout << "lifetime at slope1_index: " << x[slope1_index] << std::endl;
+
+//   return x[slope1_index];
+
+
+// } 
+
+static  double polyval(const std::vector<double>& p, double x) {
+      double result = 0.0;
+      double xi = 1.0;
+      for (auto it = p.rbegin(); it != p.rend(); ++it) {
+          result += (*it) * xi;
+          xi *= x;
+      }
+      return result;
+  }
+static  double f(double x, void *params) {
+      // Define your function here
+  auto derivative = reinterpret_cast<std::vector<double>*>(params);
+      return polyval(*derivative, x) - 1;
+  }
+
+
+double DBImpl::GetSlope1Point(std::vector<double>& x, std::vector<double>& y) {
+      int status;
+    int iter = 0, max_iter = 100;
+    const gsl_root_fsolver_type *T;
+    gsl_root_fsolver *s;
+    double r = 0, r_expected = M_PI;
+    double x_lo = 0.0, x_hi = 10000000.0;
+    gsl_function F;
+
+    F.function = &f;
+
+    auto coeffs = polyfit_Eigen(x, y, 3);
+    derivative_ = polyder(coeffs);
+    F.params = &derivative_;
+    T = gsl_root_fsolver_brent;
+    s = gsl_root_fsolver_alloc(T);
+    gsl_set_error_handler_off();
+    gsl_root_fsolver_set(s, &F, x_lo, x_hi);
+
+    ROCKS_LOG_INFO (immutable_db_options_.info_log,"using %s method\n", gsl_root_fsolver_name(s));
+    ROCKS_LOG_INFO (immutable_db_options_.info_log,"%5s [%9s, %9s] %9s %10s %9s\n", "iter", "lower", "upper", "root", "err", "err(est)");
+
+    do {
+        iter++;
+        status = gsl_root_fsolver_iterate(s);
+        r = gsl_root_fsolver_root(s);
+        x_lo = gsl_root_fsolver_x_lower(s);
+        x_hi = gsl_root_fsolver_x_upper(s);
+        status = gsl_root_test_interval(x_lo, x_hi, 0, 0.001);
+
+        // if (status == GSL_SUCCESS)
+        //     printf ("Converged:\n");
+
+     ROCKS_LOG_INFO (immutable_db_options_.info_log, "%5d [%.7f, %.7f] %.7f %+.7f %.7f\n", iter, x_lo, x_hi, r, r - r_expected, x_hi - x_lo);
+    } while (status == GSL_CONTINUE && iter < max_iter);
+
+    gsl_root_fsolver_free(s);
+  return r;
+
+
+}
+void DBImpl::CDFAddLifetime(uint64_t lifetime) {
+
+  std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
+  new_lifetimes_->emplace_back(lifetime);
+  if(new_lifetimes_->size() > lifetime_cdf_threshold_) {
+    old_lifetimes_ = new_lifetimes_; 
+    new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
+    new_lifetimes_->reserve(lifetime_cdf_threshold_);
+    CDFLifetimeThreadArg* fta = new CDFLifetimeThreadArg;
+    fta->db_ = this;
+    fta->thread_pri_ = Env::Priority::LOW;
+
+      env_->Schedule(&DBImpl::BGWorkGetSlope1Point, fta, Env::Priority::LOW, this,
+                         &DBImpl::UnscheduleFlushCallback);
+    
+  }
 }
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);

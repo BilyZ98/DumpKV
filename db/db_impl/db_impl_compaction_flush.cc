@@ -2843,6 +2843,12 @@ void DBImpl::BGWorkDataCollection(void* arg) {
 
 
 }
+void DBImpl::BGWorkGetSlope1Point(void *arg) {
+  CDFLifetimeThreadArg cdf = *(reinterpret_cast<CDFLifetimeThreadArg*>(arg));
+  delete reinterpret_cast<CDFLifetimeThreadArg*>(arg);
+  IOSTATS_SET_THREAD_POOL_ID(Env::Priority::LOW);
+  static_cast_with_check<DBImpl>(cdf.db_)->BackgroundCallGetSlope1Point(cdf.thread_pri_);
+}
 void DBImpl::BGWorkFlush(void* arg) {
   FlushThreadArg fta = *(reinterpret_cast<FlushThreadArg*>(arg));
   delete reinterpret_cast<FlushThreadArg*>(arg);
@@ -3127,6 +3133,47 @@ void DBImpl::BackgroundCallDataCollection() {
 
 }
 
+static std::string exec(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
+}
+
+void DBImpl::BackgroundCallGetSlope1Point(Env::Priority thread_pri) {
+  std::string file_name = dbname_ + "/"+ lifetime_store_name_;
+  std::ofstream file;
+  file.open(file_name, std::ios_base::app);
+  if(!file.is_open()) {
+    assert(false);
+  }
+  std::shared_ptr<std::vector<uint64_t>> cur_lifetimes;
+  {
+    std::shared_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
+    cur_lifetimes = old_lifetimes_;
+
+  }
+  for(size_t i=0; i < cur_lifetimes->size(); i++) {
+    file << (*cur_lifetimes.get())[i] << std::endl;
+  }
+
+  file.close(); 
+  std::string cmd = "python3 /mnt/nvme/zt/rocksdb_kv_sep_flush_kv_sep_lifetime_distribution_gc_small_blob_large_edc_window_gc_add_binary_logloss_starting_from_short_threshold/mlsm_scripts/get_slope1_point.py " + file_name;
+  std::string result = exec(cmd.c_str());
+  std::string::size_type sz;
+  double slope = std::stod(result, &sz);
+  uint64_t slope_int = static_cast<uint64_t>(slope);
+  slope1_point_.store(slope_int, std::memory_order_relaxed);
+
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "CDF updated, slope1: %lu, slope0.5: %lf", slope_int, 0.0);
+   
+}
 void DBImpl::BackgroundCallFlush(Env::Priority thread_pri) {
   bool made_progress = false;
   JobContext job_context(next_job_id_.fetch_add(1), true);

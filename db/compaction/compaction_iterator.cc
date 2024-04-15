@@ -1718,6 +1718,7 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
         }
       }
 
+      db_->CDFAddLifetime(distance);
       db_->HistogramAddLifetime(distance);
       //update edcs
       // Need to set up edcs if past_distances_count = 0

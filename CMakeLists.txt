@@ -115,6 +115,7 @@ else()
 #   # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third-party/lightgbm/include)
 # endif()
 
+find_package(GSL REQUIRED)
 
   option(WITH_LIGHTGBM "build with lightgbm" ON)
   if(WITH_LIGHTGBM) 
@@ -1173,14 +1174,18 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 # add_subdirectory()
 
 # add_subdirectory(third-party/lightgbm/)
+
+set(GSL_LIBS GSL::gsl GSL::gslcblas m)
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} )
+  ${THIRDPARTY_LIBS} ${GSL_LIBS} ${SYSTEM_LIBS}  )
+# target_link_libraries(${ROCKSDB_STATIC_LIB} GSL::gsl GSL::gslcblas m)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS})
+    ${THIRDPARTY_LIBS} ${GSL_LIBS} ${SYSTEM_LIBS} )
+  # target_link_libraries(${ROCKSDB_SHARED_LIB} GSL::gsl GSL::gslcblas m)
 
   if(WIN32)
     set_target_properties(${ROCKSDB_SHARED_LIB} PROPERTIES
@@ -1214,6 +1219,7 @@ option(WITH_BENCHMARK_TOOLS "build with benchmarks" ON)
 option(WITH_CORE_TOOLS "build with ldb and sst_dump" ON)
 option(WITH_TOOLS "build with tools" ON)
 
+# include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/util/Eigen/src/Core )
 if(WITH_TESTS OR WITH_BENCHMARK_TOOLS OR WITH_TOOLS OR WITH_JNI OR JNI)
   # include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/gtest-1.8.1/fused-src)
   include_directories(SYSTEM ${PROJECT_SOURCE_DIR}/third-party/googletest/googletest/include)
