@@ -194,6 +194,7 @@ protected:
   std::vector<uint64_t> lifetime_keys_count_;
 
   std::unique_ptr<WritableFile> infer_data_file_ = nullptr;;
+  double sample_add_prob_ = 0.0;
 };
 
 }

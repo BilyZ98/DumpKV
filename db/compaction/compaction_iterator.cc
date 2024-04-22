@@ -1352,7 +1352,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // is_iter_valid = db_internal_iter_->Valid(); 
     }
     // int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
-    int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
+    int maxIndex = std::min(db_->GetDefaultLifetimeIndex(), LifetimeSequence.size() -1 );
     // int maxIndex = std::max(LifetimeSequence.size() -2 , 0ul);
     uint32_t past_distances_count = 0;
     std::vector<uint64_t> past_distances;

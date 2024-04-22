@@ -661,7 +661,11 @@ class DBImpl : public DB {
 
 
   std::pair<uint64_t, uint64_t> getPointWithSlopeClosestToOneInCDF(const std::vector<std::pair<uint64_t, uint64_t>>& histogram) ;
+
+   inline uint64_t GetDefaultLifetimeIndex()  const { return default_lifetime_idx_.load(std::memory_order_relaxed); } ;
+  void SetDefaultLifetime(uint64_t lifetime) { default_lifetime_idx_.store(lifetime, std::memory_order_relaxed); } ;
   void CDFAddLifetime(uint64_t lifetime);
+  double GetGCInvalidRatio() const;
   void HistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
@@ -1399,18 +1403,22 @@ class DBImpl : public DB {
   std::shared_mutex lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
   std::atomic<uint64_t> short_lifetime_threshold_{0};
+  HistogramImpl histogram_;
+  std::atomic<uint64_t> default_lifetime_idx_ = 0;
+
   const uint64_t lifetime_cdf_threshold_ = 4 * 1024 * 1024;
   std::shared_ptr<std::vector<uint64_t>> new_lifetimes_ = nullptr;
   std::shared_ptr< std::vector<uint64_t>> old_lifetimes_ = nullptr;
   std::atomic<uint64_t> slope1_point_{0};
   std::atomic<uint64_t> slope_point5_point_{0};
   const std::string lifetime_store_name_ = "lifetime_store.txt";
-  HistogramImpl histogram_;
+
   std::shared_mutex booster_mutex_;
   std::shared_ptr<BoosterHandle> lightgbm_handle_ = nullptr;
   std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ = nullptr;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
   moodycamel::BlockingConcurrentQueue<std::vector<double>> training_data_queue_;
+  uint64_t next_training_sample_threshold_ = 128000;
 
   // Need to allocate memory for keys 
   // Call AllocateKey?

@@ -14,7 +14,6 @@ function call_run_blob() {
   op_trace_file=$with_gc_op_trace_file
 
   local write_buffer_size=$((100 * 1024 * 1024))
-  local blob_file_size=$((256 * 1024 * 1024))
   echo "default_lifetime_idx: $default_lifetime_idx"
   echo "ycsb_a_run_path: $ycsb_a_run_path"
   COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=$wal_dir \
@@ -30,7 +29,6 @@ function call_run_blob() {
    USE_BLOB_CACHE=0 \
    BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
-   BLOB_FILE_SIZE=$blob_file_size \
    ./run_blob_bench_large_target_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -48,10 +46,15 @@ fi
 
 # with_gc and without_gc
 db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+ycsb_files=(
+workloada_1024kb_100GB_0.9_zipfian.log_run.formated
+workloada_16384kb_100GB_0.9_zipfian.log_run.formated
+workloada_4096kb_100GB_0.9_zipfian.log_run.formated
+workloada_65536kb_100GB_0.9_zipfian.log_run.formated
+)
+ycsb_dir=/mnt/nvme/YCSB-C/data/
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
-# ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
-# ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated
-# db_dir=/mnt/nvme1n1/mlsm/test_blob_with_model_with_dedicated_gc
+#
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
@@ -70,18 +73,14 @@ gc_threshold_gap='0.2'
 
 function run_with_gc_dbbench {
 
-
-  # lifetime_idx_range=$(seq 0 1 3)
-  # lifetime_idx_range=(2 1 0)
   lifetime_idx_range=(0 )
-  # value_sizes=(1024 4096 16384 65536)
-  value_sizes=( 1024 4096)
-  # lifetime_idx_range=(1 3)
-  # for lifetime_idx in $lifetime_idx_range ; do
+  for ycsb_file in "${ycsb_files[@]}" ; do
+  ycsb_a_run_path=${ycsb_dir}/${ycsb_file}
+
+  value_size=$(echo $ycsb_file | awk -F'_' '{print $2}')
+  value_size=${value_size%kb}
+
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do
-  # for lifetime_idx in "${lifetime_idx_range[@]}" ; do
-  # for force_gc_threshold in $(seq 0.8 $gc_threshold_gap 0.8 ) ; do
-  for value_size in "${value_sizes[@]}" ; do
     force_gc_threshold=0.8
 
     echo "lifetime_idx-------------------: $lifetime_idx"
@@ -90,19 +89,14 @@ function run_with_gc_dbbench {
 
 
     cur_run_name=${run_name}_${lifetime_idx}_${value_size}
-    # one_run_name=${run_name}_${lifetime_idx}
-    # with_gc_dir=${db_dir}/with_gc_${age_cutoff}_${lifetime_idx}
     with_gc_dir=${db_dir}/${cur_run_name}
     date_log_path=$(date +"%Y-%m-%d-%H-%M-%S")-${cur_run_name} 
     db_log_dir=${date_log_path}
     if [ ! -d $db_log_dir ]; then
       mkdir -p $db_log_dir
     fi
-    # with_gc_compaction_trace_file=${with_gc_dir}/compaction_trace.txt
     with_gc_compaction_trace_file=""
-    # with_gc_op_trace_file=${with_gc_dir}/op_trace.txt
     with_gc_op_trace_file=""
-    # output_text=with_gc_${age_cutoff}_${force_gc_threshold}.txt
     output_text=${cur_run_name}.txt
     output_text_path=${db_log_dir}/${output_text}
 

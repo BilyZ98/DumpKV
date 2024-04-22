@@ -3069,7 +3069,8 @@ void DBImpl::BackgroundCallDataCollection() {
     const uint64_t threshold = 128000;
     // const uint64_t threshold = 256000;
     // const uint64_t threshold = 1;
-    if(training_data_->GetNumTrainingSamples() >= threshold) {
+    if(training_data_->GetNumTrainingSamples() >= next_training_sample_threshold_) {
+      next_training_sample_threshold_ = threshold;
 
       BoosterHandle *new_model = new BoosterHandle();
       uint64_t start_time = env_->NowMicros();
@@ -3089,13 +3090,6 @@ void DBImpl::BackgroundCallDataCollection() {
         training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
         training_data_->LogKeyRatio(immutable_db_options_);
       }
-      // training_data_->WriteTrainingDataForMultiClass(dbname_ + "/train_data.txt" , env_, num_class);
-      // if(lightgbm_handle_ != nullptr) {
-      //   int res = LGBM_BoosterMerge(*new_model, *lightgbm_handle_);
-      //   if(res != 0) {
-      //     assert(false);
-      //   }
-      // }
       training_data_->ClearTrainingData();
       FastConfigHandle *new_config = new FastConfigHandle();
 
@@ -3115,15 +3109,8 @@ void DBImpl::BackgroundCallDataCollection() {
         std::unique_lock<std::shared_mutex> lock(booster_mutex_ );
         lightgbm_handle_ = new_model_ptr;
         lightgbm_fastConfig_ = new_config_ptr;
-        // std::swap(lightgbm_handle_, new_model_ptr);
-        // std::swap(lightgbm_fastConfig_, new_config_ptr);
-        // std::atomic_store(&lightgbm_handle_, new_model_ptr);
-        // std::atomic_store(&lightgbm_fastConfig_, new_config_ptr);
 
       }
-      // lightgbm_handle_ = new_model_ptr;
-      // lightgbm_fastConfig_ = new_config_ptr;
-
       ROCKS_LOG_INFO(
               immutable_db_options_.info_log,
                 "training time: %lu sec",
@@ -3170,6 +3157,7 @@ void DBImpl::BackgroundCallGetSlope1Point(Env::Priority thread_pri) {
   double slope = std::stod(result, &sz);
   uint64_t slope_int = static_cast<uint64_t>(slope);
   slope1_point_.store(slope_int, std::memory_order_relaxed);
+  // short_lifetime_threshold_.store(slope_int, std::memory_order_relaxed);
 
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "CDF updated, slope1: %lu, slope0.5: %lf", slope_int, 0.0);
    
@@ -3663,6 +3651,14 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
 
     mutex_.Lock();
     status = gc_job.Install(*gc->mutable_cf_options());
+
+    if(GetGCInvalidRatio() < 0.25) {
+      SetDefaultLifetime(1);
+      ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 1", GetGCInvalidRatio());
+    } else {
+      SetDefaultLifetime(0);
+      ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 0", GetGCInvalidRatio());
+    }
     io_s = gc_job.io_status();
     if (status.ok()) {
       // InstallSuperVersionAndScheduleWork(gc->column_family_data(),

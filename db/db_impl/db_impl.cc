@@ -764,6 +764,11 @@ Status DBImpl::CloseImpl() { return CloseHelper(); }
 DBImpl::~DBImpl() {
   // TODO: remove this.
   init_logger_creation_s_.PermitUncheckedError();
+  std::string lifetime_histogram_str = histogram_.ToString();
+  if (!lifetime_histogram_str.empty()) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "Lifetime histogram: %s", lifetime_histogram_str.c_str());
+  }
 
   InstrumentedMutexLock closing_lock_guard(&closing_mutex_);
   if (closed_) {
@@ -2329,6 +2334,25 @@ void DBImpl::CDFAddLifetime(uint64_t lifetime) {
     
   }
 }
+// static double custom_sigmoid(double x) {
+//   x = 10* x - 5;
+//   return 10.0 / (1 + exp(-x));
+// }
+
+double DBImpl::GetGCInvalidRatio() const {
+  ColumnFamilyData* cfd = nullptr;
+  auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(default_cf_handle_);
+  cfd = cfh->cfd();
+  return double(cfd->internal_stats()->GetGCStats().gc_dropped_blobs) / double(cfd->internal_stats()->GetGCStats().gc_input_blobs);
+
+}
+static double sigmoid(double x) {
+    return 1 / (1 + std::exp(-x));
+}
+
+static double custom_sigmoid(double x) {
+    return 10 * sigmoid(10 * (x - 0.75));
+}
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
@@ -2337,22 +2361,49 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
     uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
     uint64_t p60 =static_cast<uint64_t>(histogram_.Percentile(60));
+    uint64_t p70 =static_cast<uint64_t>(histogram_.Percentile(70));
     uint64_t p75 =static_cast<uint64_t>(histogram_.Percentile(75));
     uint64_t p80 = static_cast<uint64_t>(histogram_.Percentile(80));
     uint64_t p90 =static_cast<uint64_t>(histogram_.Percentile(90));
     uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
     uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
-    std::vector<SequenceNumber> seqs = {p60, p90};
-    // SetLifetimeSequence(seqs);
-    lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
-    short_lifetime_threshold_.store(p60, std::memory_order_relaxed);
+    
+    // increase seqs[1] from p90 to p95 if gc invalid rate is lower
+    // with some expression
+    uint64_t initial_p = 80;
+    double gc_invalid_rate = GetGCInvalidRatio();
+    uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
+    uint64_t new_p = initial_p + p_add;
+    uint64_t new_p_value = static_cast<uint64_t>(histogram_.Percentile(new_p));
 
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu",
-                   p50, p60, p75, p80, p90, p95, p99);
+    uint64_t initial_low_p = 60;
+    uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(gc_invalid_rate));
+    uint64_t new_low_p = initial_low_p + low_p_add;
+    uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
+
+
+    std::vector<SequenceNumber> seqs = {new_low_p_value, new_p_value};
+    uint64_t slope1_point = slope1_point_.load(std::memory_order_relaxed);
+    if(slope1_point != 0 && slope1_point!= UINT64_MAX ){
+      uint64_t short_max = std::max(seqs[0], slope1_point );
+      uint64_t short_min = std::min(seqs[0], slope1_point);
+      if(short_max  < (seqs[1] / 2)) {
+        seqs[0] = short_max;
+      } else {
+        seqs[0] = short_min;
+      }
+    }
+    lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+    short_lifetime_threshold_.store(seqs[0], std::memory_order_relaxed);
+
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu",
+                   p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p);
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu",
+                   seqs[0], seqs[1]);
     lifetime_count_.store(0, std::memory_order_relaxed);
-    std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
-    histogram_.ToVector(cdf);
-    getPointWithSlopeClosestToOneInCDF(cdf);
+    // std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
+    // histogram_.ToVector(cdf);
+    // getPointWithSlopeClosestToOneInCDF(cdf);
     // histogram_.Clear();
   }
   

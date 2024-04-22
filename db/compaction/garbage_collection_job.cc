@@ -166,6 +166,10 @@ Status GarbageCollectionJob::Run(InternalIterator* iter) {
   const uint64_t start_micros = db_options_.clock->NowMicros();
   log_buffer_->FlushBufferToLog();
   LogGarbageCollection();
+  ColumnFamilyData* cfd = gc_->column_family_data();
+  assert(cfd);
+ 
+  sample_add_prob_ = 1.0 - db_->GetGCInvalidRatio();
   Status s =ProcessGarbageCollection(iter);
 
   gc_stats_.SetMicros(db_options_.clock->NowMicros() - start_micros);
@@ -443,19 +447,19 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   //     assert(s.ok()); 
   //   }
   // }
-  if(past_distances_count == 0) {
-    data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
+  //
+  // if(past_distances_count == 0) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0, 1);
     double prob = dis(gen);
-    if( prob < 0.1) {
+    if(prob < sample_add_prob_) {
+      data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
       s = db_->AddTrainingSample(data_to_train);
       assert(s.ok());
     }
-
-
-  }
+  // }
+  db_->HistogramAddLifetime(distance);
     
     if(booster_handle_ ) {
     assert(indices.size() == data.size());
