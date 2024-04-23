@@ -68,6 +68,62 @@ Status TrainingData::ConvertLabels(uint64_t threshold) {
 //   indptr_.push_back(counter);
 //   return Status::OK();
 // }
+Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const double& label,
+                           const uint64_t& short_lifetime_threshold )  {
+   uint64_t label_uint64_t = static_cast<uint64_t>(label);
+  if(label_uint64_t < short_lifetime_threshold) {
+    return Status::OK();
+  }
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  uint64_t starting_point = 0;
+
+  starting_point = label_uint64_t;
+  uint64_t double_label = label_uint64_t * 2;
+  std::uniform_int_distribution<uint64_t> dis(starting_point, double_label);
+  uint64_t random_access_time = dis(gen);
+  random_access_times_.emplace_back(random_access_time);
+
+  uint64_t new_label = double_label - random_access_time;
+  numeric_labels_.emplace_back(new_label);
+
+  // Need to update edc as well.
+  int32_t counter = indptr_.back();
+  indices_.emplace_back(0);
+  data_.emplace_back(random_access_time);
+  counter++;
+  size_t i = 0;
+  for(; i < data.size()-n_edc_feature; ++i) {
+    indices_.emplace_back(i+1);
+    data_.emplace_back(data[i]);
+    counter++;
+  }
+  uint64_t distance = random_access_time;
+
+  if(i > 0) {
+    for(size_t k=0; k < n_edc_feature; k++, i++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      float new_edc = data[i] * hash_edc[_distance_idx];
+      indices_.emplace_back(i+1);
+      data_.emplace_back(new_edc);
+      counter++;
+    }
+  } else {
+    for(size_t k=0; k < n_edc_feature; k++, i++) {
+      uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      float new_edc = hash_edc[_distance_idx];
+      indices_.emplace_back(i+1);
+      data_.emplace_back(new_edc);
+      counter++;
+    }
+  }
+  assert(data.size() <= num_features_);
+
+  indptr_.push_back(counter);
+  return Status::OK();
+ 
+}
+
 Status TrainingData::AddTrainingSample(const std::vector<double>& data, const double& label,
                                       const uint64_t& short_lifetime_threshold ) {
 

@@ -758,6 +758,17 @@ void DBImpl::SampleKeyMeta() {
 
 
 }
+
+Status DBImpl::AddGCTrainingSample(const std::vector<double>& data) {
+  bool res  =   gc_training_data_queue_.enqueue(data);
+  if(!res) {
+    assert(false);
+    return Status::IOError("Failed to enqueue data");
+  }
+
+  return Status::OK();
+
+}
 Status DBImpl::AddTrainingSample(const std::vector<double>& data) {
   bool res  =   training_data_queue_.enqueue(data);
   if(!res) {
