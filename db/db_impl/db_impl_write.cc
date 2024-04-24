@@ -758,6 +758,7 @@ void DBImpl::SampleKeyMeta() {
 
 
 }
+
 static double sigmoid(double x) {
     return 1 / (1 + std::exp(-x));
 }
@@ -770,6 +771,18 @@ uint64_t DBImpl::GetNewLabel(const std::vector<float>& edc) {
   double prob = custom_sigmoid(ratio_gap);
   uint64_t new_label =  GetShortLifetimeThreshold() + prob * (GetLongLifetimeThreshold() - GetShortLifetimeThreshold());
   return new_label;
+
+
+Status DBImpl::AddGCTrainingSample(const std::vector<double>& data) {
+  bool res  =   gc_training_data_queue_.enqueue(data);
+  if(!res) {
+    assert(false);
+    return Status::IOError("Failed to enqueue data");
+  }
+
+  return Status::OK();
+
+
 }
 Status DBImpl::AddTrainingSample(const std::vector<double>& data) {
   bool res  =   training_data_queue_.enqueue(data);

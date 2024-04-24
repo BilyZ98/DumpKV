@@ -3058,14 +3058,22 @@ void DBImpl::BackgroundCallDataCollection() {
     std::vector<double> data;
     std::int64_t timeout = 100;
     bool get_data =  training_data_queue_.wait_dequeue_timed(data, timeout);
-    if(!get_data) {
+    if(get_data) {
+      double label = data.back();
+      data.pop_back();
+      Status s = training_data_->AddTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
+      assert(s.ok());
+    } 
+    bool gc_get_data = gc_training_data_queue_.wait_dequeue_timed(data, timeout);
+    if(gc_get_data) {
+      double label = data.back();
+      data.pop_back();
+      Status s = training_data_->AddGCTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
+      assert(s.ok());
+    }
+    if(!get_data && !gc_get_data) {
       continue;
     }
-    double label = data.back();
-    data.pop_back();
-    Status s = training_data_->AddTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
-    assert(s.ok());
-
     const uint64_t threshold = 128000;
     // const uint64_t threshold = 256000;
     // const uint64_t threshold = 1;
@@ -3077,7 +3085,7 @@ void DBImpl::BackgroundCallDataCollection() {
       std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
       GetLifetimeSequence(lifetime_seqs);
       const std::vector<SequenceNumber> &lifetime_seqs_data = *lifetime_seqs.get();
-      s = training_data_->ConvertLabels(lifetime_seqs_data[0]); 
+      Status s = training_data_->ConvertLabels(lifetime_seqs_data[0]); 
       training_data_->TrainModel(new_model, training_params_);
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;

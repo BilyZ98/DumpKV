@@ -231,6 +231,7 @@ class DBImpl : public DB {
 
   uint64_t GetNewLabel(const std::vector<float>& edc);
   Status AddTrainingSample(const std::vector<double>& data);
+  Status AddGCTrainingSample(const std::vector<double>& data);
 
   void SampleKeyMeta();
   // { return Status::OK();}
@@ -1427,6 +1428,8 @@ class DBImpl : public DB {
   std::shared_ptr<FastConfigHandle> lightgbm_fastConfig_ = nullptr;
   std::unordered_map<std::string, std::unordered_map<uint64_t, std::vector<double>>> features_;
   moodycamel::BlockingConcurrentQueue<std::vector<double>> training_data_queue_;
+  moodycamel::BlockingConcurrentQueue<std::vector<double>> gc_training_data_queue_;
+
   uint64_t next_training_sample_threshold_ = 128000;
 
   // Need to allocate memory for keys 
