@@ -229,6 +229,7 @@ class DBImpl : public DB {
                            const std::vector<float>& edcs,
                            const uint64_t& future_distance);
 
+  uint64_t GetNewLabel(const std::vector<float>& edc);
   Status AddTrainingSample(const std::vector<double>& data);
   Status AddGCTrainingSample(const std::vector<double>& data);
 
@@ -670,7 +671,12 @@ class DBImpl : public DB {
   void HistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
-  uint64_t GetShortLifetimeThreshold() const;
+  inline uint64_t GetLongLifetimeThreshold() const {
+    return long_lifetime_threshold_.load(std::memory_order_relaxed);
+  }
+  inline uint64_t GetShortLifetimeThreshold() const {
+    return short_lifetime_threshold_.load(std::memory_order_relaxed);
+  }
   // Function that Get and KeyMayExist call with no_io true or false
   // Note: 'value_found' from KeyMayExist propagates here
   // This function is also called by GetMergeOperands
@@ -1404,6 +1410,9 @@ class DBImpl : public DB {
   std::shared_mutex lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
   std::atomic<uint64_t> short_lifetime_threshold_{0};
+  std::atomic<uint64_t> long_lifetime_threshold_{0};
+  std::atomic<uint64_t> short_lifetime_idx_{0};
+  std::atomic<uint64_t> long_lifetime_idx_{0};
   HistogramImpl histogram_;
   std::atomic<uint64_t> default_lifetime_idx_ = 0;
 
