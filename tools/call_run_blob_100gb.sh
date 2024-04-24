@@ -48,9 +48,9 @@ fi
 db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_files=(
 workloada_1024kb_100GB_0.9_zipfian.log_run.formated
-workloada_16384kb_100GB_0.9_zipfian.log_run.formated
-workloada_4096kb_100GB_0.9_zipfian.log_run.formated
-workloada_65536kb_100GB_0.9_zipfian.log_run.formated
+# workloada_16384kb_100GB_0.9_zipfian.log_run.formated
+# workloada_4096kb_100GB_0.9_zipfian.log_run.formated
+# workloada_65536kb_100GB_0.9_zipfian.log_run.formated
 )
 ycsb_dir=/mnt/nvme/YCSB-C/data/
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated

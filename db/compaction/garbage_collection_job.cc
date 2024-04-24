@@ -454,7 +454,9 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     std::uniform_real_distribution<> dis(0, 1);
     double prob = dis(gen);
     if(prob < sample_add_prob_) {
-      data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
+      uint64_t new_label = db_->GetNewLabel(edcs);
+      data_to_train.emplace_back(static_cast<double>(new_label + distance));
+      // data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
       s = db_->AddTrainingSample(data_to_train);
       assert(s.ok());
     }

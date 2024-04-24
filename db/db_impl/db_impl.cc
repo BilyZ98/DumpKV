@@ -305,6 +305,7 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   std::vector<SequenceNumber> ini_lifetime_sequence = {4 * 1024 * 1024, 8*1024*1024}  ;
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
   short_lifetime_threshold_ = ini_lifetime_sequence[0];
+  long_lifetime_threshold_ = ini_lifetime_sequence[1];
   new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
   new_lifetimes_->reserve(lifetime_cdf_threshold_);
   versions_->SetDBImpl(this);
@@ -2117,9 +2118,7 @@ bool DBImpl::ShouldReferenceSuperVersion(const MergeContext& merge_context) {
              merge_context.GetOperands().size();
 }
 
-uint64_t DBImpl::GetShortLifetimeThreshold() const {
-  return short_lifetime_threshold_.load(std::memory_order_relaxed);
-}
+
 std::pair<uint64_t, uint64_t> DBImpl::getPointWithSlopeClosestToOneInCDF(const std::vector<std::pair<uint64_t, uint64_t>>& histogram) {
   uint64_t cumulativeSum = 0;
   double minDiff = std::numeric_limits<double>::max();
@@ -2387,19 +2386,49 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     if(slope1_point != 0 && slope1_point!= UINT64_MAX ){
       uint64_t short_max = std::max(seqs[0], slope1_point );
       uint64_t short_min = std::min(seqs[0], slope1_point);
-      if(short_max  < (seqs[1] / 2)) {
+      if(short_max  < (seqs[1] / 2) ) {
         seqs[0] = short_max;
       } else {
-        seqs[0] = short_min;
+        if ( short_min < (short_max / 2)) {
+          seqs[0] = short_max;
+        } else {
+          seqs[0] = short_min;
+        }
       }
     }
     lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
     short_lifetime_threshold_.store(seqs[0], std::memory_order_relaxed);
+    long_lifetime_threshold_.store(seqs[1], std::memory_order_relaxed);
+    size_t left = 0;
+    size_t right = n_edc_feature;
+    while (left < right) {
+      size_t mid = left + (right - left) / 2;
+      if (edc_windows[mid] < short_lifetime_threshold_.load(std::memory_order_relaxed)) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+    short_lifetime_idx_.store(left, std::memory_order_relaxed);
+    left = 0;
+    right = n_edc_feature;
+    while (left < right) {
+      size_t mid = left + (right - left) / 2;
+      if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+    long_lifetime_idx_.store(left, std::memory_order_relaxed);
+
+
+
 
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu",
                    p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p);
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu",
-                   seqs[0], seqs[1]);
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu",
+                   seqs[0], seqs[1], short_lifetime_idx_.load(std::memory_order_relaxed), long_lifetime_idx_.load(std::memory_order_relaxed));
     lifetime_count_.store(0, std::memory_order_relaxed);
     // std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
     // histogram_.ToVector(cdf);
@@ -2417,6 +2446,7 @@ void DBImpl::SetLifetimeSequence(const std::vector<SequenceNumber>& seqs) {
   std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
   short_lifetime_threshold_.store(seqs[0], std::memory_order_relaxed);
+  long_lifetime_threshold_.store(seqs[1], std::memory_order_relaxed);
 }
 Status DBImpl::GetImpl(const ReadOptions& read_options, const Slice& key,
                        GetImplOptions& get_impl_options) {
