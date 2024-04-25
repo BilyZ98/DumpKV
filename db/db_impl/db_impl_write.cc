@@ -772,7 +772,7 @@ uint64_t DBImpl::GetNewLabel(const std::vector<float>& edc) {
   uint64_t new_label =  GetShortLifetimeThreshold() + prob * (GetLongLifetimeThreshold() - GetShortLifetimeThreshold());
   return new_label;
 
-
+}
 Status DBImpl::AddGCTrainingSample(const std::vector<double>& data) {
   bool res  =   gc_training_data_queue_.enqueue(data);
   if(!res) {

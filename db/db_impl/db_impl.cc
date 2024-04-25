@@ -2350,7 +2350,7 @@ static double sigmoid(double x) {
 }
 
 static double custom_sigmoid(double x) {
-    return 10 * sigmoid(10 * (x - 0.75));
+    return 10 * sigmoid(10 * (x - 0.5));
 }
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);

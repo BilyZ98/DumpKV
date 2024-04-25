@@ -380,6 +380,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint8_t n_within = 0;
   uint32_t i = 0;
   data.emplace_back(static_cast<double>(distance));
+  data_to_train.emplace_back(static_cast<double>(distance));
   indices.emplace_back(0);
   assert(past_distances_count <= max_n_past_timestamps);
   for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
@@ -411,8 +412,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
       ok = GetFixed32(&prev_value, reinterpret_cast<uint32_t*>(&edc));
 
       uint32_t _distance_idx = std::min(uint32_t(distance) / edc_windows[i], max_hash_edc_idx);
-      data_to_train.emplace_back(edc);
       edc = edc * hash_edc[_distance_idx];
+      data_to_train.emplace_back(edc);
       edcs.emplace_back(edc);
       data.emplace_back(edc);
       indices.emplace_back(i + max_n_past_timestamps + 2);
@@ -456,7 +457,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     if(prob < sample_add_prob_) {
 
       uint64_t new_label = db_->GetNewLabel(edcs);
-      data_to_train.emplace_back(static_cast<double>(new_label + distance));
+      data_to_train.emplace_back(static_cast<double>(new_label ));
       // data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
 
       // data_to_train.emplace_back(static_cast<double>(distance));

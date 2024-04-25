@@ -3082,10 +3082,11 @@ void DBImpl::BackgroundCallDataCollection() {
 
       BoosterHandle *new_model = new BoosterHandle();
       uint64_t start_time = env_->NowMicros();
-      std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
-      GetLifetimeSequence(lifetime_seqs);
-      const std::vector<SequenceNumber> &lifetime_seqs_data = *lifetime_seqs.get();
-      Status s = training_data_->ConvertLabels(lifetime_seqs_data[0]); 
+      // std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
+      // GetLifetimeSequence(lifetime_seqs);
+      // const std::vector<SequenceNumber> &lifetime_seqs_data = *lifetime_seqs.get();
+      uint64_t label_threshold = GetShortLifetimeThreshold() + (GetLongLifetimeThreshold() - GetShortLifetimeThreshold()) / 2;
+      Status s = training_data_->ConvertLabels(label_threshold); 
       training_data_->TrainModel(new_model, training_params_);
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
