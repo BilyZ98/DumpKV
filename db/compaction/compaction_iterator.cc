@@ -1692,7 +1692,6 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
         if(this_past_distance < memory_window) {
           ++n_within;
         }
-        data_to_train.emplace_back(static_cast<double>(past_distance));
         assert(ok);
       }
 
@@ -1725,7 +1724,8 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
       if(distance > db_->GetShortLifetimeThreshold()) {
         // Model prediction
         // This is not good as well. Any better solution ?
-        double inverse_distance = 1.0 / double(edcs[0]);
+        // double inverse_distance = 1.0 / double(edcs[0]);
+        double inverse_distance = db_->GetSampleRatio(edcs);
         // add training sample with inverse_distance probability
         std::random_device rd;
         std::mt19937 gen(rd());

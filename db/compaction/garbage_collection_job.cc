@@ -138,14 +138,14 @@ GarbageCollectionJob::~GarbageCollectionJob() {
     infer_data_file_->Close();
   }
 }
-Status GarbageCollectionJob::WriteInferDataToFile(const std::vector<double>& data, double label) {
+Status GarbageCollectionJob::WriteInferDataToFile(const std::vector<int32_t>& indicies, const std::vector<double>& data, double label) {
   Status s;
   if(!infer_data_file_) {
     assert(false);
     return s;
   }
   for(size_t i = 0; i < data.size(); i++) {
-    std::string data_with_sep = std::to_string(data[i]) + " ";
+    std::string data_with_sep = std::to_string(indicies[i]) + ":" + std::to_string(data[i]) + " ";
     s = infer_data_file_->Append(data_with_sep);
     
   }
@@ -379,21 +379,14 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint32_t this_past_distance = 0;
   uint8_t n_within = 0;
   uint32_t i = 0;
-  data.emplace_back(static_cast<double>(distance));
-  data_to_train.emplace_back(static_cast<double>(distance));
-  indices.emplace_back(0);
   assert(past_distances_count <= max_n_past_timestamps);
   for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
     uint64_t past_distance;
     ok = GetVarint64(&prev_value, &past_distance);
-    past_distances.emplace_back(past_distance);
     this_past_distance +=  past_distance;  
-    indices.emplace_back(i+1);
-    data.emplace_back(static_cast<double>(past_distance));
     if (this_past_distance < memory_window) {
       ++n_within;
     }
-    data_to_train.emplace_back(static_cast<double>(past_distance));
     assert(ok);
   }
 
@@ -456,12 +449,15 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     double prob = dis(gen);
     if(prob < sample_add_prob_) {
 
-      uint64_t new_label = db_->GetNewLabel(edcs);
-      data_to_train.emplace_back(static_cast<double>(new_label ));
-      // data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
-
-      // data_to_train.emplace_back(static_cast<double>(distance));
-
+      uint64_t lifetime_idx = 0;
+      if(past_distances_count == 0) {
+        data_to_train.emplace_back(1.0);
+        data_to_train.emplace_back(0.0);
+      } else {
+        uint64_t new_label = db_->GetNewLabel(edcs, &lifetime_idx);
+        data_to_train.emplace_back(static_cast<double>(new_label ));
+        data_to_train.emplace_back(static_cast<double>(lifetime_idx));
+      }
       s = db_->AddGCTrainingSample(data_to_train);
 
       assert(s.ok());
@@ -509,7 +505,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     //   }
     // }
 
-    s = WriteInferDataToFile(data, out_result[0]); 
+    s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);
@@ -518,8 +514,6 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   lifetime_keys_count_[maxIndex] += 1;
   return maxIndex;
 
-  // count new past_distances
-  // past_distances_count += 1;
 
 
 }

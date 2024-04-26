@@ -112,7 +112,7 @@ public:
 
 protected:
   Status ProcessGarbageCollection(InternalIterator* iter);
-  Status WriteInferDataToFile(const std::vector<double>& data, double label) ;
+  Status WriteInferDataToFile(const std::vector<int32_t>& indicies, const std::vector<double>& data, double label) ;
   uint64_t GetNewLifetimeIndex(InternalIterator* iter);
 
   bool GetKeyMeta(const Slice& key, const Slice& value, std::vector<double>& key_meta);

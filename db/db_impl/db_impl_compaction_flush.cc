@@ -3066,9 +3066,11 @@ void DBImpl::BackgroundCallDataCollection() {
     } 
     bool gc_get_data = gc_training_data_queue_.wait_dequeue_timed(data, timeout);
     if(gc_get_data) {
+      double lifetime_idx = data.back();
+      data.pop_back();
       double label = data.back();
       data.pop_back();
-      Status s = training_data_->AddGCTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
+      Status s = training_data_->AddGCTrainingSample(data, label, lifetime_idx, short_lifetime_threshold_.load(std::memory_order_relaxed));
       assert(s.ok());
     }
     if(!get_data && !gc_get_data) {
@@ -3085,7 +3087,8 @@ void DBImpl::BackgroundCallDataCollection() {
       // std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
       // GetLifetimeSequence(lifetime_seqs);
       // const std::vector<SequenceNumber> &lifetime_seqs_data = *lifetime_seqs.get();
-      uint64_t label_threshold = GetShortLifetimeThreshold() + (GetLongLifetimeThreshold() - GetShortLifetimeThreshold()) / 2;
+      // uint64_t label_threshold = GetShortLifetimeThreshold() + (GetLongLifetimeThreshold() - GetShortLifetimeThreshold()) / 3;
+      uint64_t label_threshold = 0;
       Status s = training_data_->ConvertLabels(label_threshold); 
       training_data_->TrainModel(new_model, training_params_);
       uint64_t end_time = env_->NowMicros();
@@ -3122,8 +3125,8 @@ void DBImpl::BackgroundCallDataCollection() {
       }
       ROCKS_LOG_INFO(
               immutable_db_options_.info_log,
-                "training time: %lu sec",
-              duration_sec);
+                "training time: %lu sec, label_threshold: %lu",
+              duration_sec, label_threshold);
       }
   }
 

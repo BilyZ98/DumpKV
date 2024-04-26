@@ -38,6 +38,7 @@ public:
   Status AddTrainingSample(const std::vector<double>& data, const double& label,
                            const uint64_t& short_lifetime_threshold ) ;
   Status AddGCTrainingSample(const std::vector<double>& data, const double& label,
+                             const double& lifetime_idx,
                            const uint64_t& short_lifetime_threshold ) ;
 
   Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
@@ -78,6 +79,7 @@ private:
 
   Arena* arena_;
   std::vector<float> labels_;
+  std::vector<double> lifetime_idx_;
   std::vector<uint64_t> numeric_labels_;
   std::vector<uint64_t> random_access_times_;
   std::vector<int32_t> indptr_;

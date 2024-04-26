@@ -229,7 +229,14 @@ class DBImpl : public DB {
                            const std::vector<float>& edcs,
                            const uint64_t& future_distance);
 
-  uint64_t GetNewLabel(const std::vector<float>& edc);
+  inline double GetSampleRatio(const std::vector<float>& edc) {
+    double ratio_gap =1.0 -  (edc[short_lifetime_idx_.load(std::memory_order_relaxed)] / edc[long_lifetime_idx_.load(std::memory_order_relaxed)]);
+    if(ratio_gap < 0.01) {
+      return 0.5;
+    }
+    return ratio_gap;
+  }
+  uint64_t GetNewLabel(const std::vector<float>& edc, uint64_t *lifetime_idx);
   Status AddTrainingSample(const std::vector<double>& data);
   Status AddGCTrainingSample(const std::vector<double>& data);
 

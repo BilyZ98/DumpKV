@@ -2376,7 +2376,7 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     uint64_t new_p_value = static_cast<uint64_t>(histogram_.Percentile(new_p));
 
     uint64_t initial_low_p = 60;
-    uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(gc_invalid_rate));
+    uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
     uint64_t new_low_p = initial_low_p + low_p_add;
     uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
 
@@ -2389,7 +2389,7 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
       if(short_max  < (seqs[1] / 2) ) {
         seqs[0] = short_max;
       } else {
-        if ( short_min < (short_max / 2)) {
+        if ( short_min < (short_max / 2)  && short_max < seqs[1]  ) {
           seqs[0] = short_max;
         } else {
           seqs[0] = short_min;
