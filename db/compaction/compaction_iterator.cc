@@ -1655,7 +1655,7 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
   }
   uint32_t past_distances_count = 0;
   std::vector<uint64_t> past_distances;
-  past_distances.reserve(max_n_past_timestamps);
+  past_distances.reserve(max_n_past_distances);
   std::vector<float> edcs;
   edcs.reserve(n_edc_feature);
   uint64_t past_seq;
@@ -1683,8 +1683,8 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
       uint32_t this_past_distance = 0;
       uint8_t n_within = 0;
       uint32_t i = 0;
-      assert(past_distances_count <= max_n_past_timestamps);
-      for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
+      assert(past_distances_count <= max_n_past_distances);
+      for(i=0; i < past_distances_count && i <= max_n_past_distances; i++) {
         uint64_t past_distance;
         ok = GetVarint64(&prev_value, &past_distance);
         past_distances.emplace_back(past_distance);
@@ -1761,7 +1761,7 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
     assert(past_distances_count == 0);
   }
 
-  past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
+  past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_distances));
   PutVarint32(&key_meta_str_, past_distances_count);
   if(past_distances_count > 0) {
     PutVarint64(&key_meta_str_, distance ); 
