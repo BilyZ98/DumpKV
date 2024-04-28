@@ -75,7 +75,7 @@ function run_with_gc_dbbench {
   # lifetime_idx_range=(2 1 0)
   lifetime_idx_range=(0 )
   # value_sizes=(1024 4096 16384 65536)
-  value_sizes=( 4096 )
+  value_sizes=( 1024 4096 )
   # lifetime_idx_range=(1 3)
   # for lifetime_idx in $lifetime_idx_range ; do
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do

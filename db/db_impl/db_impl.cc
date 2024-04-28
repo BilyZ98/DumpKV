@@ -2355,7 +2355,7 @@ static double sigmoid(double x) {
 }
 
 static double custom_sigmoid(double x) {
-    return 10 * sigmoid(10 * (x - 0.5));
+    return 20 * sigmoid(10 * (x - 0.5));
 }
 
 void DBImpl::GCHistogramAddLifetime(uint64_t lifetime) {
@@ -2374,11 +2374,9 @@ void DBImpl::GCHistogramAddLifetime(uint64_t lifetime) {
     uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - GetGCInvalidRatio()));
     uint64_t new_p = 80 + p_add;
     uint64_t new_p_value = static_cast<uint64_t>(gc_histogram_.Percentile(new_p));
-    std::vector<SequenceNumber> seqs = {p80, new_p_value};
-    // gc_lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
     gc_lifetime_count_.store(0, std::memory_order_relaxed);
     uint64_t histogram_mode_point = static_cast<uint64_t>(gc_histogram_.GetModePoint());
-    uint64_t long_lifetime_threshold = std::max(histogram_mode_point, new_p_value);
+    uint64_t long_lifetime_threshold = std::max(std::min(histogram_mode_point, p80), new_p_value);
     long_lifetime_threshold_.store(long_lifetime_threshold, std::memory_order_relaxed);
     (*lifetime_sequence_)[1] = long_lifetime_threshold;
     size_t left = 0;
@@ -2425,11 +2423,11 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     
     // increase seqs[1] from p90 to p95 if gc invalid rate is lower
     // with some expression
-    uint64_t initial_p = 80;
+    // uint64_t initial_p = 80;
     double gc_invalid_rate = GetGCInvalidRatio();
-    uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
-    uint64_t new_p = initial_p + p_add;
-    uint64_t new_p_value = static_cast<uint64_t>(histogram_.Percentile(new_p));
+    // uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
+    // uint64_t new_p = initial_p + p_add;
+    // uint64_t new_p_value = static_cast<uint64_t>(histogram_.Percentile(new_p));
 
     uint64_t initial_low_p = 60;
     uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
