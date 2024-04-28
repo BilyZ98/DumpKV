@@ -1732,6 +1732,7 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
         std::uniform_real_distribution<> dis(0, 1);
         double prob = dis(gen);
         if(prob < inverse_distance) {
+          data_to_train.emplace_back(static_cast<double>(past_distances_count));
           data_to_train.emplace_back(static_cast<double>(distance));
           s = db_->AddTrainingSample(data_to_train);
           assert(s.ok()); 

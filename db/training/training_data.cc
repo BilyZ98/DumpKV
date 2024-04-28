@@ -186,6 +186,8 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
       return Status::OK();
     }
   }
+  uint32_t past_distances_count = static_cast<uint32_t>(data.back());
+  // data.pop_back();
   compaction_sample_count_++;
   lifetime_idx_.emplace_back(44.0);
 
@@ -194,16 +196,16 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   size_t other_count =2;
   size_t i = 0;
 
-  for(; i < data.size()-n_edc_feature  ; ++i) {
+  for(; i < other_count  ; ++i) {
     int32_t index_value = i + max_n_past_timestamps;
     indices_.emplace_back(index_value);
     data_.emplace_back(data[i]);
     counter++;
   }
-  assert(data.size() == other_count  + n_edc_feature);
+  assert(data.size() == other_count  + n_edc_feature + 1);
   uint64_t distance = random_access_time;
 
-  if(i > 0) {
+  if(past_distances_count > 0) {
     for(size_t k=0; k < n_edc_feature; k++, i++) {
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
       float new_edc = data[i] * hash_edc[_distance_idx];
