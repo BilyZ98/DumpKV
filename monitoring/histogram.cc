@@ -183,6 +183,19 @@ void HistogramStat::ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) co
     }
   }
 }
+
+double HistogramStat::GetModePoint() const {
+  uint64_t max_bucket = 0;
+  uint64_t max_bucket_value = 0;
+  for (unsigned int b = 0; b < num_buckets_; b++) {
+    uint64_t bucket_value = bucket_at(b);
+    if (bucket_value > max_bucket_value) {
+      max_bucket_value = bucket_value;
+      max_bucket = b;
+    }
+  }
+  return static_cast<double>(bucketMapper.BucketLimit(max_bucket));
+}
 std::string HistogramStat::ToString() const {
   uint64_t cur_num = num();
   std::string r;
@@ -271,6 +284,7 @@ double HistogramImpl::StandardDeviation() const {
   return stats_.StandardDeviation();
 }
 
+double HistogramImpl::GetModePoint() const { return stats_.GetModePoint(); }
 std::string HistogramImpl::ToString() const { return stats_.ToString(); }
 
 void HistogramImpl::ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const { return stats_.ToVector(res); }

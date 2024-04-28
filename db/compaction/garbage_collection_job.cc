@@ -453,6 +453,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
       if(past_distances_count == 0) {
         data_to_train.emplace_back(1.0);
         data_to_train.emplace_back(0.0);
+        // db_->HistogramAddLifetime(distance);
       } else {
         uint64_t new_label = db_->GetNewLabel(edcs, &lifetime_idx);
         data_to_train.emplace_back(static_cast<double>(new_label ));
@@ -462,8 +463,10 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
 
       assert(s.ok());
     }
+
+    db_->GCHistogramAddLifetime(distance);
+    // db_->CDFAddLifetime(distance);
   // }
-  db_->HistogramAddLifetime(distance);
     
     if(booster_handle_ ) {
     assert(indices.size() == data.size());

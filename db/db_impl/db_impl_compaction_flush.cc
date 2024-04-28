@@ -3054,6 +3054,11 @@ static void booster_config_deleter(FastConfigHandle* booster_config) {
 }
 
 void DBImpl::BackgroundCallDataCollection() {
+  const uint64_t threshold = 128000;
+  training_data_->SetLongLabelLimit(threshold/4);
+  training_data_->SetShortLabelLimit(threshold/4);
+  training_data_->SetGCLongLabelLimit(threshold/4);
+  training_data_->SetGCShortLabelLimit(threshold/4);
   while(!shutting_down_.load(std::memory_order_relaxed)) {
     std::vector<double> data;
     std::int64_t timeout = 100;
@@ -3076,7 +3081,6 @@ void DBImpl::BackgroundCallDataCollection() {
     if(!get_data && !gc_get_data) {
       continue;
     }
-    const uint64_t threshold = 128000;
     // const uint64_t threshold = 256000;
     // const uint64_t threshold = 1;
     if(training_data_->GetNumTrainingSamples() >= next_training_sample_threshold_) {

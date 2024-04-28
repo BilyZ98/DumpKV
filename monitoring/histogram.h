@@ -71,6 +71,7 @@ struct HistogramStat {
   double Average() const;
   double StandardDeviation() const;
   void Data(HistogramData* const data) const;
+  double GetModePoint() const;
   std::string ToString() const;
   void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const;
 
@@ -96,6 +97,7 @@ class Histogram {
   virtual void Add(uint64_t value) = 0;
   virtual void Merge(const Histogram&) = 0;
 
+  virtual double GetModePoint() const = 0;
   virtual void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const = 0; 
   virtual std::string ToString() const = 0;
   virtual const char* Name() const = 0;
@@ -122,6 +124,7 @@ class HistogramImpl : public Histogram {
   virtual void Merge(const Histogram& other) override;
   void Merge(const HistogramImpl& other);
 
+  virtual double GetModePoint() const override;
   virtual void ToVector(std::vector<std::pair<uint64_t, uint64_t>>& res) const  override;;
   virtual std::string ToString() const override;
   virtual const char* Name() const override { return "HistogramImpl"; }

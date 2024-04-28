@@ -770,6 +770,11 @@ DBImpl::~DBImpl() {
     ROCKS_LOG_INFO(immutable_db_options_.info_log,
                    "Lifetime histogram: %s", lifetime_histogram_str.c_str());
   }
+  lifetime_histogram_str = gc_histogram_.ToString();
+  if (!lifetime_histogram_str.empty()) {
+    ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                   "GC histogram: %s", lifetime_histogram_str.c_str());
+  }
 
   InstrumentedMutexLock closing_lock_guard(&closing_mutex_);
   if (closed_) {
@@ -2352,6 +2357,57 @@ static double sigmoid(double x) {
 static double custom_sigmoid(double x) {
     return 10 * sigmoid(10 * (x - 0.5));
 }
+
+void DBImpl::GCHistogramAddLifetime(uint64_t lifetime) {
+  gc_histogram_.Add(lifetime);
+  gc_lifetime_count_.fetch_add(1, std::memory_order_relaxed);
+  if(gc_lifetime_count_.load(std::memory_order_relaxed) > lifetiem_sequence_refresh_limit_) {
+    std::unique_lock<std::shared_mutex> lock(gc_lifetime_sequence_mutex_);
+    uint64_t p50 =static_cast<uint64_t>(gc_histogram_.Percentile(50)); 
+    uint64_t p60 =static_cast<uint64_t>(gc_histogram_.Percentile(60));
+    uint64_t p70 =static_cast<uint64_t>(gc_histogram_.Percentile(70));
+    uint64_t p75 =static_cast<uint64_t>(gc_histogram_.Percentile(75));
+    uint64_t p80 = static_cast<uint64_t>(gc_histogram_.Percentile(80));
+    uint64_t p90 =static_cast<uint64_t>(gc_histogram_.Percentile(90));
+    uint64_t p95 =static_cast<uint64_t>(gc_histogram_.Percentile(95));
+    uint64_t p99 =static_cast<uint64_t>(gc_histogram_.Percentile(99));
+    uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - GetGCInvalidRatio()));
+    uint64_t new_p = 80 + p_add;
+    uint64_t new_p_value = static_cast<uint64_t>(gc_histogram_.Percentile(new_p));
+    std::vector<SequenceNumber> seqs = {p80, new_p_value};
+    // gc_lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+    gc_lifetime_count_.store(0, std::memory_order_relaxed);
+    uint64_t histogram_mode_point = static_cast<uint64_t>(gc_histogram_.GetModePoint());
+    uint64_t long_lifetime_threshold = std::max(histogram_mode_point, new_p_value);
+    long_lifetime_threshold_.store(long_lifetime_threshold, std::memory_order_relaxed);
+    (*lifetime_sequence_)[1] = long_lifetime_threshold;
+    size_t left = 0;
+    size_t right = n_edc_feature;
+    left = 0;
+    right = n_edc_feature;
+    while (left < right) {
+      size_t mid = left + (right - left) / 2;
+      if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+    long_lifetime_idx_.store(left, std::memory_order_relaxed);
+
+
+
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, long lifetime threshold: %lu, long mode point: %lu",
+                   p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p, long_lifetime_threshold, histogram_mode_point);
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu",
+                   short_lifetime_threshold_.load(std::memory_order_relaxed), 
+                   long_lifetime_threshold_.load(std::memory_order_relaxed),
+                   short_lifetime_idx_.load(std::memory_order_relaxed),
+                   long_lifetime_idx_.load(std::memory_order_relaxed));
+
+  }
+
+}
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
@@ -2380,25 +2436,14 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     uint64_t new_low_p = initial_low_p + low_p_add;
     uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
 
+    uint64_t histogram_mode_point = static_cast<uint64_t>(histogram_.GetModePoint());
+    uint64_t short_lifetime_threshold = std::min(std::max(histogram_mode_point,p60), new_low_p_value);
+    short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
 
-    std::vector<SequenceNumber> seqs = {new_low_p_value, new_p_value};
-    uint64_t slope1_point = slope1_point_.load(std::memory_order_relaxed);
-    if(slope1_point != 0 && slope1_point!= UINT64_MAX ){
-      uint64_t short_max = std::max(seqs[0], slope1_point );
-      uint64_t short_min = std::min(seqs[0], slope1_point);
-      if(short_max  < (seqs[1] / 2) ) {
-        seqs[0] = short_max;
-      } else {
-        if ( short_min < (short_max / 2)  && short_max < seqs[1]  ) {
-          seqs[0] = short_max;
-        } else {
-          seqs[0] = short_min;
-        }
-      }
-    }
-    lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
-    short_lifetime_threshold_.store(seqs[0], std::memory_order_relaxed);
-    long_lifetime_threshold_.store(seqs[1], std::memory_order_relaxed);
+    // std::vector<SequenceNumber> seqs = {short_lifetime_threshold, new_p_value};
+    (*lifetime_sequence_)[0] = short_lifetime_threshold;
+    // lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
+    // long_lifetime_threshold_.store(seqs[1], std::memory_order_relaxed);
     size_t left = 0;
     size_t right = n_edc_feature;
     while (left < right) {
@@ -2410,25 +2455,15 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
       }
     }
     short_lifetime_idx_.store(left, std::memory_order_relaxed);
-    left = 0;
-    right = n_edc_feature;
-    while (left < right) {
-      size_t mid = left + (right - left) / 2;
-      if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
-        left = mid + 1;
-      } else {
-        right = mid;
-      }
-    }
-    long_lifetime_idx_.store(left, std::memory_order_relaxed);
 
 
-
-
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu",
-                   p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p);
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, short mode point: %lu",
+                   p50, p60, p70, p75, p80, p90, p95, p99, new_low_p_value, new_low_p, histogram_mode_point);
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu",
-                   seqs[0], seqs[1], short_lifetime_idx_.load(std::memory_order_relaxed), long_lifetime_idx_.load(std::memory_order_relaxed));
+                   short_lifetime_threshold_.load(std::memory_order_relaxed), 
+                   long_lifetime_threshold_.load(std::memory_order_relaxed),
+                   short_lifetime_idx_.load(std::memory_order_relaxed),
+                   long_lifetime_idx_.load(std::memory_order_relaxed));
     lifetime_count_.store(0, std::memory_order_relaxed);
     // std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
     // histogram_.ToVector(cdf);
