@@ -89,11 +89,22 @@ Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const 
 
   // Need to update edc as well.
   int32_t counter = indptr_.back();
-  for(size_t i = 0; i < data.size(); ++i) {
-    indices_.emplace_back(i);
+  size_t other_count =2; 
+  size_t i = 0;
+  for(; i < data.size() - other_count - n_edc_feature; ++i) {
+    int32_t index_value = i  ;
+    indices_.emplace_back(index_value);
     data_.emplace_back(data[i]);
     counter++;
   }
+  
+  int32_t index_value =  max_n_past_timestamps ;
+  for(; i < data.size() ; index_value++, i++) {
+    indices_.emplace_back(index_value);
+    data_.emplace_back(data[i]);
+    counter++;
+  }
+
   // indices_.emplace_back(0);
   // data_.emplace_back(random_access_time);
   // counter++;
@@ -144,42 +155,60 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   starting_point = short_lifetime_threshold;
   std::uniform_int_distribution<uint64_t> dis(starting_point, label_uint64_t);
   uint64_t random_access_time = dis(gen);
-  random_access_times_.emplace_back(random_access_time);
 
   uint64_t new_label = label_uint64_t - random_access_time;
   numeric_labels_.emplace_back(new_label);
 
   // Need to update edc as well.
   int32_t counter = indptr_.back();
+  size_t other_count =2;
+
+  size_t i = 0;
+
   indices_.emplace_back(0);
   data_.emplace_back(random_access_time);
   counter++;
-  size_t i = 0;
-  for(; i < data.size()-n_edc_feature; ++i) {
-    indices_.emplace_back(i+1);
+  for(; i < data.size()-n_edc_feature -other_count ; ++i) {
+    int32_t index_value = i + 1;
+    indices_.emplace_back(index_value);
     data_.emplace_back(data[i]);
     counter++;
   }
+
+  indices_.emplace_back(max_n_past_timestamps);
+  data_.push_back(data[i]);
+  ++counter;
+  i++;
+
+  indices_.emplace_back(max_n_past_timestamps+1);
+  data_.emplace_back(data[i]);
+  ++counter;
+  i++;
+
+  assert(data.size() == other_count  + n_edc_feature);
   uint64_t distance = random_access_time;
 
-  if(i > 0) {
+  if(i > other_count) {
     for(size_t k=0; k < n_edc_feature; k++, i++) {
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
       float new_edc = data[i] * hash_edc[_distance_idx];
-      indices_.emplace_back(i+1);
+      int32_t index_value = other_count + k + max_n_past_timestamps;
+      indices_.emplace_back(index_value);
       data_.emplace_back(new_edc);
       counter++;
     }
   } else {
     for(size_t k=0; k < n_edc_feature; k++, i++) {
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+      int32_t index_value = other_count + k + max_n_past_timestamps;
       float new_edc = hash_edc[_distance_idx];
-      indices_.emplace_back(i+1);
+      indices_.emplace_back(index_value);
       data_.emplace_back(new_edc);
       counter++;
     }
   }
   assert(data.size() <= num_features_);
+  assert(counter - indptr_.back() == 2 + n_edc_feature);
 
   indptr_.push_back(counter);
   return Status::OK();
@@ -555,7 +584,7 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
     for (uint64_t j = cur_pos; j < next_pos; ++j) {
       
 
-      std::string data_with_sep =  std::to_string(data_[j]) + " ";
+      std::string data_with_sep = std::to_string(indices_[j]) + ":"  + std::to_string(data_[j]) + " ";
       s = file->Append(data_with_sep);
       if (!s.ok()) {
         return s;
@@ -567,6 +596,8 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
     if (!s.ok()) {
       return s;
     }
+
+
 
   }
   file->Close();

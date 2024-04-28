@@ -138,14 +138,14 @@ GarbageCollectionJob::~GarbageCollectionJob() {
     infer_data_file_->Close();
   }
 }
-Status GarbageCollectionJob::WriteInferDataToFile(const std::vector<double>& data, double label) {
+Status GarbageCollectionJob::WriteInferDataToFile(const std::vector<int32_t>& indicies, const std::vector<double>& data, double label) {
   Status s;
   if(!infer_data_file_) {
     assert(false);
     return s;
   }
   for(size_t i = 0; i < data.size(); i++) {
-    std::string data_with_sep = std::to_string(data[i]) + " ";
+    std::string data_with_sep = std::to_string(indicies[i]) + ":" + std::to_string(data[i]) + " ";
     s = infer_data_file_->Append(data_with_sep);
     
   }
@@ -509,7 +509,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     //   }
     // }
 
-    s = WriteInferDataToFile(data, out_result[0]); 
+    s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);
@@ -518,8 +518,6 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   lifetime_keys_count_[maxIndex] += 1;
   return maxIndex;
 
-  // count new past_distances
-  // past_distances_count += 1;
 
 
 }
