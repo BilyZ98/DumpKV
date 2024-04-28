@@ -20,7 +20,9 @@ TrainingData::TrainingData(Arena* arena,
     : arena_(arena),
       num_features_(num_features),
       num_labels_(num_labels),
-      batch_size_(batch_size){
+      batch_size_(batch_size),
+      short_label_count_(0),
+      long_label_count_(0){
 
   labels_.reserve(batch_size_);
   numeric_labels_.reserve(batch_size_);
@@ -69,11 +71,13 @@ Status TrainingData::ConvertLabels(uint64_t threshold) {
 //   return Status::OK();
 // }
 Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const double& label,
+                           const double& lifetime_idx,
                            const uint64_t& short_lifetime_threshold )  {
    uint64_t label_uint64_t = static_cast<uint64_t>(label);
-  if(label_uint64_t < short_lifetime_threshold) {
-    return Status::OK();
-  }
+  // if(label_uint64_t < short_lifetime_threshold) {
+  //   return Status::OK();
+  // }
+  //
   // std::random_device rd;
   // std::mt19937 gen(rd());
   // uint64_t starting_point = 0;
@@ -85,10 +89,29 @@ Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const 
   // random_access_times_.emplace_back(random_access_time);
 
   // uint64_t new_label = double_label - random_access_time;
-  numeric_labels_.emplace_back(label_uint64_t);
+  if(label_uint64_t > 0) {
+    if(GetLongLabelGCCount() < GetGCLongLabelLimit()) {
+      gc_long_label_count_++;
+      numeric_labels_.emplace_back(1);
+    } else{
+      return Status::OK();
+    }
+  } else {
+    if(GetShortLabelGCCount() < GetGCShortLabelLimit()) {
+      gc_short_label_count_++;
+      numeric_labels_.emplace_back(0);
+    } else {
+      return Status::OK();
+    }
+  }
+
+  gc_sample_count_++;
+  // numeric_labels_.emplace_back(label_uint64_t);
+  lifetime_idx_.emplace_back(lifetime_idx);
 
   // Need to update edc as well.
   int32_t counter = indptr_.back();
+
   size_t other_count =2; 
   size_t i = 0;
   for(; i < data.size() - other_count - n_edc_feature; ++i) {
@@ -157,11 +180,30 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   uint64_t random_access_time = dis(gen);
 
   uint64_t new_label = label_uint64_t - random_access_time;
-  numeric_labels_.emplace_back(new_label);
+  if(new_label > short_lifetime_threshold) {
+    if(GetLongLabelCount() < GetLongLabelLimit()) {
+      long_label_count_++;
+      numeric_labels_.emplace_back(1);
+    } else{
+      return Status::OK();
+    }
+  } else {
+    if(GetShortLabelCount() < GetShortLabelLimit()) {
+      short_label_count_++;
+      numeric_labels_.emplace_back(0);
+    } else {
+      return Status::OK();
+    }
+  }
+
+  // data.pop_back();
+  compaction_sample_count_++;
+  lifetime_idx_.emplace_back(44.0);
 
   // Need to update edc as well.
   int32_t counter = indptr_.back();
   size_t other_count =2;
+
 
   size_t i = 0;
 
@@ -170,10 +212,12 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   counter++;
   for(; i < data.size()-n_edc_feature -other_count ; ++i) {
     int32_t index_value = i + 1;
+
     indices_.emplace_back(index_value);
     data_.emplace_back(data[i]);
     counter++;
   }
+
 
   indices_.emplace_back(max_n_past_timestamps);
   data_.push_back(data[i]);
@@ -193,6 +237,7 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
       float new_edc = data[i] * hash_edc[_distance_idx];
       int32_t index_value = other_count + k + max_n_past_timestamps;
+
       indices_.emplace_back(index_value);
       data_.emplace_back(new_edc);
       counter++;
@@ -200,7 +245,9 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   } else {
     for(size_t k=0; k < n_edc_feature; k++, i++) {
       uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
+
       int32_t index_value = other_count + k + max_n_past_timestamps;
+
       float new_edc = hash_edc[_distance_idx];
       indices_.emplace_back(index_value);
       data_.emplace_back(new_edc);
@@ -513,6 +560,12 @@ Status TrainingData::TrainModel(BoosterHandle* new_model_ptr,  const std::unorde
 }
 
 void TrainingData::ClearTrainingData() {
+  short_label_count_ = 0;
+  long_label_count_ = 0;
+  gc_short_label_count_ = 0;
+  gc_long_label_count_ = 0;
+  gc_sample_count_ = 0;
+  compaction_sample_count_ = 0;
   labels_.clear();
   numeric_labels_.clear();
   random_access_times_.clear();
@@ -525,6 +578,7 @@ void TrainingData::ClearTrainingData() {
   label_count_.resize(LifetimeSequence.size(), 0);
   res_short_count_ = 0;
   res_long_count_ = 0;
+  lifetime_idx_.clear();
 }
 
 Status TrainingData::WriteTrainingDataForMultiClass(const std::string& file_path, Env* env, uint64_t num_class) {
@@ -591,7 +645,7 @@ Status TrainingData::WriteTrainingData(const std::string& file_path, Env* env) {
       }
     }
 
-    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(numeric_labels_[i]) + " " + std::to_string(result_[i]) + "\n";
+    std::string label_str = std::to_string(labels_[i]) + " " + std::to_string(numeric_labels_[i]) + " " + std::to_string(result_[i]) + " lifetime idx:" + std::to_string(lifetime_idx_[i]) + "\n";
     s = file->Append(label_str);
     if (!s.ok()) {
       return s;
@@ -685,8 +739,15 @@ Status TrainingData::LogKeyRatio(const ImmutableDBOptions& ioptions) {
   ROCKS_LOG_INFO(
           ioptions.info_log,
           "key label ratio 0: %lu, 1: %lu"
-          " res_short_count: %lu, res_long_count: %lu",
-          short_count, long_count, res_short_count_, res_long_count_);
+          " res_short_count: %lu, res_long_count: %lu"
+          " gc_sample_count: %lu, compaction_sample_count: %lu"
+          " gc_short_label_count: %lu, gc_long_label_count: %lu"
+          "compaction short_label_count: %lu,compaction long_label_count: %lu",
+
+          short_count, long_count, res_short_count_, res_long_count_,
+          gc_sample_count_, compaction_sample_count_,
+          gc_short_label_count_, gc_long_label_count_,
+          short_label_count_, long_label_count_);
 
   std::stringstream ss;
   std::vector<int> labels_int(labels_.size());

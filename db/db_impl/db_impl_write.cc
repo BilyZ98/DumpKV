@@ -759,18 +759,28 @@ void DBImpl::SampleKeyMeta() {
 
 }
 
-static double sigmoid(double x) {
-    return 1 / (1 + std::exp(-x));
-}
-static double custom_sigmoid(double x) {
-    return   sigmoid(10 * (x - 0.5));
-}
-uint64_t DBImpl::GetNewLabel(const std::vector<float>& edc) {
+// static double sigmoid(double x) {
+//     return 1 / (1 + std::exp(-x));
+// }
+// static double custom_sigmoid(double x) {
+//     return   sigmoid(10 * (x - 0.5));
+// }
+uint64_t DBImpl::GetNewLabel(const std::vector<float>& edc,uint64_t *lifetime_idx) {
 
-  double ratio_gap =1.0 -  (edc[short_lifetime_idx_.load(std::memory_order_relaxed)] / edc[long_lifetime_idx_.load(std::memory_order_relaxed)]);
-  double prob = custom_sigmoid(ratio_gap);
-  uint64_t new_label =  GetShortLifetimeThreshold() + prob * (GetLongLifetimeThreshold() - GetShortLifetimeThreshold());
-  return new_label;
+  // double ratio_gap =1.0 -  (edc[short_lifetime_idx_.load(std::memory_order_relaxed)] / edc[long_lifetime_idx_.load(std::memory_order_relaxed)]);
+  // // double prob = custom_sigmoid(ratio_gap);
+  // // uint64_t new_label =  GetShortLifetimeThreshold() + prob * (GetLongLifetimeThreshold() - GetShortLifetimeThreshold());
+  // if(ratio_gap > 0.5) {
+  //   return 1;
+  // } else {
+  //   return 0;
+  // }
+  *lifetime_idx = short_lifetime_idx_.load(std::memory_order_relaxed);
+  if(edc[*lifetime_idx] >= 1.0) {
+    return 0;
+  } else {
+    return 1;
+  }
 
 }
 Status DBImpl::AddGCTrainingSample(const std::vector<double>& data) {

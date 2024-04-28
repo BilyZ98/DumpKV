@@ -34,10 +34,57 @@ public:
   Status TrainModel(BoosterHandle* new_model,  const std::unordered_map<std::string, std::string>& training_params ); 
   // Status AddTrainingSample()
 
+  void SetShortLabelLimit(uint64_t short_lifetime_threshold) {
+    short_label_count_limit_ = short_lifetime_threshold;
+  }
+  void SetLongLabelLimit(uint64_t long_lifetime_threshold) {
+    long_label_count_limit_ = long_lifetime_threshold;
+  }
+  void SetGCShortLabelLimit(uint64_t short_lifetime_threshold) {
+    gc_short_label_limit_ = short_lifetime_threshold;
+  }
+  void SetGCLongLabelLimit(uint64_t long_lifetime_threshold) {
+    gc_long_label_limit_ = long_lifetime_threshold;
+  }
+
+  uint64_t GetShortLabelLimit() const {
+    return short_label_count_limit_;
+  }
+  uint64_t GetLongLabelLimit() const {
+    return long_label_count_limit_;
+  }
+  uint64_t GetGCShortLabelLimit() const {
+    return gc_short_label_limit_;
+  }
+  uint64_t GetGCLongLabelLimit() const {
+    return gc_long_label_limit_;
+  }
+  uint64_t GetShortLabelGCCount() const {
+    return gc_short_label_count_;
+  }
+  uint64_t GetLongLabelGCCount() const {
+    return gc_long_label_count_;
+  }
+
+  uint64_t GetShortLabelCount() const {
+    return short_label_count_;
+  }
+  uint64_t GetLongLabelCount() const {
+    return long_label_count_;
+  }
+
+  uint64_t GetGCCount() const {
+    return gc_sample_count_;
+  }
+  uint64_t GetCompactionCount() const {
+    return compaction_sample_count_;
+  }
+
   Status ConvertLabels(uint64_t threshold);
   Status AddTrainingSample(const std::vector<double>& data, const double& label,
                            const uint64_t& short_lifetime_threshold ) ;
   Status AddGCTrainingSample(const std::vector<double>& data, const double& label,
+                             const double& lifetime_idx,
                            const uint64_t& short_lifetime_threshold ) ;
 
   Status AddTrainingSample(const std::vector<uint64_t>& past_distance,
@@ -78,6 +125,7 @@ private:
 
   Arena* arena_;
   std::vector<float> labels_;
+  std::vector<double> lifetime_idx_;
   std::vector<uint64_t> numeric_labels_;
   std::vector<uint64_t> random_access_times_;
   std::vector<int32_t> indptr_;
@@ -90,6 +138,19 @@ private:
   std::vector<uint64_t> predicted_labes_;
   std::vector<float> weights_;
   std::vector<int32_t> label_count_;
+
+  uint64_t short_label_count_limit_ = 0;
+  uint64_t long_label_count_limit_ = 0;
+  uint64_t short_label_count_ = 0;
+  uint64_t long_label_count_ = 0;
+
+  uint64_t gc_short_label_limit_ = 0;
+  uint64_t gc_long_label_limit_ = 0;
+  uint64_t gc_short_label_count_ = 0;
+  uint64_t gc_long_label_count_ = 0;
+
+  uint64_t gc_sample_count_ = 0;
+  uint64_t compaction_sample_count_ = 0;
 
   uint64_t res_short_count_ = 0;
   uint64_t res_long_count_ = 0;

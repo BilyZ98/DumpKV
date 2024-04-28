@@ -1684,7 +1684,9 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
       uint8_t n_within = 0;
       uint32_t i = 0;
       assert(past_distances_count <= max_n_past_distances);
-      for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
+
+      for(i=0; i < past_distances_count && i <= max_n_past_distances; i++) {
+
         uint64_t past_distance;
         ok = GetVarint64(&prev_value, &past_distance);
         past_distances.emplace_back(past_distance);
@@ -1692,7 +1694,6 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
         if(this_past_distance < memory_window) {
           ++n_within;
         }
-        data_to_train.emplace_back(static_cast<double>(past_distance));
         assert(ok);
       }
 
@@ -1725,13 +1726,15 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
       if(distance > db_->GetShortLifetimeThreshold()) {
         // Model prediction
         // This is not good as well. Any better solution ?
-        double inverse_distance = 1.0 / double(edcs[0]);
+        // double inverse_distance = 1.0 / double(edcs[0]);
+        double inverse_distance = db_->GetSampleRatio(edcs);
         // add training sample with inverse_distance probability
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<> dis(0, 1);
         double prob = dis(gen);
         if(prob < inverse_distance) {
+          data_to_train.emplace_back(static_cast<double>(past_distances_count));
           data_to_train.emplace_back(static_cast<double>(distance));
           s = db_->AddTrainingSample(data_to_train);
           assert(s.ok()); 

@@ -379,21 +379,14 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint32_t this_past_distance = 0;
   uint8_t n_within = 0;
   uint32_t i = 0;
-  data.emplace_back(static_cast<double>(distance));
-  data_to_train.emplace_back(static_cast<double>(distance));
-  indices.emplace_back(0);
   assert(past_distances_count <= max_n_past_timestamps);
   for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
     uint64_t past_distance;
     ok = GetVarint64(&prev_value, &past_distance);
-    past_distances.emplace_back(past_distance);
     this_past_distance +=  past_distance;  
-    indices.emplace_back(i+1);
-    data.emplace_back(static_cast<double>(past_distance));
     if (this_past_distance < memory_window) {
       ++n_within;
     }
-    data_to_train.emplace_back(static_cast<double>(past_distance));
     assert(ok);
   }
 
@@ -456,18 +449,24 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     double prob = dis(gen);
     if(prob < sample_add_prob_) {
 
-      uint64_t new_label = db_->GetNewLabel(edcs);
-      data_to_train.emplace_back(static_cast<double>(new_label ));
-      // data_to_train.emplace_back(static_cast<double>(std::min(distance*2, lifetime_seqs->back())));
-
-      // data_to_train.emplace_back(static_cast<double>(distance));
-
+      uint64_t lifetime_idx = 0;
+      if(past_distances_count == 0) {
+        data_to_train.emplace_back(1.0);
+        data_to_train.emplace_back(0.0);
+        // db_->HistogramAddLifetime(distance);
+      } else {
+        uint64_t new_label = db_->GetNewLabel(edcs, &lifetime_idx);
+        data_to_train.emplace_back(static_cast<double>(new_label ));
+        data_to_train.emplace_back(static_cast<double>(lifetime_idx));
+      }
       s = db_->AddGCTrainingSample(data_to_train);
 
       assert(s.ok());
     }
+
+    db_->GCHistogramAddLifetime(distance);
+    // db_->CDFAddLifetime(distance);
   // }
-  db_->HistogramAddLifetime(distance);
     
     if(booster_handle_ ) {
     assert(indices.size() == data.size());

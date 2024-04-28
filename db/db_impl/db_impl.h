@@ -229,7 +229,14 @@ class DBImpl : public DB {
                            const std::vector<float>& edcs,
                            const uint64_t& future_distance);
 
-  uint64_t GetNewLabel(const std::vector<float>& edc);
+  inline double GetSampleRatio(const std::vector<float>& edc) {
+    double ratio_gap =1.0 -  (edc[short_lifetime_idx_.load(std::memory_order_relaxed)] / edc[long_lifetime_idx_.load(std::memory_order_relaxed)]);
+    if(ratio_gap < 0.01) {
+      return 0.5;
+    }
+    return ratio_gap;
+  }
+  uint64_t GetNewLabel(const std::vector<float>& edc, uint64_t *lifetime_idx);
   Status AddTrainingSample(const std::vector<double>& data);
   Status AddGCTrainingSample(const std::vector<double>& data);
 
@@ -669,6 +676,7 @@ class DBImpl : public DB {
   void CDFAddLifetime(uint64_t lifetime);
   double GetGCInvalidRatio() const;
   void HistogramAddLifetime(uint64_t lifetime);
+  void GCHistogramAddLifetime(uint64_t lifetime);
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
   inline uint64_t GetLongLifetimeThreshold() const {
@@ -1406,14 +1414,17 @@ class DBImpl : public DB {
   // constant false canceled flag, used when the compaction is not manual
   const std::atomic<bool> kManualCompactionCanceledFalse_{false};
   std::atomic<uint64_t> lifetime_count_{0};
+  std::atomic<uint64_t> gc_lifetime_count_{0};
   const uint64_t lifetiem_sequence_refresh_limit_ = 4 * 1024 * 1024 ;
   std::shared_mutex lifetime_sequence_mutex_;  
+  std::shared_mutex gc_lifetime_sequence_mutex_;  
   std::shared_ptr<std::vector<SequenceNumber>> lifetime_sequence_;
   std::atomic<uint64_t> short_lifetime_threshold_{0};
   std::atomic<uint64_t> long_lifetime_threshold_{0};
-  std::atomic<uint64_t> short_lifetime_idx_{0};
-  std::atomic<uint64_t> long_lifetime_idx_{0};
+  std::atomic<uint64_t> short_lifetime_idx_{2};
+  std::atomic<uint64_t> long_lifetime_idx_{3};
   HistogramImpl histogram_;
+  HistogramImpl gc_histogram_;
   std::atomic<uint64_t> default_lifetime_idx_ = 0;
 
   const uint64_t lifetime_cdf_threshold_ = 4 * 1024 * 1024;
