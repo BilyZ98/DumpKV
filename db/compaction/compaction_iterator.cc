@@ -1684,7 +1684,9 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
       uint8_t n_within = 0;
       uint32_t i = 0;
       assert(past_distances_count <= max_n_past_distances);
+
       for(i=0; i < past_distances_count && i <= max_n_past_distances; i++) {
+
         uint64_t past_distance;
         ok = GetVarint64(&prev_value, &past_distance);
         past_distances.emplace_back(past_distance);
