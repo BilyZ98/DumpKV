@@ -239,20 +239,10 @@ PARAMS_GC="$PARAMS \
 
 function run_benchmark {
 # env -u DURATION -S "$ENV_VARS" ./benchmark.sh mixgraph "$PARAMS_GC"
-env -u DURATION -S "$ENV_VARS" ./benchmark.sh ycsb_a "$PARAMS_GC"
-# readwhilewriting
-# env -S "$ENV_VARS_D" ./tools/benchmark.sh readwhilewriting "$PARAMS_GC"
-# echo "$PARAMS_GC"
-
-# fwdrangewhilewriting
-# env -S "$ENV_VARS_D" ./tools/benchmark.sh fwdrangewhilewriting "$PARAMS_GC"
-
-# readrandom
-# env -S "$ENV_VARS_D" ./tools/benchmark.sh readrandom "$PARAMS_GC"
-
-# fwdrange
-# env -S "$ENV_VARS_D" ./tools/benchmark.sh fwdrange "$PARAMS_GC"
-
+#
+# env -u DURATION -S "$ENV_VARS" ./benchmark.sh ycsb_a "$PARAMS_GC"
+#
+env -u DURATION -S "$ENV_VARS" ./benchmark.sh ssd_trace "$PARAMS_GC"
 
 
 }

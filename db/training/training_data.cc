@@ -128,34 +128,6 @@ Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const 
     counter++;
   }
 
-  // indices_.emplace_back(0);
-  // data_.emplace_back(random_access_time);
-  // counter++;
-  // size_t i = 0;
-  // for(; i < data.size()-n_edc_feature; ++i) {
-  //   indices_.emplace_back(i+1);
-  //   data_.emplace_back(data[i]);
-  //   counter++;
-  // }
-  // uint64_t distance = random_access_time;
-
-  // if(i > 0) {
-  //   for(size_t k=0; k < n_edc_feature; k++, i++) {
-  //     uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-  //     float new_edc = data[i] * hash_edc[_distance_idx];
-  //     indices_.emplace_back(i+1);
-  //     data_.emplace_back(new_edc);
-  //     counter++;
-  //   }
-  // } else {
-  //   for(size_t k=0; k < n_edc_feature; k++, i++) {
-  //     uint32_t _distance_idx = std::min(uint32_t(distance / edc_windows[k]), max_hash_edc_idx);
-  //     float new_edc = hash_edc[_distance_idx];
-  //     indices_.emplace_back(i+1);
-  //     data_.emplace_back(new_edc);
-  //     counter++;
-  //   }
-  // }
   assert(data.size() <= num_features_);
 
   indptr_.push_back(counter);
@@ -171,13 +143,14 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
     return Status::OK();
     // starting_point = label_uint64_t - short_lifetime_threshold;
   }
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  // std::random_device rd;
+  // std::mt19937 gen(rd());
   uint64_t starting_point = 0;
 
   starting_point = short_lifetime_threshold;
-  std::uniform_int_distribution<uint64_t> dis(starting_point, label_uint64_t);
-  uint64_t random_access_time = dis(gen);
+  uint64_t starting_point_idx = std::lower_bound(edc_windows.begin(), edc_windows.end(), starting_point) - edc_windows.begin();
+  // std::uniform_int_distribution<uint64_t> dis(starting_point, label_uint64_t);
+  uint64_t random_access_time = starting_point;
 
   uint64_t new_label = label_uint64_t - random_access_time;
   if(new_label > short_lifetime_threshold) {
@@ -208,7 +181,7 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
   size_t i = 0;
 
   indices_.emplace_back(0);
-  data_.emplace_back(random_access_time);
+  data_.emplace_back(starting_point_idx);
   counter++;
   for(; i < data.size()-n_edc_feature -other_count ; ++i) {
     int32_t index_value = i + 1;

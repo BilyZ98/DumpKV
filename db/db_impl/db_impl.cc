@@ -2435,7 +2435,8 @@ void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
     uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
 
     uint64_t histogram_mode_point = static_cast<uint64_t>(histogram_.GetModePoint());
-    uint64_t short_lifetime_threshold = std::min(std::max(histogram_mode_point,p60), new_low_p_value);
+    // uint64_t short_lifetime_threshold = std::min(std::max(histogram_mode_point,p60), new_low_p_value);
+    uint64_t short_lifetime_threshold = new_low_p_value;
     short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
 
     // std::vector<SequenceNumber> seqs = {short_lifetime_threshold, new_p_value};

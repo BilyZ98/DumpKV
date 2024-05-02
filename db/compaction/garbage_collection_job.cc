@@ -379,14 +379,23 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   uint32_t this_past_distance = 0;
   uint8_t n_within = 0;
   uint32_t i = 0;
+  uint64_t distance_edc_window_idx = std::lower_bound(edc_windows.begin(), edc_windows.end(), distance) - edc_windows.begin();
+  data.emplace_back(static_cast<double>(distance_edc_window_idx));
+  data_to_train.emplace_back(static_cast<double>(distance_edc_window_idx));
+  indices.emplace_back(0);
   assert(past_distances_count <= max_n_past_timestamps);
   for(i=0; i < past_distances_count && i < max_n_past_distances; i++) {
     uint64_t past_distance;
     ok = GetVarint64(&prev_value, &past_distance);
     this_past_distance +=  past_distance;  
+    indices.emplace_back(i+1);
+    distance_edc_window_idx = std::lower_bound(edc_windows.begin(), edc_windows.end(), past_distance) - edc_windows.begin();
     if (this_past_distance < memory_window) {
       ++n_within;
     }
+
+    data.emplace_back(static_cast<double>(distance_edc_window_idx));
+    data_to_train.emplace_back(static_cast<double>(distance_edc_window_idx));
     assert(ok);
   }
 
@@ -423,26 +432,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
       assert(ok);
     }
   }
-  //update edcs
-  // Need to set up edcs if past_distances_count = 0
-  // if(past_distances_count > 0) {
 
-  //   // Model prediction
-  //   // This is not good as well. Any better solution ?
-  //   double inverse_distance = 1.0 / double(edcs[0]);
-  //   // add training sample with inverse_distance probability
-  //   std::random_device rd;
-  //   std::mt19937 gen(rd());
-  //   std::uniform_real_distribution<> dis(0, 1);
-  //   double prob = dis(gen);
-  //   if(prob < inverse_distance) {
-  //     data_to_train.emplace_back(static_cast<double>(distance));
-  //     s = db_->AddTrainingSample(data_to_train);
-  //     assert(s.ok()); 
-  //   }
-  // }
-  //
-  // if(past_distances_count == 0) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0, 1);
@@ -465,8 +455,6 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     }
 
     db_->GCHistogramAddLifetime(distance);
-    // db_->CDFAddLifetime(distance);
-  // }
     
     if(booster_handle_ ) {
     assert(indices.size() == data.size());
