@@ -302,10 +302,11 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
-  std::vector<SequenceNumber> ini_lifetime_sequence = {4 * 1024 * 1024, 8*1024*1024}  ;
+  std::vector<SequenceNumber> ini_lifetime_sequence = {10 * 1024 * 1024, 10*1024*1024}  ;
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
   short_lifetime_threshold_ = ini_lifetime_sequence[0];
   long_lifetime_threshold_ = ini_lifetime_sequence[1];
+  default_lifetime_threshold_ = 10 * 1024 * 1024;
   new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
   new_lifetimes_->reserve(lifetime_cdf_threshold_);
   versions_->SetDBImpl(this);
@@ -2343,10 +2344,29 @@ void DBImpl::CDFAddLifetime(uint64_t lifetime) {
 //   return 10.0 / (1 + exp(-x));
 // }
 
+
+void DBImpl::GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const {
+  ColumnFamilyData* cfd = nullptr;
+  auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(default_cf_handle_);
+  cfd = cfh->cfd();
+  const auto& gc_stats = cfd->internal_stats()->GetGCStats();
+  for (size_t i = 0; i < gc_stats.gc_input_class_blobs.size(); ++i) {
+    if(gc_stats.gc_input_class_blobs[i] == 0 || gc_stats.gc_dropped_class_blobs[i] == 0) {
+      invalid_ratio.push_back(0.0);
+    } else {
+      invalid_ratio.push_back(double(gc_stats.gc_dropped_class_blobs[i]) / double(gc_stats.gc_input_class_blobs[i]));
+    }
+  }
+  gc_input_subclass_blob = gc_stats.gc_input_class_blobs;
+  gc_dropped_subclass_blobs = gc_stats.gc_dropped_class_blobs;
+}
 double DBImpl::GetGCInvalidRatio() const {
   ColumnFamilyData* cfd = nullptr;
   auto cfh = static_cast_with_check<ColumnFamilyHandleImpl>(default_cf_handle_);
   cfd = cfh->cfd();
+  if(cfd->internal_stats()->GetGCStats().gc_input_blobs == 0 || cfd->internal_stats()->GetGCStats().gc_dropped_blobs == 0){
+    return 0.0;
+  }
   return double(cfd->internal_stats()->GetGCStats().gc_dropped_blobs) / double(cfd->internal_stats()->GetGCStats().gc_input_blobs);
 
 }
@@ -2354,120 +2374,168 @@ static double sigmoid(double x) {
     return 1 / (1 + std::exp(-x));
 }
 
-static double custom_sigmoid(double x) {
-    return 20 * sigmoid(10 * (x - 0.5));
+// static double custom_sigmoid(double x) {
+//     return 20 * sigmoid(10 * (x - 0.5));
+// }
+
+static double custom_sigmoid_for_default_lifetime(double x) {
+    return sigmoid(10 * (x - 0.75));
+}
+
+static double custom_sigmoid_for_base_short_lifetime(double x) {
+    return 60 * sigmoid(10 * (x - 0.25));
+}
+static double custom_sigmoid_for_extra_short_lifetime(double x) {
+    return 40 * sigmoid(10 * (x - 0.75));
+}
+static double custom_sigmoid_for_base_long_lifetime(double x) {
+    return 80 * sigmoid(10 * (x - 0.25));
+}
+static double custom_sigmoid_for_extra_long_lifetime(double x) {
+    return 20 * sigmoid(10 * (x - 0.75));
 }
 
 void DBImpl::GCHistogramAddLifetime(uint64_t lifetime) {
   gc_histogram_.Add(lifetime);
   gc_lifetime_count_.fetch_add(1, std::memory_order_relaxed);
   if(gc_lifetime_count_.load(std::memory_order_relaxed) > lifetiem_sequence_refresh_limit_) {
-    std::unique_lock<std::shared_mutex> lock(gc_lifetime_sequence_mutex_);
-    uint64_t p50 =static_cast<uint64_t>(gc_histogram_.Percentile(50)); 
-    uint64_t p60 =static_cast<uint64_t>(gc_histogram_.Percentile(60));
-    uint64_t p70 =static_cast<uint64_t>(gc_histogram_.Percentile(70));
-    uint64_t p75 =static_cast<uint64_t>(gc_histogram_.Percentile(75));
-    uint64_t p80 = static_cast<uint64_t>(gc_histogram_.Percentile(80));
-    uint64_t p90 =static_cast<uint64_t>(gc_histogram_.Percentile(90));
-    uint64_t p95 =static_cast<uint64_t>(gc_histogram_.Percentile(95));
-    uint64_t p99 =static_cast<uint64_t>(gc_histogram_.Percentile(99));
-    uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - GetGCInvalidRatio()));
-    uint64_t new_p = 80 + p_add;
-    uint64_t new_p_value = static_cast<uint64_t>(gc_histogram_.Percentile(new_p));
+    RefreshLongLifetimeThreshold();
     gc_lifetime_count_.store(0, std::memory_order_relaxed);
-    uint64_t histogram_mode_point = static_cast<uint64_t>(gc_histogram_.GetModePoint());
-    uint64_t long_lifetime_threshold = std::max(std::min(histogram_mode_point, p80), new_p_value);
-    long_lifetime_threshold_.store(long_lifetime_threshold, std::memory_order_relaxed);
-    (*lifetime_sequence_)[1] = long_lifetime_threshold;
-    size_t left = 0;
-    size_t right = n_edc_feature;
-    left = 0;
-    right = n_edc_feature;
-    while (left < right) {
-      size_t mid = left + (right - left) / 2;
-      if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
-        left = mid + 1;
-      } else {
-        right = mid;
-      }
-    }
-    long_lifetime_idx_.store(left, std::memory_order_relaxed);
-
-
-
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, long lifetime threshold: %lu, long mode point: %lu",
-                   p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p, long_lifetime_threshold, histogram_mode_point);
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu",
-                   short_lifetime_threshold_.load(std::memory_order_relaxed), 
-                   long_lifetime_threshold_.load(std::memory_order_relaxed),
-                   short_lifetime_idx_.load(std::memory_order_relaxed),
-                   long_lifetime_idx_.load(std::memory_order_relaxed));
-
   }
 
 }
+
+void DBImpl::RefreshShortLifetimeThreshold() {
+  std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
+  uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
+  uint64_t p60 =static_cast<uint64_t>(histogram_.Percentile(60));
+  uint64_t p70 =static_cast<uint64_t>(histogram_.Percentile(70));
+  uint64_t p75 =static_cast<uint64_t>(histogram_.Percentile(75));
+  uint64_t p80 = static_cast<uint64_t>(histogram_.Percentile(80));
+  uint64_t p90 =static_cast<uint64_t>(histogram_.Percentile(90));
+  uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
+  uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
+  
+  double gc_invalid_rate = GetGCInvalidRatio();
+
+// void DBImpl::GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const {
+  std::vector<double> invalid_ratio;
+  std::vector<uint64_t> gc_input_subclass_blob;
+  std::vector<uint64_t> gc_dropped_subclass_blobs;
+  GetGCSubClassInvalidRatio(invalid_ratio, gc_input_subclass_blob, gc_dropped_subclass_blobs);
+
+  uint64_t initial_low_p =  static_cast<uint64_t>(custom_sigmoid_for_base_short_lifetime(1.0 - invalid_ratio[0]));
+  // uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
+  uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid_for_extra_short_lifetime(1.0 - invalid_ratio[0]));
+  uint64_t new_low_p = initial_low_p + low_p_add;
+  uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
+
+  uint64_t histogram_mode_point = static_cast<uint64_t>(histogram_.GetModePoint());
+  uint64_t short_lifetime_threshold = new_low_p_value;
+  short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
+
+  RefreshDefaultLifetimeThreshold();
+  (*lifetime_sequence_)[0] = short_lifetime_threshold;
+  size_t left = 0;
+  size_t right = n_edc_feature;
+  while (left < right) {
+    size_t mid = left + (right - left) / 2;
+    if (edc_windows[mid] < short_lifetime_threshold_.load(std::memory_order_relaxed)) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  short_lifetime_idx_.store(left, std::memory_order_relaxed);
+
+
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, short mode point: %lu",
+                 p50, p60, p70, p75, p80, p90, p95, p99, new_low_p_value, new_low_p, histogram_mode_point);
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu, default lifetime: %lu",
+                 short_lifetime_threshold_.load(std::memory_order_relaxed), 
+                 long_lifetime_threshold_.load(std::memory_order_relaxed),
+                 short_lifetime_idx_.load(std::memory_order_relaxed),
+                 long_lifetime_idx_.load(std::memory_order_relaxed),
+                 default_lifetime_threshold_.load(std::memory_order_relaxed));
+}
+void DBImpl::RefreshLongLifetimeThreshold() {
+  std::unique_lock<std::shared_mutex> lock(gc_lifetime_sequence_mutex_);
+  uint64_t p50 =static_cast<uint64_t>(gc_histogram_.Percentile(50)); 
+  uint64_t p60 =static_cast<uint64_t>(gc_histogram_.Percentile(60));
+  uint64_t p70 =static_cast<uint64_t>(gc_histogram_.Percentile(70));
+  uint64_t p75 =static_cast<uint64_t>(gc_histogram_.Percentile(75));
+  uint64_t p80 = static_cast<uint64_t>(gc_histogram_.Percentile(80));
+  uint64_t p90 =static_cast<uint64_t>(gc_histogram_.Percentile(90));
+  uint64_t p95 =static_cast<uint64_t>(gc_histogram_.Percentile(95));
+  uint64_t p99 =static_cast<uint64_t>(gc_histogram_.Percentile(99));
+
+  std::vector<double> invalid_ratio;
+  std::vector<uint64_t> gc_input_subclass_blob;
+  std::vector<uint64_t> gc_dropped_subclass_blobs;
+  GetGCSubClassInvalidRatio(invalid_ratio, gc_input_subclass_blob, gc_dropped_subclass_blobs);
+  uint64_t initial_long_p =  static_cast<uint64_t>(custom_sigmoid_for_base_long_lifetime(1.0 - invalid_ratio[1]));
+
+
+  // uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - GetGCInvalidRatio()));
+  uint64_t p_add = static_cast<uint64_t>(custom_sigmoid_for_extra_long_lifetime(1.0 - invalid_ratio[1]));
+  uint64_t new_p = initial_long_p + p_add;
+  uint64_t new_p_value = static_cast<uint64_t>(gc_histogram_.Percentile(new_p));
+  uint64_t histogram_mode_point = static_cast<uint64_t>(gc_histogram_.GetModePoint());
+  // uint64_t long_lifetime_threshold = std::max(std::min(histogram_mode_point, p80), new_p_value);
+  uint64_t long_lifetime_threshold = new_p_value;
+  uint64_t cur_short_lifetime_threshold = short_lifetime_threshold_.load(std::memory_order_relaxed); 
+
+  if(long_lifetime_threshold > cur_short_lifetime_threshold) {
+    long_lifetime_threshold_.store(long_lifetime_threshold, std::memory_order_relaxed);
+  }
+  RefreshDefaultLifetimeThreshold();
+
+  
+  (*lifetime_sequence_)[1] = long_lifetime_threshold;
+  size_t left = 0;
+  size_t right = n_edc_feature;
+  left = 0;
+  right = n_edc_feature;
+  while (left < right) {
+    size_t mid = left + (right - left) / 2;
+    if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  long_lifetime_idx_.store(left, std::memory_order_relaxed);
+
+
+
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, long lifetime threshold: %lu, long mode point: %lu",
+                 p50, p60, p70, p75, p80, p90, p95, p99, new_p_value, new_p, long_lifetime_threshold, histogram_mode_point);
+  ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu, default lifetime: %lu",
+                 short_lifetime_threshold_.load(std::memory_order_relaxed), 
+                 long_lifetime_threshold_.load(std::memory_order_relaxed),
+                 short_lifetime_idx_.load(std::memory_order_relaxed),
+                 long_lifetime_idx_.load(std::memory_order_relaxed),
+                 default_lifetime_threshold_.load(std::memory_order_relaxed));
+
+}
+void DBImpl::RefreshDefaultLifetimeThreshold() {
+  uint64_t cur_short_lifetime_threshold = short_lifetime_threshold_.load(std::memory_order_relaxed);
+  uint64_t cur_long_lifetime_threshold = long_lifetime_threshold_.load(std::memory_order_relaxed);
+  uint64_t delta = 0;
+  if(cur_long_lifetime_threshold > cur_short_lifetime_threshold) {
+    delta = cur_long_lifetime_threshold - cur_short_lifetime_threshold;
+  }
+  uint64_t new_default_lifetime = cur_short_lifetime_threshold + delta * custom_sigmoid_for_default_lifetime(1.0 - GetGCInvalidRatio());
+  default_lifetime_threshold_.store(new_default_lifetime, std::memory_order_relaxed);
+}
+
 void DBImpl::HistogramAddLifetime(uint64_t lifetime) {
   histogram_.Add(lifetime);
   lifetime_count_.fetch_add(1, std::memory_order_relaxed); 
 
   if(lifetime_count_.load(std::memory_order_relaxed) > lifetiem_sequence_refresh_limit_) {
-    std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
-    uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
-    uint64_t p60 =static_cast<uint64_t>(histogram_.Percentile(60));
-    uint64_t p70 =static_cast<uint64_t>(histogram_.Percentile(70));
-    uint64_t p75 =static_cast<uint64_t>(histogram_.Percentile(75));
-    uint64_t p80 = static_cast<uint64_t>(histogram_.Percentile(80));
-    uint64_t p90 =static_cast<uint64_t>(histogram_.Percentile(90));
-    uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
-    uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
-    
-    // increase seqs[1] from p90 to p95 if gc invalid rate is lower
-    // with some expression
-    // uint64_t initial_p = 80;
-    double gc_invalid_rate = GetGCInvalidRatio();
-    // uint64_t p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
-    // uint64_t new_p = initial_p + p_add;
-    // uint64_t new_p_value = static_cast<uint64_t>(histogram_.Percentile(new_p));
-
-    uint64_t initial_low_p = 60;
-    uint64_t low_p_add = static_cast<uint64_t>(custom_sigmoid(1.0 - gc_invalid_rate));
-    uint64_t new_low_p = initial_low_p + low_p_add;
-    uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
-
-    uint64_t histogram_mode_point = static_cast<uint64_t>(histogram_.GetModePoint());
-    // uint64_t short_lifetime_threshold = std::min(std::max(histogram_mode_point,p60), new_low_p_value);
-    uint64_t short_lifetime_threshold = new_low_p_value;
-    short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
-
-    // std::vector<SequenceNumber> seqs = {short_lifetime_threshold, new_p_value};
-    (*lifetime_sequence_)[0] = short_lifetime_threshold;
-    // lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(seqs);
-    // long_lifetime_threshold_.store(seqs[1], std::memory_order_relaxed);
-    size_t left = 0;
-    size_t right = n_edc_feature;
-    while (left < right) {
-      size_t mid = left + (right - left) / 2;
-      if (edc_windows[mid] < short_lifetime_threshold_.load(std::memory_order_relaxed)) {
-        left = mid + 1;
-      } else {
-        right = mid;
-      }
-    }
-    short_lifetime_idx_.store(left, std::memory_order_relaxed);
-
-
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, short mode point: %lu",
-                   p50, p60, p70, p75, p80, p90, p95, p99, new_low_p_value, new_low_p, histogram_mode_point);
-    ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence short: %lu, long: %lu, short idx: %lu, long idx: %lu",
-                   short_lifetime_threshold_.load(std::memory_order_relaxed), 
-                   long_lifetime_threshold_.load(std::memory_order_relaxed),
-                   short_lifetime_idx_.load(std::memory_order_relaxed),
-                   long_lifetime_idx_.load(std::memory_order_relaxed));
+    RefreshShortLifetimeThreshold();
     lifetime_count_.store(0, std::memory_order_relaxed);
-    // std::vector<std::pair<uint64_t, uint64_t>> cdf ;;
-    // histogram_.ToVector(cdf);
-    // getPointWithSlopeClosestToOneInCDF(cdf);
-    // histogram_.Clear();
   }
   
 }

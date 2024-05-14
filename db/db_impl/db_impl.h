@@ -675,8 +675,12 @@ class DBImpl : public DB {
   void SetDefaultLifetime(uint64_t lifetime) { default_lifetime_idx_.store(lifetime, std::memory_order_relaxed); } ;
   void CDFAddLifetime(uint64_t lifetime);
   double GetGCInvalidRatio() const;
+  void GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const;
   void HistogramAddLifetime(uint64_t lifetime);
   void GCHistogramAddLifetime(uint64_t lifetime);
+  void RefreshShortLifetimeThreshold();
+  void RefreshLongLifetimeThreshold();
+  void RefreshDefaultLifetimeThreshold();
   void GetLifetimeSequence(std::shared_ptr<std::vector<SequenceNumber>>& seqs);
   void SetLifetimeSequence(const std::vector<SequenceNumber>& seqs);
   inline uint64_t GetLongLifetimeThreshold() const {
@@ -684,6 +688,9 @@ class DBImpl : public DB {
   }
   inline uint64_t GetShortLifetimeThreshold() const {
     return short_lifetime_threshold_.load(std::memory_order_relaxed);
+  }
+  inline uint64_t GetDefaultLifetimeThreshold() const {
+    return default_lifetime_threshold_.load(std::memory_order_relaxed);
   }
   // Function that Get and KeyMayExist call with no_io true or false
   // Note: 'value_found' from KeyMayExist propagates here
@@ -1426,6 +1433,7 @@ class DBImpl : public DB {
   HistogramImpl histogram_;
   HistogramImpl gc_histogram_;
   std::atomic<uint64_t> default_lifetime_idx_ = 0;
+  std::atomic<uint64_t> default_lifetime_threshold_ = 0;
 
   const uint64_t lifetime_cdf_threshold_ = 4 * 1024 * 1024;
   std::shared_ptr<std::vector<uint64_t>> new_lifetimes_ = nullptr;

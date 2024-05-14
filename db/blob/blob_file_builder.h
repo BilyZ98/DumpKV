@@ -48,7 +48,8 @@ class BlobFileBuilder {
                   std::vector<std::string>* blob_file_paths,
                   std::vector<BlobFileAddition>* blob_file_additions,
                   uint64_t lifetime_label=0,
-                  uint64_t creation_timestamp=0);
+                  uint64_t creation_timestamp=0,
+                  uint64_t ending_timestamp=0);
 
   BlobFileBuilder(std::function<uint64_t()> file_number_generator,
                   FileSystem* fs, const ImmutableOptions* immutable_options,
@@ -65,7 +66,8 @@ class BlobFileBuilder {
                   std::vector<std::string>* blob_file_paths,
                   std::vector<BlobFileAddition>* blob_file_additions,
                   uint64_t lifetime_label=0,
-                  uint64_t creation_timestamp=0);
+                  uint64_t creation_timestamp=0,
+                  uint64_t ending_timestamp=0);
 
   BlobFileBuilder(const BlobFileBuilder&) = delete;
   BlobFileBuilder& operator=(const BlobFileBuilder&) = delete;
@@ -124,6 +126,7 @@ class BlobFileBuilder {
   uint64_t blob_bytes_;
   uint64_t lifetime_label_;  
   uint64_t creation_timestamp_;
+  uint64_t ending_timestamp_;
   uint64_t lifetime_bucket_num_;
   uint64_t min_seq_;
   uint64_t max_seq_;

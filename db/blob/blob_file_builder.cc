@@ -43,16 +43,19 @@ BlobFileBuilder::BlobFileBuilder(
     std::vector<std::string>* blob_file_paths,
     std::vector<BlobFileAddition>* blob_file_additions,
     uint64_t lifetime_label,
-    uint64_t creation_timestamp)
+    uint64_t creation_timestamp,
+    uint64_t ending_timestamp)
     : BlobFileBuilder([versions]() { return versions->NewFileNumber(); }, fs,
                       immutable_options, mutable_cf_options, file_options,
                       db_id, db_session_id, job_id, column_family_id,
                       column_family_name, io_priority, write_hint, io_tracer,
                       blob_callback, creation_reason, blob_file_paths,
                       blob_file_additions,
-                      lifetime_label, creation_timestamp)
+                      lifetime_label, creation_timestamp,
+                      ending_timestamp) 
   {
   assert(creation_timestamp > 0);
+  assert(ending_timestamp > 0);
   // creation_timestamp_ = creation_timestamp;
 
 }
@@ -70,7 +73,8 @@ BlobFileBuilder::BlobFileBuilder(
     std::vector<std::string>* blob_file_paths,
     std::vector<BlobFileAddition>* blob_file_additions,
     uint64_t lifetime_label,
-    uint64_t creation_timestamp)
+    uint64_t creation_timestamp,
+    uint64_t ending_timestamp)
     : file_number_generator_(std::move(file_number_generator)),
       fs_(fs),
       immutable_options_(immutable_options),
@@ -95,9 +99,9 @@ BlobFileBuilder::BlobFileBuilder(
       blob_bytes_(0),
       lifetime_label_(lifetime_label),
       creation_timestamp_(creation_timestamp),
+      ending_timestamp_(ending_timestamp),
       min_seq_(0),
       max_seq_(0){
-  // assert(lifetime_label_ >= 0);
   assert(file_number_generator_);
   assert(fs_);
   assert(immutable_options_);
@@ -107,6 +111,11 @@ BlobFileBuilder::BlobFileBuilder(
   assert(blob_file_additions_);
   assert(blob_file_additions_->empty());
   assert(creation_timestamp > 0);
+  ROCKS_LOG_INFO(immutable_options_->logger,
+                 "[%s] [JOB %d] BlobFileBuilder created with creation timestamp: %" PRIu64
+                 " and ending timestamp: %" PRIu64,
+                 column_family_name_.c_str(), job_id_, creation_timestamp_,
+                 ending_timestamp_);
 }
 
 BlobFileBuilder::~BlobFileBuilder() = default;
@@ -491,7 +500,8 @@ Status BlobFileBuilder::CloseBlobFile() {
                                      std::move(checksum_method),
                                      std::move(checksum_value),
                                      lifetime_label_,
-                                     creation_timestamp_);
+                                     creation_timestamp_,
+                                     ending_timestamp_);
 
   assert(immutable_options_);
   ROCKS_LOG_INFO(immutable_options_->logger,

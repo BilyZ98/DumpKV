@@ -1138,6 +1138,10 @@ DEFINE_string(ycsb_a_run_path, "",
               "Path to the YCSB-A run file. If not empty, db_bench will run "
               "YCSB-A workload using the specified run file.");
 
+DEFINE_string(ycsb_a_load_path, "",
+              "Path to the YCSB-A load file. If not empty, db_bench will load "
+              "YCSB-A workload using the specified load file.");
+
 DEFINE_string(model_path, "",
               "Path to the model file used by the ML-based compaction "
               "policy. If empty, the default model will be used.");
@@ -6750,6 +6754,9 @@ class Benchmark {
     std::vector<std::string> files = {
       FLAGS_ycsb_a_run_path
     };
+    if(!FLAGS_ycsb_a_load_path.empty()){
+      files.push_back(FLAGS_ycsb_a_load_path);
+    }
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);
     int64_t val_size = FLAGS_value_size; //1000;

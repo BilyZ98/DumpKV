@@ -142,6 +142,7 @@ features_file_path=${FEATURES_FILE_PATH:-""}
 default_lifetime_idx=${DEFAULT_LIFETIME_IDX:-0}
 
 ycsb_a_run_path=${YCSB_A_RUN_PATH:-""}
+ycsb_a_load_path=${YCSB_A_LOAD_PATH:-""}
 paranoid_file_checks=${PARANOID_FILE_CHECKS:-0}
 if [ "$enable_blob_files" == "1" ]; then
   target_file_size_base=${TARGET_FILE_SIZE_BASE:-$((32 * 10 * write_buffer_size / value_size))}
@@ -230,7 +231,8 @@ PARAMS_GC="$PARAMS \
   --blob_garbage_collection_force_threshold=$blob_garbage_collection_force_threshold \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size \
   --default_lifetime_idx=$default_lifetime_idx \
-  --ycsb_a_run_path=$ycsb_a_run_path"
+  --ycsb_a_run_path=$ycsb_a_run_path \
+  --ycsb_a_load_path=$ycsb_a_load_path"
 
 # bulk load (using fillrandom) + compact
 # env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"
@@ -240,9 +242,9 @@ PARAMS_GC="$PARAMS \
 function run_benchmark {
 # env -u DURATION -S "$ENV_VARS" ./benchmark.sh mixgraph "$PARAMS_GC"
 #
-# env -u DURATION -S "$ENV_VARS" ./benchmark.sh ycsb_a "$PARAMS_GC"
+env -u DURATION -S "$ENV_VARS" ./benchmark.sh ycsb_a "$PARAMS_GC"
 #
-env -u DURATION -S "$ENV_VARS" ./benchmark.sh ssd_trace "$PARAMS_GC"
+# env -u DURATION -S "$ENV_VARS" ./benchmark.sh ssd_trace "$PARAMS_GC"
 
 
 }

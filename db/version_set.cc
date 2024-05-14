@@ -3899,11 +3899,11 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
     uint64_t lifetime_ttl = lifetime_sequence[lifetime_idx];
     for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {
       if(blob_file->GetBeingGCed()) {
-        // this blob file is already being GCed
         continue;
       } 
 
-      bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
+      // bool should_gc = ShouldGC(blob_file->GetCreationTimestamp(), lifetime_ttl);
+      bool should_gc = blob_file->GetEndingTimestamp() <= versions_->LastSequence();
       bool file_size_too_small = blob_file->GetBlobFileSize() <= (mutable_cf_options.blob_file_size >> 4);
       if(should_gc || file_size_too_small) {
         blob_files_marked_for_gc_.emplace_back(blob_file );
@@ -3924,13 +3924,6 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
       continue;
     }
 
-    // const auto lifetime_label_iter = LifetimeLabelToSecMap.find(lifetime_idx);
-    // // uint64_t lifetime_ttl =  LifetimeLabelToSecMap[lifetime_idx];
-    // if(lifetime_label_iter == LifetimeLabelToSecMap.end()) {
-    //   fprintf(stderr, "Lifetime label %zu not found in LifetimeLabelToSecMap\n", lifetime_idx);
-    //   assert(false);
-    // }
-    // uint64_t lifetime_ttl = lifetime_label_iter->second;
     assert(lifetime_idx < LifetimeSequence.size());
     uint64_t lifetime_ttl = LifetimeSequence[lifetime_idx];
     for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {

@@ -3108,7 +3108,7 @@ void DBImpl::BackgroundCallDataCollection() {
       if(num_class > 2) {
         training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
       } else {
-        training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
+        // training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
         training_data_->LogKeyRatio(immutable_db_options_);
       }
       training_data_->ClearTrainingData();
@@ -3673,22 +3673,37 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
     mutex_.Lock();
     status = gc_job.Install(*gc->mutable_cf_options());
 
-    if(GetGCInvalidRatio() < 0.25) {
-      SetDefaultLifetime(1);
-      ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 1", GetGCInvalidRatio());
-    } else {
-      SetDefaultLifetime(0);
-      ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 0", GetGCInvalidRatio());
-    }
+    // if(GetGCInvalidRatio() < 0.25) {
+    //   SetDefaultLifetime(1);
+    //   ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 1", GetGCInvalidRatio());
+    // } else {
+    //   SetDefaultLifetime(0);
+    //   ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, set default lifetime to 0", GetGCInvalidRatio());
+    // }
+    //
+    std::string sub_class_gc_ratio_str ;
+    std::vector<double> sub_class_gc_ratio;
+    std::vector<uint64_t> gc_input_class_blobs;
+    std::vector<uint64_t> gc_dropped_class_blobs;
+    GetGCSubClassInvalidRatio(sub_class_gc_ratio, gc_input_class_blobs, gc_dropped_class_blobs);
+
+    ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, "
+                   "gc input 0 :%lu, gc droppped 0:%lu, ratio:%lf,"
+                   "gc input 1 :%lu, gc droppped 1:%lu, ratio:%lf,",
+                   GetGCInvalidRatio(),
+                   gc_input_class_blobs[0], gc_dropped_class_blobs[0], sub_class_gc_ratio[0],
+                   gc_input_class_blobs[1], gc_dropped_class_blobs[1], sub_class_gc_ratio[1]);
+    RefreshShortLifetimeThreshold();
+    RefreshLongLifetimeThreshold();
     io_s = gc_job.io_status();
     if (status.ok()) {
-      // InstallSuperVersionAndScheduleWork(gc->column_family_data(),
-      //                                    &job_context->superversion_contexts[0],
-      //                                    *gc->mutable_cf_options());
+      InstallSuperVersionAndScheduleWork(gc->column_family_data(),
+                                         &job_context->superversion_contexts[0],
+                                         *gc->mutable_cf_options());
     }
 
     *madeProgress = true;
-    TEST_SYNC_POINT_CALLBACK("DBImpl:: BackgroundGarbageCollection:AfterCompaction",
+    TEST_SYNC_POINT_CALLBACK("DBImpl:: BackgroundGarbageCollection:AfterGC",
                              gc->column_family_data());
 
   }

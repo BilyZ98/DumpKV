@@ -181,6 +181,7 @@ class VersionBuilder::Rep {
         const std::shared_ptr<SharedBlobFileMetaData>& shared_meta)
         : shared_meta_(shared_meta) {
       assert(shared_meta_->GetCreationTimestamp() > 0);
+      assert(shared_meta_->GetEndingTimestamp() > 0);
     }
 
     // To be used for pre-existing blob files
@@ -191,6 +192,7 @@ class VersionBuilder::Rep {
           garbage_blob_count_(meta->GetGarbageBlobCount()),
           garbage_blob_bytes_(meta->GetGarbageBlobBytes()) {
       assert(shared_meta_->GetCreationTimestamp() > 0);
+      assert(shared_meta_->GetEndingTimestamp() > 0);
     }
 
     const std::shared_ptr<SharedBlobFileMetaData>& GetSharedMeta() const {
@@ -811,7 +813,8 @@ class VersionBuilder::Rep {
         blob_file_addition.GetChecksumMethod(),
         blob_file_addition.GetChecksumValue(), deleter,
         blob_file_addition.GetLifetimeLabel(),
-        blob_file_addition.GetCreationTimestamp());
+        blob_file_addition.GetCreationTimestamp(),
+        blob_file_addition.GetEndingTimestamp());
 
     // auto shared_mutable_blob_file_metadata = 
     // const auto shared_meta_const = shared_meta;

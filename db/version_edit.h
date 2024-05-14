@@ -516,11 +516,12 @@ class VersionEdit {
   void AddBlobFile(uint64_t blob_file_number, uint64_t total_blob_count,
                    uint64_t total_blob_bytes, std::string checksum_method,
                    std::string checksum_value, uint64_t lifetime_label,
-                   uint64_t creation_time) {
+                   uint64_t creation_time,
+                   uint64_t ending_timestamp) {
     blob_file_additions_.emplace_back(
         blob_file_number, total_blob_count, total_blob_bytes,
         std::move(checksum_method), std::move(checksum_value),
-        lifetime_label, creation_time);
+        lifetime_label, creation_time, ending_timestamp);
 
 
   } 

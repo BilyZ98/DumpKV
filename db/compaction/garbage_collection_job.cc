@@ -126,7 +126,7 @@ GarbageCollectionJob::GarbageCollectionJob(
 
   const EnvOptions soptions;
   std::string infer_data_file_path = dbname_ + "/compaction_infer_data.txt" + std::to_string(env_->NowMicros()) ;
-  Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
+  // Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
   assert(s.ok());
 
 
@@ -347,7 +347,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   db_->GetLifetimeSequence(lifetime_seqs);
 
 
-  int maxIndex = std::min(default_lifetime_idx_, lifetime_seqs->size() - 1);
+  // int maxIndex = std::min(default_lifetime_idx_, lifetime_seqs->size() - 1);
+  int maxIndex = 1; 
   bool get_feat = false;
   BlobIndex prev_blob_index;
   Slice prev_value = iter->value();
@@ -496,7 +497,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     //   }
     // }
 
-    s = WriteInferDataToFile(indices, data, out_result[0]); 
+    // s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);
@@ -558,8 +559,16 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     // auto blob_file_meta = vstorage->FastGetBlobFileMetaData(blob_index.file_number());
 
   for(size_t i =0; i < blob_file_builders.size(); i++){
-    // uint64_t timestamp = env_->NowMicros();
+    uint64_t expected_lifetime = 0;
+    if(i==0){
+      expected_lifetime = db_->GetShortLifetimeThreshold();
+    } else if (i==1) {
+      expected_lifetime = db_->GetLongLifetimeThreshold();
+    } else {
+      assert(false);
+    }
     uint64_t now_seq = versions_->LastSequence();
+    uint64_t end_seq = now_seq + expected_lifetime;
     blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
     new BlobFileBuilder(
       versions_, fs_.get(),
@@ -569,18 +578,21 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       write_hint_, io_tracer_, nullptr,
       BlobFileCreationReason::kCompaction, &blob_file_paths,
       gc_output_.blob_file_additions(),
-        i, now_seq));
+        i, now_seq,end_seq));
 
       blob_file_builders_raw[i] = blob_file_builders[i].get();
   }
 
   std::string blob_index_str;
   std::string prev_blob_index_str;
+  std::vector<uint64_t> input_blobs(2,0); 
+  std::vector<uint64_t> dropped_blobs(2,0);
 
 
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
 
+    uint64_t cur_blob_lifetime_label = blob_file->GetLifetimeLabel();
     uint64_t blob_file_num = blob_file->GetBlobFileNumber();
     std::string blob_file_path = BlobFileName(dbname_, blob_file->GetBlobFileNumber());;
     uint64_t lifetime_label = blob_file->GetLifetimeLabel();
@@ -700,15 +712,18 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
         } else {
           invalid_key_num++;
           invalid_value_size+=record.value_size;
+          dropped_blobs[cur_blob_lifetime_label] += 1;
           // invalid_key_size+=record.key_size;
         }
       } else {
         invalid_key_num++;
         invalid_value_size+=record.value_size;
+        dropped_blobs[cur_blob_lifetime_label] += 1;
         // invalid_key_size+=record.key_size;
       }
 
       total_blob_size+=record.record_size();
+      input_blobs[cur_blob_lifetime_label] += 1;
     }
    
 
@@ -746,6 +761,10 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   gc_stats_.stats.gc_input_blobs = valid_key_num + invalid_key_num;
   gc_stats_.stats.gc_output_blobs = valid_key_num;
   gc_stats_.stats.gc_dropped_blobs = invalid_key_num;
+  for(size_t i = 0; i < input_blobs.size(); i++) {
+    gc_stats_.stats.gc_input_class_blobs[i] = input_blobs[i];
+    gc_stats_.stats.gc_dropped_class_blobs[i] = dropped_blobs[i];
+  }
 
  gc_stats_.stats.cpu_micros =
       db_options_.clock->CPUMicros() - prev_cpu_micros;

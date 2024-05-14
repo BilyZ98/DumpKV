@@ -1351,16 +1351,14 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // db_internal_iter_->Seek(key());
       // is_iter_valid = db_internal_iter_->Valid(); 
     }
-    // int maxIndex = std::min(default_lifetime_idx_, LifetimeSequence.size() -1 );
     int maxIndex = std::min(db_->GetDefaultLifetimeIndex(), LifetimeSequence.size() -1 );
-    // int maxIndex = std::max(LifetimeSequence.size() -2 , 0ul);
-    uint32_t past_distances_count = 0;
-    std::vector<uint64_t> past_distances;
-    past_distances.reserve(max_n_past_timestamps);
-    std::vector<float> edcs;
-    edcs.reserve(n_edc_feature);
-    uint64_t past_seq;
-    uint64_t distance = 0;
+    // uint32_t past_distances_count = 0;
+    // std::vector<uint64_t> past_distances;
+    // past_distances.reserve(max_n_past_timestamps);
+    // std::vector<float> edcs;
+    // edcs.reserve(n_edc_feature);
+    // uint64_t past_seq;
+    // uint64_t distance = 0;
     if(is_iter_valid && db_internal_iter_->user_key().compare(user_key()) == 0) {
       assert(false);
     } else {
@@ -1372,25 +1370,6 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
    
     lifetime_keys_count_[maxIndex] += 1;
     s = lifetime_blob_file_builders_[maxIndex]->Add(key(), value_, &blob_index_);
-
-    past_distances_count = std::min(past_distances_count, static_cast<uint32_t>(max_n_past_timestamps));
-    // PutVarint32(&blob_index_, past_distances_count);
-    if(past_distances_count > 0) {
-      assert(false);
-      PutVarint64(&blob_index_, distance ); 
-      // write past_distances to value
-      for(size_t i = 0; i < past_distances_count-1; i++) {
-        PutVarint64(&blob_index_, past_distances[i]);
-      }
-      // write edcs to value
-      // Need to update edcs
-      for(int i = 0; i < n_edc_feature; i++) {
-        PutFixed32(&blob_index_, *reinterpret_cast<uint32_t*>(&edcs[i]));
-      }
-    }
-    // Add training example. We can all db_->AddtrainingExample() here
-    // Training example should be added before updating edcs
-
   }
 
   if (!s.ok()) {
@@ -1537,7 +1516,7 @@ Slice CompactionIterator::CollectKeyFeatures(Slice orig_blob_index_slice) {
         }
       }
 
-      db_->CDFAddLifetime(distance);
+      // db_->CDFAddLifetime(distance);
       db_->HistogramAddLifetime(distance);
       //update edcs
       // Need to set up edcs if past_distances_count = 0

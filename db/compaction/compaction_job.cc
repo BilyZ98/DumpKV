@@ -1258,14 +1258,19 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   bool enable_blob_file_builder = mutable_cf_options->enable_blob_files &&
        sub_compact->compaction->output_level() >=
            mutable_cf_options->blob_file_starting_level;
-    // mutable_cf_options.enable_blob_files &&
-    //    tboptions.level_at_creation >=
-    //        mutable_cf_options.blob_file_starting_level && blob_file_additions;
 
   if(enable_blob_file_builder ) {
     for(size_t i =0; i < blob_file_builders.size(); i++){
-      // uint64_t timestamp = env_->NowMicros();
+      uint64_t expected_lifetime = 0;
+      if(i==0){
+        expected_lifetime = db_impl_->GetShortLifetimeThreshold();
+      } else if (i==1) {
+        expected_lifetime = db_impl_->GetLongLifetimeThreshold();
+      } else {
+        assert(false);
+      }
       uint64_t now_seq = versions_->LastSequence();
+      uint64_t end_seq = now_seq + expected_lifetime;
       blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
       new BlobFileBuilder(
         versions_, fs_.get(),
@@ -1275,19 +1280,11 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
         write_hint_, io_tracer_, blob_callback_,
         BlobFileCreationReason::kCompaction, &blob_file_paths,
         sub_compact->Current().GetBlobFileAdditionsPtr(),
-          i, now_seq));
+          i, now_seq, end_seq));
 
         blob_file_builders_raw[i] = blob_file_builders[i].get();
     }
   }
-
-  // new BlobFileBuilder(
-  //     versions, fs, &ioptions, &mutable_cf_options, &file_options,
-  //     tboptions.db_id, tboptions.db_session_id, job_id,
-  //     tboptions.column_family_id, tboptions.column_family_name,
-  //     io_priority, write_hint, io_tracer, blob_callback,
-  //     blob_creation_reason, &blob_file_paths, blob_file_additions,
-  //     i, timestamp));
 
 
   // TODO: BlobDB to support output_to_penultimate_level compaction, which needs
