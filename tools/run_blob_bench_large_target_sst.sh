@@ -140,6 +140,9 @@ model_path=${MODEL_PATH:-""}
 features_file_path=${FEATURES_FILE_PATH:-""}
 
 default_lifetime_idx=${DEFAULT_LIFETIME_IDX:-0}
+default_lifetime=${DEFAULT_LIFETIME:-0}
+max_n_timestamps=${MAX_N_TIMESTAMPS:-32}
+n_edc_feature=${N_EDC_FEATURES:-10}
 
 ycsb_a_run_path=${YCSB_A_RUN_PATH:-""}
 ycsb_a_load_path=${YCSB_A_LOAD_PATH:-""}
@@ -232,7 +235,10 @@ PARAMS_GC="$PARAMS \
   --blob_compaction_readahead_size=$blob_compaction_readahead_size \
   --default_lifetime_idx=$default_lifetime_idx \
   --ycsb_a_run_path=$ycsb_a_run_path \
-  --ycsb_a_load_path=$ycsb_a_load_path"
+  --ycsb_a_load_path=$ycsb_a_load_path \
+  --default_lifetime=$default_lifetime \
+  --max_n_past_timestamps=$max_n_timestamps \
+  --n_edc_feature=$n_edc_feature"
 
 # bulk load (using fillrandom) + compact
 # env -u DURATION -S "$ENV_VARS" .//benchmark.sh bulkload "$PARAMS"

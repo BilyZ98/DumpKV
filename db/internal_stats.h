@@ -210,8 +210,8 @@ class InternalStats {
 
     uint64_t gc_dropped_blobs = 0;
 
-    std::vector<uint64_t> gc_input_class_blobs = std::vector<uint64_t>(2, 0);
-    std::vector<uint64_t> gc_dropped_class_blobs = std::vector<uint64_t>(2, 0);
+    std::vector<uint64_t> gc_input_class_blobs = std::vector<uint64_t>(3, 0);
+    std::vector<uint64_t> gc_dropped_class_blobs = std::vector<uint64_t>(3, 0);
 
 
     // Number of compactions done per CompactionReason
@@ -364,7 +364,7 @@ class InternalStats {
       this->gc_input_blobs += c.gc_input_blobs;
       this->gc_output_blobs += c.gc_output_blobs;
       this->gc_dropped_blobs += c.gc_dropped_blobs;
-      for(int i=0; i< 2; i++ ) {
+      for(size_t i=0; i< gc_input_class_blobs.size(); i++ ) {
         this->gc_input_class_blobs[i] += c.gc_input_class_blobs[i];
         this->gc_dropped_class_blobs[i] += c.gc_dropped_class_blobs[i];
       }

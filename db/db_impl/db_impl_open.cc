@@ -1760,9 +1760,9 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
 }
 
 
- uint8_t max_n_past_timestamps = 32;
- uint8_t max_n_past_distances = 31;
- const uint8_t n_edc_feature = 10;
+ uint8_t max_n_past_timestamps = 2;
+ uint8_t max_n_past_distances = 1;
+ uint8_t n_edc_feature = 1;
  std::vector<double> hash_edc;
  uint32_t max_hash_edc_idx;
 // set memory window to cur_max_sequence * 2?
@@ -1785,6 +1785,12 @@ static void init_hash_edc() {
     hash_edc = std::vector<double>(max_hash_edc_idx + 1);
     for (size_t i = 0; i < hash_edc.size(); ++i)
         hash_edc[i] = pow(0.5, i);
+}
+
+static void init_n_timestamp_and_edc(const DBOptions& db_options) {
+    max_n_past_timestamps = db_options.max_n_past_timestamps;
+    max_n_past_distances = max_n_past_timestamps - 1;
+    n_edc_feature = db_options.n_edc_feature;
 }
 
 
@@ -2125,6 +2131,10 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
   } else {
     printf("failed to load features data, msg: %s\n", s.ToString().c_str());
   }
+  init_n_timestamp_and_edc(db_options);
+  ROCKS_LOG_INFO(impl->immutable_db_options_.info_log,
+                 "max_n_past_timestamps: %d, max_n_past_distances: %d, n_edc_feature: %d",
+                 max_n_past_timestamps, max_n_past_distances, n_edc_feature);
   init_hash_edc();
   init_edc_windows();
   // std::once_flag once_hash_edc;

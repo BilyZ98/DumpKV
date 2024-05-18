@@ -2195,29 +2195,24 @@ const Slice Version::GetLatestBlobIndex(const uint64_t orig_blob_file_number,
   uint64_t latest_blob_file_number = orig_blob_file_number;
   Slice cur_blob_index_slice(orig_blob_index_str);
   // const std::string* cur_blob_index_str_ptr = &cur_blob_index_str;
+  BlobIndex cur_blob_index;
   while (true) {
-    auto cur_blob_file_it = blob_file_map.find(latest_blob_file_number);
-    if (cur_blob_file_it != blob_file_map.end()) {
-      uint64_t cur_blob_file_number = cur_blob_file_it->second;
+      uint64_t cur_blob_file_number = latest_blob_file_number;
       auto cur_blob_offset_it = blob_offset_map.find(cur_blob_file_number);
       if (cur_blob_offset_it != blob_offset_map.end()) {
         auto cur_blob_offset_map = cur_blob_offset_it->second;
         auto cur_blob_index_it = cur_blob_offset_map->find(cur_blob_index_slice.ToString());
         if (cur_blob_index_it != cur_blob_offset_map->end()) {
           cur_blob_index_slice = Slice(cur_blob_index_it->second);
-          // cur_blob_index_str_ptr = &cur_blob_index_it->second;
+          cur_blob_index.DecodeFrom(cur_blob_index_slice);
+          latest_blob_file_number = cur_blob_index.file_number();
         } else {
           return Slice();
-          // assert(false);
         }
       } else {
+        return cur_blob_index_slice;
         assert(false);
       }
-    } else {
-      return cur_blob_index_slice;
-    }
-
-    latest_blob_file_number = cur_blob_file_it->second;
   }
   
 }
@@ -3884,19 +3879,11 @@ void VersionStorageInfo::ComputeBlobsMarkedForForcedGC(
   blob_files_marked_for_gc_.clear();
   assert(db_impl != nullptr);
 
-  std::shared_ptr<std::vector<SequenceNumber>> lifetime_seqs;
-  db_impl->GetLifetimeSequence(lifetime_seqs);
-  const auto& lifetime_sequence = *(lifetime_seqs.get());
-
-  assert(lifetime_sequence.size() == LifetimeSequence.size());
-  assert(lifetime_sequence[0] > 0);
   for(size_t lifetime_idx=0; lifetime_idx < lifetime_blob_files_.size(); lifetime_idx++) {
     if(lifetime_blob_files_[lifetime_idx].empty()) {
       continue;
     }
-
-    assert(lifetime_idx < lifetime_sequence.size());
-    uint64_t lifetime_ttl = lifetime_sequence[lifetime_idx];
+    
     for(const auto &blob_file: lifetime_blob_files_[lifetime_idx]) {
       if(blob_file->GetBeingGCed()) {
         continue;

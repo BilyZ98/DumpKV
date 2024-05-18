@@ -1412,6 +1412,11 @@ struct DBOptions {
 
   uint64_t default_lifetime_idx = 0;
 
+  uint64_t default_lifetime = 0;
+
+  uint8_t max_n_past_timestamps = 32;
+
+  uint8_t n_edc_feature = 1;
 };
 
 // Options to control the behavior of a database (passed to DB::Open)

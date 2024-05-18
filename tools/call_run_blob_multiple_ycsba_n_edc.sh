@@ -32,6 +32,9 @@ function call_run_blob() {
    BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
    BLOB_FILE_SIZE=$blob_file_size \
+   DEFAULT_LIFETIME=$default_lifetime \
+   MAX_N_TIMESTAMPS=$cur_n_timestamps \
+   N_EDC_FEATURES=$cur_n_edc_features \
    ./run_blob_bench_large_target_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -50,35 +53,19 @@ fi
 # with_gc and without_gc
 db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
-ycsb_a_load_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_load.formated
+ycsb_a_load_path=""
 ycsb_a_run_files=(
-workloada_200GB_0.99_1024_zipfian.log_run.formated
-workloada_200GB_0.99_4096_zipfian.log_run.formated
-workloada_200GB_0.99_16384_zipfian.log_run.formated
-workloada_200GB_0.99_65536_zipfian.log_run.formated
+# workloada_200GB_0.99_1024_zipfian.log_run.formated
+# workloada_200GB_0.99_4096_zipfian.log_run.formated
+# workloada_200GB_0.99_16384_zipfian.log_run.formated
+# workloada_200GB_0.99_65536_zipfian.log_run.formated
 # workloadanew_50M_0.2_zipfian.log_run.formated
 # workloadanew_50M_0.5_zipfian.log_run.formated
 # workloadanew_50M_0.9_zipfian.log_run.formated
 #
-# workloada_50M_0.2_zipfian.log_run.formated
-# workloada_50M_0.5_zipfian.log_run.formated
-# workloada_50M_0.9_zipfian.log_run.formated
-)
-ycsb_a_load_files=(
-# workloada_100M_0.99_zipfian.log_load.formated
-# workloadb_100M_0.99_zipfian.log_load.formated
-# workloadc_100M_0.99_zipfian.log_load.formated
-# workloadd_100M_0.99_zipfian.log_load.formated
-workloade_100M_0.99_zipfian.log_load.formated
-# workloadf_100M_0.99_zipfian.log_load.formated
-)
-ycsb_a_run_files=(
-# workloada_100M_0.99_zipfian.log_run.formated
-# workloadb_100M_0.99_zipfian.log_run.formated
-# workloadc_100M_0.99_zipfian.log_run.formated
-# workloadd_100M_0.99_zipfian.log_run.formated
-workloade_100M_0.99_zipfian.log_run.formated
-# workloadf_100M_0.99_zipfian.log_run.formated
+workloada_50M_0.2_zipfian.log_run.formated
+workloada_50M_0.5_zipfian.log_run.formated
+workloada_50M_0.9_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
 # ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
@@ -105,31 +92,30 @@ function run_with_gc_dbbench {
   lifetime_idx_range=(0 )
   # value_sizes=(1024 4096 16384 65536)
   value_sizes=( 4096  )
+
+
+  max_n_timestamps=(1 2 4 32)
+  n_edc_features=(1 2 4 10)
+
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do
 
-  # for value_size in "${value_sizes[@]}" ; do
+  for value_size in "${value_sizes[@]}" ; do
 
-  for idx in "${!ycsb_a_run_files[@]}" ; do
-    ycsb_a_run_file=${ycsb_a_run_files[$idx]}
-    ycsb_a_load_file=${ycsb_a_load_files[$idx]}
-    ycsb_a_run_path=${ycsb_a_folder}/${ycsb_a_run_file}
-    ycsb_a_load_path=${ycsb_a_folder}/${ycsb_a_load_file}
+  for ycbs_a_run_file in "${ycsb_a_run_files[@]}" ; do
+  for edc_idx in $(seq 0 1 3) ; do
+    cur_n_timestamps=${max_n_timestamps[$edc_idx]}
+    cur_n_edc_features=${n_edc_features[$edc_idx]}
 
-    # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
-    zipfian_value=`echo $ycsb_a_run_file | awk -F"_" '{print $3}'`
-    write_count=`echo $ycsb_a_run_file | awk -F"_" '{print $2}'`
-    # value_size=`echo $ycsb_a_run_file | awk -F"_" '{print $4}'`
-    value_size=4096
-    ycsb_name=`echo $ycsb_a_run_file | awk -F"_" '{print $1}'`
-
-  # for ycbs_a_run_file in "${ycsb_a_run_files[@]}" ; do
-    # ycsb_a_run_path=${ycsb_a_folder}/${ycbs_a_run_file}
+    ycsb_a_run_path=${ycsb_a_folder}/${ycbs_a_run_file}
 
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
-    # zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
-    # write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
+    zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
+    write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
     # value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
 
+    default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')
+    echo "default_lifetime: $default_lifetime"
+    # exit 0
 
     force_gc_threshold=0.8
 
@@ -138,7 +124,7 @@ function run_with_gc_dbbench {
     cur_value_size=$value_size
 
 
-    cur_run_name=${run_name}_${lifetime_idx}_${value_size}_${zipfian_value}_${write_count}_${ycsb_name}
+    cur_run_name=${run_name}_${lifetime_idx}_${value_size}_${zipfian_value}_${write_count}_${cur_n_timestamps}_${cur_n_edc_features}
     with_gc_dir=${db_dir}/${cur_run_name}
     date_log_path=$(date +"%Y-%m-%d-%H-%M-%S")-${cur_run_name} 
     db_log_dir=${date_log_path}
@@ -181,7 +167,8 @@ function run_with_gc_dbbench {
 
   done
   done
-  # done
+  done
+  done
 
 }
 

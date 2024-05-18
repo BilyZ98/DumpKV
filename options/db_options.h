@@ -113,6 +113,7 @@ struct ImmutableDBOptions {
   uint64_t num_classification = 1;
   uint64_t num_features = 0;
   uint64_t default_lifetime_idx = 0;
+  uint64_t default_lifetime = 0;
   std::shared_ptr<BoosterHandle> booster_handle = nullptr;
   std::shared_ptr<FastConfigHandle> booster_fast_config_handle = nullptr;
 

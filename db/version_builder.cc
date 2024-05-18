@@ -715,8 +715,6 @@ class VersionBuilder::Rep {
   }
 
   Status ApplyBlobFileDeletion(uint64_t blob_file_number) {
-    // const uint64_t blob_file_number = blob_file_deletion.GetBlobFileNumber();
-    // const uint64_t lifetime_label = blob_file_deletion.GetLifetimeLabel();
 
     deleted_blob_files_.insert(blob_file_number);
     return Status::OK();

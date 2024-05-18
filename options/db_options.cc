@@ -757,7 +757,8 @@ ImmutableDBOptions::ImmutableDBOptions(const DBOptions& options)
       enforce_single_del_contracts(options.enforce_single_del_contracts),
       num_classification(options.classification_num),
       num_features(options.num_features),
-      default_lifetime_idx(options.default_lifetime_idx) {
+      default_lifetime_idx(options.default_lifetime_idx),
+      default_lifetime(options.default_lifetime){
   fs = env->GetFileSystem();
   clock = env->GetSystemClock().get();
   logger = info_log.get();

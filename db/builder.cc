@@ -201,15 +201,17 @@ Status BuildTable(
              mutable_cf_options.blob_file_starting_level && blob_file_additions;
 
     if(enable_blob_file_builder ) {
+
       for(size_t i =0; i < blob_file_builders.size(); i++){
+        uint64_t lifetime_label = i;
         uint64_t now_seq = versions->LastSequence();
         uint64_t end_seq;
-        // = now_seq + tboptions.db_impl->GetDefaultLifetimeThreshold();
-        if(now_seq < 25000000) {
-          end_seq = tboptions.db_impl->GetDefaultLifetimeThreshold() + 25000000;
-        } else {
-          end_seq = now_seq + tboptions.db_impl->GetDefaultLifetimeThreshold();
-        }
+        // if(now_seq < 25000000) {
+        //   end_seq = now_seq + 25000000;
+        // } else {
+        //   end_seq = now_seq + tboptions.db_impl->GetDefaultLifetimeThreshold();
+        // }
+        end_seq = now_seq + tboptions.db_impl->GetDefaultLifetimeThreshold();
         blob_file_builders[i] = std::unique_ptr<BlobFileBuilder>(
             new BlobFileBuilder(
                 versions, fs, &ioptions, &mutable_cf_options, &file_options,
@@ -217,7 +219,7 @@ Status BuildTable(
                 tboptions.column_family_id, tboptions.column_family_name,
                 io_priority, write_hint, io_tracer, blob_callback,
                 blob_creation_reason, &blob_file_paths, blob_file_additions,
-                i, now_seq, end_seq));
+                lifetime_label, now_seq, end_seq));
           blob_file_builders_raw[i] = blob_file_builders[i].get();
       }
     }
