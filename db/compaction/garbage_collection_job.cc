@@ -126,8 +126,8 @@ GarbageCollectionJob::GarbageCollectionJob(
 
   const EnvOptions soptions;
   std::string infer_data_file_path = dbname_ + "/compaction_infer_data.txt" + std::to_string(env_->NowMicros()) ;
-  Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
-  assert(s.ok());
+  // Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
+  // assert(s.ok());
 
 
 }
@@ -497,7 +497,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     //   }
     // }
 
-    s = WriteInferDataToFile(indices, data, out_result[0]); 
+    // s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);
