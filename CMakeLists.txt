@@ -115,7 +115,7 @@ else()
 #   # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/third-party/lightgbm/include)
 # endif()
 
-find_package(GSL REQUIRED)
+#find_package(GSL REQUIRED)
 
   option(WITH_LIGHTGBM "build with lightgbm" ON)
   if(WITH_LIGHTGBM) 
@@ -1178,13 +1178,13 @@ configure_file(util/build_version.cc.in ${BUILD_VERSION_CC} @ONLY)
 set(GSL_LIBS GSL::gsl GSL::gslcblas m)
 add_library(${ROCKSDB_STATIC_LIB} STATIC ${SOURCES} ${BUILD_VERSION_CC})
 target_link_libraries(${ROCKSDB_STATIC_LIB} PRIVATE
-  ${THIRDPARTY_LIBS} ${GSL_LIBS} ${SYSTEM_LIBS}  )
+  ${THIRDPARTY_LIBS} ${SYSTEM_LIBS}  )
 # target_link_libraries(${ROCKSDB_STATIC_LIB} GSL::gsl GSL::gslcblas m)
 
 if(ROCKSDB_BUILD_SHARED)
   add_library(${ROCKSDB_SHARED_LIB} SHARED ${SOURCES} ${BUILD_VERSION_CC})
   target_link_libraries(${ROCKSDB_SHARED_LIB} PRIVATE
-    ${THIRDPARTY_LIBS} ${GSL_LIBS} ${SYSTEM_LIBS} )
+    ${THIRDPARTY_LIBS} ${SYSTEM_LIBS} )
   # target_link_libraries(${ROCKSDB_SHARED_LIB} GSL::gsl GSL::gslcblas m)
 
   if(WIN32)

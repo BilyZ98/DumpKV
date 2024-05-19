@@ -58,8 +58,6 @@ workloadanew_50M_0.9_zipfian.log_run.formated
 # workloada_50M_0.9_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
-# ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
-# ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
