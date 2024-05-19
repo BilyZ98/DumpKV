@@ -302,11 +302,15 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
-  std::vector<SequenceNumber> ini_lifetime_sequence = {10 * 1024 * 1024, 10*1024*1024}  ;
+  uint64_t default_lifetime = options.default_lifetime;
+  std::vector<SequenceNumber> ini_lifetime_sequence = {default_lifetime, default_lifetime}  ;
   lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
   short_lifetime_threshold_ = ini_lifetime_sequence[0];
   long_lifetime_threshold_ = ini_lifetime_sequence[1];
-  default_lifetime_threshold_ = 10 * 1024 * 1024;
+  default_lifetime_threshold_ = default_lifetime;
+  ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                 "DBImpl::DBImpl: default_lifetime_threshold_ %lu",
+                 default_lifetime);
   new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
   new_lifetimes_->reserve(lifetime_cdf_threshold_);
   versions_->SetDBImpl(this);
@@ -2474,7 +2478,13 @@ void DBImpl::RefreshDefaultLifetimeThreshold() {
   if(cur_long_lifetime_threshold > cur_short_lifetime_threshold) {
     delta = cur_long_lifetime_threshold - cur_short_lifetime_threshold;
   }
-  uint64_t new_default_lifetime = cur_short_lifetime_threshold + delta * custom_sigmoid_for_default_lifetime(1.0 - GetGCInvalidRatio());
+  std::vector<double> invalid_ratio;
+  std::vector<uint64_t> gc_input_subclass_blob;
+  std::vector<uint64_t> gc_dropped_subclass_blobs;
+  GetGCSubClassInvalidRatio(invalid_ratio, gc_input_subclass_blob, gc_dropped_subclass_blobs);
+  double default_lifetime_invalid_ratio = invalid_ratio[2];
+
+  uint64_t new_default_lifetime = cur_short_lifetime_threshold + delta * custom_sigmoid_for_default_lifetime(1.0 - default_lifetime_invalid_ratio);
   default_lifetime_threshold_.store(new_default_lifetime, std::memory_order_relaxed);
 }
 

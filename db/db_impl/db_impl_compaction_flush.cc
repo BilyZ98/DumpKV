@@ -3108,7 +3108,7 @@ void DBImpl::BackgroundCallDataCollection() {
       if(num_class > 2) {
         training_data_->LogKeyRatioForMultiClass(immutable_db_options_, num_class );
       } else {
-        // training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
+        training_data_->WriteTrainingData(dbname_ + "/train_data.txt" , env_ );
         training_data_->LogKeyRatio(immutable_db_options_);
       }
       training_data_->ClearTrainingData();
@@ -3689,10 +3689,12 @@ Status DBImpl::BackgroundGarbageCollection(bool* madeProgress, JobContext* job_c
 
     ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC invalid ratio:%lf, "
                    "gc input 0 :%lu, gc droppped 0:%lu, ratio:%lf,"
-                   "gc input 1 :%lu, gc droppped 1:%lu, ratio:%lf,",
+                   "gc input 1 :%lu, gc droppped 1:%lu, ratio:%lf,"
+                   "gc input 2: %lu, gc droppped 2:%lu, ratio:%lf",
                    GetGCInvalidRatio(),
                    gc_input_class_blobs[0], gc_dropped_class_blobs[0], sub_class_gc_ratio[0],
-                   gc_input_class_blobs[1], gc_dropped_class_blobs[1], sub_class_gc_ratio[1]);
+                   gc_input_class_blobs[1], gc_dropped_class_blobs[1], sub_class_gc_ratio[1],
+                   gc_input_class_blobs[2], gc_dropped_class_blobs[2], sub_class_gc_ratio[2]);
     RefreshShortLifetimeThreshold();
     RefreshLongLifetimeThreshold();
     io_s = gc_job.io_status();

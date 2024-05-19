@@ -37,7 +37,7 @@ const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 
 #define M 1000000
 // const std::vector<uint64_t> LifetimeSequence = { 1 * M, 2 * M, 4*M, 8 * M, 16 * M };
-std::vector<uint64_t> LifetimeSequence = {  4*M, 8 * M };
+std::vector<uint64_t> LifetimeSequence = {  4*M, 8 * M, 4 * M };
 // const  std::unordered_map<uint64_t, uint64_t> LifetimeLabelToSecMap ={
 //   {0, 1},
 //   {1, 10},
@@ -1351,7 +1351,8 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // db_internal_iter_->Seek(key());
       // is_iter_valid = db_internal_iter_->Valid(); 
     }
-    int maxIndex = std::min(db_->GetDefaultLifetimeIndex(), LifetimeSequence.size() -1 );
+    // int maxIndex = std::min(db_->GetDefaultLifetimeIndex(), LifetimeSequence.size() -1 );
+    int maxIndex = 2;
     // uint32_t past_distances_count = 0;
     // std::vector<uint64_t> past_distances;
     // past_distances.reserve(max_n_past_timestamps);
@@ -1365,7 +1366,7 @@ bool CompactionIterator::ExtractLargeValueIfNeededImpl() {
       // no previous key write  
       // write past_distances_count = 0 to file.
       // No need to write past_distances and edcs to value 
-      assert(past_distances_count == 0);
+      // assert(past_distances_count == 0);
     }
    
     lifetime_keys_count_[maxIndex] += 1;

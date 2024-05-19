@@ -296,6 +296,12 @@ DEFINE_int32(threads, 1, "Number of concurrent threads to run.");
 
 DEFINE_int32(default_lifetime_idx, 0, "Default lifetime indx for mlsm");
 
+DEFINE_int32(default_lifetime, 10000000, "Default lifetime for mlsm");
+
+DEFINE_int32(max_n_past_timestamps, 32, "Max number of past timestamps");
+
+DEFINE_int32(n_edc_feature, 10, "Number of edc features");
+
 DEFINE_int32(duration, 0,
              "Time in seconds for the random-ops tests to run."
              " When 0 then num & reads determine the test duration");
@@ -4181,6 +4187,9 @@ class Benchmark {
     assert(db_.db == nullptr);
 
     options.default_lifetime_idx = FLAGS_default_lifetime_idx;
+    options.default_lifetime = FLAGS_default_lifetime;
+    options.max_n_past_timestamps = FLAGS_max_n_past_timestamps;
+    options.n_edc_feature = FLAGS_n_edc_feature;
 
     options.env = FLAGS_env;
     options.model_path = FLAGS_model_path;
@@ -6830,7 +6839,30 @@ class Benchmark {
                                                       nullptr /*stats*/);
         }
         thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kWrite);
-      }
+      } else if (query_type == "SCAN"){
+        seek++;
+        int64_t scan_len = std::stoi(data[2]);
+        total_scan_length += scan_len;
+        Iterator* iter;
+        if (FLAGS_num_column_families > 1) {
+          iter = db_with_cfh->db->NewIterator(read_options_),
+          db_with_cfh->GetCfh(key.size());
+        } else {
+          iter = db_with_cfh->db->NewIterator(read_options_);
+        }
+        int64_t count = 0;
+        for (iter->Seek(key); count < scan_len && iter->Valid(); iter->Next()) {
+          count++;
+          std::string k = iter->key().ToString();
+          std::string val = iter->value().ToString();
+          bytes += iter->key().size() + iter->value().size();
+        }
+        delete iter;
+        if (count == scan_len) {
+          seek_found++;
+        }
+        thread->stats.FinishedOps(db_with_cfh, db_with_cfh->db, 1, kSeek);
+      } 
     }
     char msg[256];
     snprintf(msg, sizeof(msg),

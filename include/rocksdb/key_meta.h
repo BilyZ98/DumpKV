@@ -12,7 +12,8 @@ namespace ROCKSDB_NAMESPACE {
 
 extern uint8_t max_n_past_timestamps;
 extern uint8_t max_n_past_distances;
-extern const uint8_t n_edc_feature;
+// extern const uint8_t n_edc_feature;
+extern  uint8_t n_edc_feature;
 extern std::vector<double> hash_edc;
 extern uint32_t max_hash_edc_idx;
 extern uint32_t memory_window;
