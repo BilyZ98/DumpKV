@@ -26,7 +26,6 @@ function call_run_blob() {
    OP_TRACE_FILE=$op_trace_file BLOB_GC_FORCE_THRESHOLD=$force_gc_threshold \
    DEFAULT_LIFETIME_IDX=$default_lifetime_idx \
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
-   YCSB_A_LOAD_PATH=${ycsb_a_load_path} \
    VALUE_SIZE=$cur_value_size \
    USE_BLOB_CACHE=0 \
    BLOB_FILE_STARTING_LEVEL=0 \
@@ -48,7 +47,7 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 ycsb_a_load_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_load.formated
 ycsb_a_run_files=(
@@ -80,7 +79,13 @@ workloadd_100M_0.99_zipfian.log_run.formated
 workloade_100M_0.99_zipfian.log_run.formated
 workloadf_100M_0.99_zipfian.log_run.formated
   )
+ycsb_a_run_files=(
+workloadanew_100M_0.2_zipfian.log_run.formated
+workloadanew_100M_0.5_zipfian.log_run.formated
+workloadanew_100M_0.9_zipfian.log_run.formated
+)
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
+ycsb_a_folder="/mnt/nvme0n1/YCSB-C/data"
 # ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
 # ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-0.99-10000000-100000000.log_run.formated
 if [ ! -d $db_dir ]; then
@@ -115,7 +120,8 @@ function run_with_gc_dbbench {
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
     zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
     write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
-    value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+    #value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+    value_size=4096
 
 
     force_gc_threshold=0.8
