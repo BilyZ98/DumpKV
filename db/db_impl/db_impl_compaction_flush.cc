@@ -3059,8 +3059,8 @@ void DBImpl::BackgroundCallDataCollection() {
   // training_data_->SetShortLabelLimit(threshold/4 + threshold/8 + 1);
   // training_data_->SetGCLongLabelLimit(threshold/4 + 1);
   // training_data_->SetGCShortLabelLimit(0);
-  training_data_->SetLongLabelLimit(threshold/4 );
-  training_data_->SetShortLabelLimit(threshold/4 + 1);
+  training_data_->SetLongLabelLimit(threshold/2 + 1);
+  training_data_->SetShortLabelLimit(threshold/2 + 1);
   training_data_->SetGCLongLabelLimit(threshold/4 + 1);
   training_data_->SetGCShortLabelLimit(threshold/4 + 1);
 
@@ -3071,7 +3071,7 @@ void DBImpl::BackgroundCallDataCollection() {
     if(get_data) {
       double label = data.back();
       data.pop_back();
-      Status s = training_data_->AddTrainingSample(data, label, short_lifetime_threshold_.load(std::memory_order_relaxed));
+      Status s = training_data_->AddTrainingSample(data, label, GetDefaultLifetimeThreshold());
       assert(s.ok());
     } 
     bool gc_get_data = gc_training_data_queue_.wait_dequeue_timed(data, timeout);
@@ -3080,7 +3080,7 @@ void DBImpl::BackgroundCallDataCollection() {
       data.pop_back();
       double label = data.back();
       data.pop_back();
-      Status s = training_data_->AddGCTrainingSample(data, label, lifetime_idx, short_lifetime_threshold_.load(std::memory_order_relaxed));
+      Status s = training_data_->AddGCTrainingSample(data, label, lifetime_idx, GetDefaultLifetimeThreshold());
       assert(s.ok());
     }
     if(!get_data && !gc_get_data) {

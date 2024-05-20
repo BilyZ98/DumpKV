@@ -52,13 +52,13 @@ db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 ycsb_a_load_path=""
 ycsb_a_run_files=(
-workloada_200GB_0.99_1024_zipfian.log_run.formated
-workloada_200GB_0.99_4096_zipfian.log_run.formated
+#workloada_200GB_0.99_1024_zipfian.log_run.formated
+#workloada_200GB_0.99_4096_zipfian.log_run.formated
 # workloada_200GB_0.99_16384_zipfian.log_run.formated
 # workloada_200GB_0.99_65536_zipfian.log_run.formated
-# workloadanew_50M_0.2_zipfian.log_run.formated
-# workloadanew_50M_0.5_zipfian.log_run.formated
-# workloadanew_50M_0.9_zipfian.log_run.formated
+workloadanew_50M_0.2_zipfian.log_run.formated
+workloadanew_50M_0.5_zipfian.log_run.formated
+workloadanew_50M_0.9_zipfian.log_run.formated
 #
 # workloada_50M_0.2_zipfian.log_run.formated
 # workloada_50M_0.5_zipfian.log_run.formated
@@ -98,7 +98,7 @@ function run_with_gc_dbbench {
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
     zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
     write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
-    #value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+
     value_size=4096
 
     default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')

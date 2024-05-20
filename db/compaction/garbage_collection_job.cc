@@ -193,6 +193,11 @@ Status GarbageCollectionJob::Install(const MutableCFOptions& mutable_cf_options)
                  cfd->internal_stats()->GetGCStats().gc_output_blobs,
                  cfd->internal_stats()->GetGCStats().gc_dropped_blobs,
                  invalid_key_ratio);
+  ROCKS_LOG_INFO(db_options_.info_log, "model prediction time: %lu, data extraction time: %lu, iter seek time: %lu, data write time: %lu", 
+                 cfd->internal_stats()->GetGCStats().model_prediction_time_ns.count(),
+                 cfd->internal_stats()->GetGCStats().data_extraction_time_ns.count(),
+                 cfd->internal_stats()->GetGCStats().iter_seek_time_ns.count(),
+                 cfd->internal_stats()->GetGCStats().data_write_time_ns.count());
   status = InstallGarbageCollectionResults(mutable_cf_options);
   assert(status.ok());
 
@@ -335,6 +340,7 @@ uint64_t GarbageCollectionJob::GetNextLifetimeIndex(uint64_t cur_seq, uint64_t k
 }
 
 uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
+  auto start = std::chrono::high_resolution_clock::now();
   uint32_t past_distances_count = 0;
   std::vector<uint64_t> past_distances;
   past_distances.reserve(max_n_past_timestamps);
@@ -347,8 +353,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
   db_->GetLifetimeSequence(lifetime_seqs);
 
 
-  // int maxIndex = std::min(default_lifetime_idx_, lifetime_seqs->size() - 1);
-  int maxIndex = 0; 
+  int maxIndex = std::min(default_lifetime_idx_, lifetime_seqs->size() - 1);
+  // int maxIndex = 0; 
   bool get_feat = false;
   BlobIndex prev_blob_index;
   Slice prev_value = iter->value();
@@ -457,7 +463,10 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
 
     db_->GCHistogramAddLifetime(distance);
     
+    auto end = std::chrono::high_resolution_clock::now();
+    data_extraction_time_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     if(booster_handle_ ) {
+    start = std::chrono::high_resolution_clock::now();
     assert(indices.size() == data.size());
 
     std::string inference_params = "num_threads=1 verbosity=0";
@@ -488,14 +497,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     if(predict_res != 0) {
       assert(false);
     }
-    // double max_val = 0.0;
-    // for(size_t res_idx = 0; res_idx < out_result.size(); res_idx++) {
-    //   data.emplace_back(out_result[res_idx]);
-    //   if(out_result[res_idx] > max_val) {
-    //     max_val = out_result[res_idx];
-    //     maxIndex = res_idx;
-    //   }
-    // }
+    end = std::chrono::high_resolution_clock::now();
+    model_prediction_time_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
     // s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
@@ -592,7 +595,6 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   for (auto blob_file: *(gc_->inputs())){
     // 读取blob file
 
-    uint64_t cur_blob_lifetime_label = blob_file->GetLifetimeLabel();
     uint64_t blob_file_num = blob_file->GetBlobFileNumber();
     std::string blob_file_path = BlobFileName(dbname_, blob_file->GetBlobFileNumber());;
     uint64_t lifetime_label = blob_file->GetLifetimeLabel();
@@ -640,6 +642,8 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
     while (true) {
       BlobLogRecord record;
 
+    auto start = std::chrono::high_resolution_clock::now();
+    uint64_t cur_blob_lifetime_label = blob_file->GetLifetimeLabel();
       rocksdb::Status s2 = blob_log_reader.ReadRecord(&record, BlobLogSequentialReader::kReadHeaderKeyBlob, &blob_offset);
       if (!s2.ok()){
         break;
@@ -655,6 +659,10 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
       if (!s.ok()){
       return s;
       }
+      auto end = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+      iter_seek_time_ns_ += duration;
+
       if(iter->Valid() ) {
 
         Slice find_internal_key = iter->key();
@@ -667,6 +675,7 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
         if(parsed_ikey.user_key.compare(parsed_blob_key.user_key)==0 &&
           parsed_ikey.sequence == parsed_blob_key.sequence &&
           parsed_ikey.type == rocksdb::kTypeBlobIndex) {
+          start = std::chrono::high_resolution_clock::now();
 
           next_lifetime_label = GetNewLifetimeIndex(iter);
 
@@ -700,6 +709,9 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
           }
           valid_key_num++;
           valid_value_size+=record.value_size;
+          end = std::chrono::high_resolution_clock::now();
+          duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+          data_write_time_ns_ += duration;
         } else {
           invalid_key_num++;
           invalid_value_size+=record.value_size;
@@ -752,6 +764,10 @@ Status GarbageCollectionJob::ProcessGarbageCollection(InternalIterator* iter) {
   gc_stats_.stats.gc_input_blobs = valid_key_num + invalid_key_num;
   gc_stats_.stats.gc_output_blobs = valid_key_num;
   gc_stats_.stats.gc_dropped_blobs = invalid_key_num;
+  gc_stats_.stats.model_prediction_time_ns = model_prediction_time_ns_;
+  gc_stats_.stats.data_extraction_time_ns = data_extraction_time_ns_;
+  gc_stats_.stats.iter_seek_time_ns = iter_seek_time_ns_;
+  gc_stats_.stats.data_write_time_ns = data_write_time_ns_;
   for(size_t i = 0; i < input_blobs.size(); i++) {
     gc_stats_.stats.gc_input_class_blobs[i] = input_blobs[i];
     gc_stats_.stats.gc_dropped_class_blobs[i] = dropped_blobs[i];
