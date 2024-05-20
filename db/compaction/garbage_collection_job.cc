@@ -126,8 +126,8 @@ GarbageCollectionJob::GarbageCollectionJob(
 
   const EnvOptions soptions;
   std::string infer_data_file_path = dbname_ + "/compaction_infer_data.txt" + std::to_string(env_->NowMicros()) ;
-  Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
-  assert(s.ok());
+  // Status s= env_->NewWritableFile(infer_data_file_path, &infer_data_file_, soptions);
+  // assert(s.ok());
 
 
 }
@@ -500,7 +500,7 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     end = std::chrono::high_resolution_clock::now();
     model_prediction_time_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-    s = WriteInferDataToFile(indices, data, out_result[0]); 
+    // s = WriteInferDataToFile(indices, data, out_result[0]); 
     maxIndex = out_result[0] > 0.5 ? 1 : 0;
 
     // s = WriteTrainDataToFile(data,maxIndex);

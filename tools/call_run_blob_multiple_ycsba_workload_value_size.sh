@@ -31,6 +31,7 @@ function call_run_blob() {
    BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
    BLOB_FILE_SIZE=$blob_file_size \
+   DEFAULT_LIFETIME=$default_lifetime \
    ./run_blob_bench_large_target_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -47,17 +48,17 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
+ycsb_a_load_path=""
 ycsb_a_run_files=(
-workloadanew_50M_0.2_zipfian.log_run.formated
-workloadanew_50M_0.5_zipfian.log_run.formated
-workloadanew_50M_0.9_zipfian.log_run.formated
-# workloada_50M_0.2_zipfian.log_run.formated
-# workloada_50M_0.5_zipfian.log_run.formated
-# workloada_50M_0.9_zipfian.log_run.formated
+workloada_200GB_0.99_1024_zipfian.log_run.formated
+workloada_200GB_0.99_4096_zipfian.log_run.formated
+# workloada_200GB_0.99_16384_zipfian.log_run.formated
+# workloada_200GB_0.99_65536_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
+ycsb_a_folder="/mnt/nvme0n1/YCSB-C/data/"
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
@@ -77,20 +78,25 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=(0 )
+  lifetime_idx_range=(1)
   # value_sizes=(1024 4096 16384 65536)
-  value_sizes=( 1024 4096  )
+  # value_sizes=( 4096  )
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do
 
-  for value_size in "${value_sizes[@]}" ; do
+  # for value_size in "${value_sizes[@]}" ; do
 
-  # for ycbs_a_run_file in "${ycsb_a_run_files[@]}" ; do
-    # ycsb_a_run_path=${ycsb_a_folder}/${ycbs_a_run_file}
+  for ycbs_a_run_file in "${ycsb_a_run_files[@]}" ; do
+    ycsb_a_run_path=${ycsb_a_folder}/${ycbs_a_run_file}
 
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
-    # zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
-    # write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
+    zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
+    write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
+    value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+    # value_size=4096
 
+    default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')
+    echo "default_lifetime: $default_lifetime"
+    # exit 0
 
     force_gc_threshold=0.8
 

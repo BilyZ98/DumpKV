@@ -2269,60 +2269,9 @@ std::pair<uint64_t, uint64_t> DBImpl::getPointWithSlopeClosestToOneInCDF(const s
 
 // } 
 
-static  double polyval(const std::vector<double>& p, double x) {
-      double result = 0.0;
-      double xi = 1.0;
-      for (auto it = p.rbegin(); it != p.rend(); ++it) {
-          result += (*it) * xi;
-          xi *= x;
-      }
-      return result;
-  }
-static  double f(double x, void *params) {
-      // Define your function here
-  auto derivative = reinterpret_cast<std::vector<double>*>(params);
-      return polyval(*derivative, x) - 1;
-  }
-
 
 double DBImpl::GetSlope1Point(std::vector<double>& x, std::vector<double>& y) {
-      int status;
-    int iter = 0, max_iter = 100;
-    const gsl_root_fsolver_type *T;
-    gsl_root_fsolver *s;
-    double r = 0, r_expected = M_PI;
-    double x_lo = 0.0, x_hi = 10000000.0;
-    gsl_function F;
-
-    F.function = &f;
-
-    auto coeffs = polyfit_Eigen(x, y, 3);
-    derivative_ = polyder(coeffs);
-    F.params = &derivative_;
-    T = gsl_root_fsolver_brent;
-    s = gsl_root_fsolver_alloc(T);
-    gsl_set_error_handler_off();
-    gsl_root_fsolver_set(s, &F, x_lo, x_hi);
-
-    ROCKS_LOG_INFO (immutable_db_options_.info_log,"using %s method\n", gsl_root_fsolver_name(s));
-    ROCKS_LOG_INFO (immutable_db_options_.info_log,"%5s [%9s, %9s] %9s %10s %9s\n", "iter", "lower", "upper", "root", "err", "err(est)");
-
-    do {
-        iter++;
-        status = gsl_root_fsolver_iterate(s);
-        r = gsl_root_fsolver_root(s);
-        x_lo = gsl_root_fsolver_x_lower(s);
-        x_hi = gsl_root_fsolver_x_upper(s);
-        status = gsl_root_test_interval(x_lo, x_hi, 0, 0.001);
-
-        // if (status == GSL_SUCCESS)
-        //     printf ("Converged:\n");
-
-     ROCKS_LOG_INFO (immutable_db_options_.info_log, "%5d [%.7f, %.7f] %.7f %+.7f %.7f\n", iter, x_lo, x_hi, r, r - r_expected, x_hi - x_lo);
-    } while (status == GSL_CONTINUE && iter < max_iter);
-
-    gsl_root_fsolver_free(s);
-  return r;
+  return 0.0;
 
 
 }

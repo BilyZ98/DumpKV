@@ -8,12 +8,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
-#include <Eigen/Dense>
+//#include <Eigen/Dense>
 // #include "util/Eigen/src/Core//DenseCoeffsBase.h"
-#include <gsl/gsl_multifit.h>
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_roots.h>
+//#include <gsl/gsl_multifit.h>
+//#include <gsl/gsl_errno.h>
+//#include <gsl/gsl_math.h>
+//#include <gsl/gsl_roots.h>
 
 
 
@@ -1337,49 +1337,6 @@ class DBImpl : public DB {
  protected:
   double GetSlope1Point(std::vector<double>& x, std::vector<double>& y);
   template<typename T>
-  std::vector<T> polyfit_Eigen(const std::vector<T> &xValues, const std::vector<T> &yValues, const int degree, const std::vector<T>& weights = std::vector<T>(), bool useJacobi = true)
-  {
-      using namespace Eigen;
-      
-      bool useWeights = weights.size() > 0 && weights.size() == xValues.size();
-      
-      int numCoefficients = degree + 1;
-      size_t nCount = xValues.size();
-      
-      MatrixXf X(nCount, numCoefficients);
-      MatrixXf Y(nCount, 1);
-      
-      // fill Y matrix
-      for (size_t i = 0; i < nCount; i++)
-      {
-          if (useWeights)
-              Y(i, 0) = yValues[i] * weights[i];
-          else
-              Y(i, 0) = yValues[i];
-      }
-      
-      // fill X matrix (Vandermonde matrix)
-      for (size_t nRow = 0; nRow < nCount; nRow++)
-      {
-          T nVal = 1.0f;
-          for (int nCol = 0; nCol < numCoefficients; nCol++)
-          {
-              if (useWeights)
-                  X(nRow, nCol) = nVal * weights[nRow];
-              else
-                  X(nRow, nCol) = nVal;
-              nVal *= xValues[nRow];
-          }
-      }
-      
-      VectorXf coefficients;
-      if (useJacobi)
-          coefficients = X.jacobiSvd(ComputeThinU | ComputeThinV).solve(Y);
-      else
-          coefficients = X.colPivHouseholderQr().solve(Y);
-      
-      return std::vector<T>(coefficients.data(), coefficients.data() + numCoefficients);
-  }
   std::vector<double> polyder(const std::vector<double>& coeffs) {
       std::vector<double> result;
       int n = coeffs.size();
