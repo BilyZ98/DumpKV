@@ -195,6 +195,15 @@ protected:
 
   std::unique_ptr<WritableFile> infer_data_file_ = nullptr;;
   double sample_add_prob_ = 0.0;
+
+  std::chrono::nanoseconds model_prediction_time_ns_ = std::chrono::nanoseconds(0);
+
+  std::chrono::nanoseconds iter_seek_time_ns_ = std::chrono::nanoseconds(0);
+
+  std::chrono::nanoseconds data_extraction_time_ns_ = std::chrono::nanoseconds(0);
+  std::chrono::nanoseconds data_write_time_ns_ = std::chrono::nanoseconds(0);
+
+
 };
 
 }

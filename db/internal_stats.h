@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <map>
 #include <memory>
 #include <string>
@@ -210,6 +211,14 @@ class InternalStats {
 
     uint64_t gc_dropped_blobs = 0;
 
+    std::chrono::nanoseconds model_prediction_time_ns = std::chrono::nanoseconds(0);
+
+    std::chrono::nanoseconds iter_seek_time_ns = std::chrono::nanoseconds(0);
+
+    std::chrono::nanoseconds data_extraction_time_ns = std::chrono::nanoseconds(0);
+    std::chrono::nanoseconds data_write_time_ns = std::chrono::nanoseconds(0);
+
+
     std::vector<uint64_t> gc_input_class_blobs = std::vector<uint64_t>(3, 0);
     std::vector<uint64_t> gc_dropped_class_blobs = std::vector<uint64_t>(3, 0);
 
@@ -368,6 +377,10 @@ class InternalStats {
         this->gc_input_class_blobs[i] += c.gc_input_class_blobs[i];
         this->gc_dropped_class_blobs[i] += c.gc_dropped_class_blobs[i];
       }
+      this->model_prediction_time_ns += c.model_prediction_time_ns;
+      this->iter_seek_time_ns += c.iter_seek_time_ns;
+      this->data_extraction_time_ns += c.data_extraction_time_ns;
+      this->data_write_time_ns += c.data_write_time_ns;
       int num_of_reasons = static_cast<int>(CompactionReason::kNumOfReasons);
       for (int i = 0; i < num_of_reasons; i++) {
         counts[i] += c.counts[i];

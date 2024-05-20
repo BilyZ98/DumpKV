@@ -57,13 +57,13 @@ ycsb_a_run_files=(
 # workloada_200GB_0.99_4096_zipfian.log_run.formated
 # workloada_200GB_0.99_16384_zipfian.log_run.formated
 # workloada_200GB_0.99_65536_zipfian.log_run.formated
-# workloadanew_50M_0.2_zipfian.log_run.formated
-# workloadanew_50M_0.5_zipfian.log_run.formated
-# workloadanew_50M_0.9_zipfian.log_run.formated
+workloadanew_50M_0.2_zipfian.log_run.formated
+workloadanew_50M_0.5_zipfian.log_run.formated
+workloadanew_50M_0.9_zipfian.log_run.formated
 #
-workloada_50M_0.2_zipfian.log_run.formated
-workloada_50M_0.5_zipfian.log_run.formated
-workloada_50M_0.9_zipfian.log_run.formated
+# workloada_50M_0.2_zipfian.log_run.formated
+# workloada_50M_0.5_zipfian.log_run.formated
+# workloada_50M_0.9_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
 # ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
@@ -87,7 +87,7 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=(0 )
+  lifetime_idx_range=(1 )
   # value_sizes=(1024 4096 16384 65536)
   value_sizes=( 4096  )
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do
@@ -100,7 +100,8 @@ function run_with_gc_dbbench {
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
     zipfian_value=`echo $ycbs_a_run_file | awk -F"_" '{print $3}'`
     write_count=`echo $ycbs_a_run_file | awk -F"_" '{print $2}'`
-    value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+    # value_size=`echo $ycbs_a_run_file | awk -F"_" '{print $4}'`
+    value_size=4096
 
     default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')
     echo "default_lifetime: $default_lifetime"
