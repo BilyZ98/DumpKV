@@ -80,6 +80,16 @@ public:
     return compaction_sample_count_;
   }
 
+  uint64_t GetTrainingDataSize() const {
+    uint64_t label_size = labels_.size() * sizeof(float);
+    // uint64_t numeric_label_size = numeric_labels_.size() * sizeof(uint64_t);
+    uint64_t indptr_size = indptr_.size() * sizeof(int32_t);
+    uint64_t indices_size = indices_.size() * sizeof(int32_t);
+    uint64_t data_size = data_.size() * sizeof(double);
+    // uint64_t result_size = result_.size() * sizeof(double);
+    uint64_t res = label_size  + indptr_size + indices_size + data_size;
+    return res;
+  }
   Status ConvertLabels(uint64_t threshold);
   Status AddTrainingSample(const std::vector<double>& data, const double& label,
                            const uint64_t& short_lifetime_threshold ) ;

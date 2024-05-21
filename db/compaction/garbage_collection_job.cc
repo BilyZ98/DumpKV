@@ -465,7 +465,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     
     auto end = std::chrono::high_resolution_clock::now();
     data_extraction_time_ns_ += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    if(booster_handle_ ) {
+    bool use_booster = true;
+    if(booster_handle_ && use_booster) {
     start = std::chrono::high_resolution_clock::now();
     assert(indices.size() == data.size());
 

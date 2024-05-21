@@ -65,20 +65,20 @@ workloada_200GB_0.99_65536_zipfian.log_run.formated
 # workloada_50M_0.9_zipfian.log_run.formated
 )
 ycsb_a_load_files=(
-# workloada_100M_0.99_zipfian.log_load.formated
-# workloadb_100M_0.99_zipfian.log_load.formated
+workloada_100M_0.99_zipfian.log_load.formated
+workloadb_100M_0.99_zipfian.log_load.formated
 # workloadc_100M_0.99_zipfian.log_load.formated
 # workloadd_100M_0.99_zipfian.log_load.formated
-workloade_100M_0.99_zipfian.log_load.formated
-# workloadf_100M_0.99_zipfian.log_load.formated
+# workloade_100M_0.99_zipfian.log_load.formated
+workloadf_100M_0.99_zipfian.log_load.formated
 )
 ycsb_a_run_files=(
-# workloada_100M_0.99_zipfian.log_run.formated
-# workloadb_100M_0.99_zipfian.log_run.formated
+workloada_100M_0.99_zipfian.log_run.formated
+workloadb_100M_0.99_zipfian.log_run.formated
 # workloadc_100M_0.99_zipfian.log_run.formated
 # workloadd_100M_0.99_zipfian.log_run.formated
-workloade_100M_0.99_zipfian.log_run.formated
-# workloadf_100M_0.99_zipfian.log_run.formated
+# workloade_100M_0.99_zipfian.log_run.formated
+workloadf_100M_0.99_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
 # ycsb_a_run_path=/mnt/nvme/YCSB-C-0.2/data/workloaduniform-load-0.2-10000000-100000000.log_run.formated 
@@ -102,7 +102,7 @@ gc_threshold_gap='0.2'
 function run_with_gc_dbbench {
 
 
-  lifetime_idx_range=(0 )
+  lifetime_idx_range=(1 )
   # value_sizes=(1024 4096 16384 65536)
   value_sizes=( 4096  )
   for lifetime_idx in "${lifetime_idx_range[@]}" ; do

@@ -6790,7 +6790,7 @@ class Benchmark {
       if (query_type == "READ") {
         // the Get query
         gets++;
-        continue;
+        // continue;
 
         if (FLAGS_num_column_families > 1) {
           s = db_with_cfh->db->Get(read_options_,

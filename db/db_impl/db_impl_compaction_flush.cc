@@ -3100,6 +3100,15 @@ void DBImpl::BackgroundCallDataCollection() {
       uint64_t label_threshold = 0;
       Status s = training_data_->ConvertLabels(label_threshold); 
       training_data_->TrainModel(new_model, training_params_);
+      uint64_t model_len = 5 * 1024 * 1024;
+      std::string model_str(model_len, '\0'); 
+      int64_t out_len = 0;
+      int res = LGBM_BoosterSaveModelToString(*new_model, 0, 0,C_API_FEATURE_IMPORTANCE_SPLIT, model_len, &out_len, model_str.data());
+      if(res != 0) {
+        assert(false);
+      }
+      uint64_t training_data_size = training_data_->GetTrainingDataSize();
+      ROCKS_LOG_INFO(immutable_db_options_.info_log, "model len: %lu, out len: %lu, training data size: %lu", model_len, out_len, training_data_size);
       uint64_t end_time = env_->NowMicros();
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
@@ -3115,7 +3124,7 @@ void DBImpl::BackgroundCallDataCollection() {
       FastConfigHandle *new_config = new FastConfigHandle();
 
       std::string params = "num_threads=1";
-      int res = LGBM_BoosterPredictForCSRSingleRowFastInit(
+      res = LGBM_BoosterPredictForCSRSingleRowFastInit(
         *new_model, C_API_PREDICT_NORMAL,0, 0,
         C_API_DTYPE_FLOAT64, immutable_db_options_.num_features, 
           params.c_str(), new_config);
