@@ -6760,12 +6760,14 @@ class Benchmark {
       std::cout << "FLAGS_ycsb_a_run_path is empty" << std::endl;
       return;
     }
-    std::vector<std::string> files = {
-      FLAGS_ycsb_a_run_path
-    };
+    std::vector<std::string> files; 
+    // = {
+    //   FLAGS_ycsb_a_run_path
+    // };
     if(!FLAGS_ycsb_a_load_path.empty()){
       files.push_back(FLAGS_ycsb_a_load_path);
     }
+    files.push_back(FLAGS_ycsb_a_run_path);
     std::vector<std::vector<std::string>> datas;
     read_ycsb_a(files, &datas);
     int64_t val_size = FLAGS_value_size; //1000;
@@ -6811,6 +6813,7 @@ class Benchmark {
           fprintf(stderr, "Get returned an error: %s\n", s.ToString().c_str());
           abort();
         }
+        assert(s.ok());
 
         if (thread->shared->read_rate_limiter && (gets + seek) % 100 == 0) {
           thread->shared->read_rate_limiter->Request(100, Env::IO_HIGH,

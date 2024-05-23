@@ -207,7 +207,7 @@ Status BuildTable(
         uint64_t now_seq = versions->LastSequence();
         uint64_t end_seq;
         // if(now_seq < 25000000) {
-        //   end_seq = now_seq + 25000000;
+        //   end_seq = now_seq + 50000000;
         // } else {
         //   end_seq = now_seq + tboptions.db_impl->GetDefaultLifetimeThreshold();
         // }

@@ -1,6 +1,8 @@
 make_config.mk
 rocksdb.pc
 
+tools/zipfian_ycsb_abf*
+
 LOG
 0.8
 *.a

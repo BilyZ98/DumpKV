@@ -3110,6 +3110,21 @@ void DBImpl::BackgroundCallDataCollection() {
       uint64_t training_data_size = training_data_->GetTrainingDataSize();
       ROCKS_LOG_INFO(immutable_db_options_.info_log, "model len: %lu, out len: %lu, training data size: %lu", model_len, out_len, training_data_size);
       uint64_t end_time = env_->NowMicros();
+
+      double feature_importance_split[50];
+      res = LGBM_BoosterFeatureImportance(*new_model, 0, C_API_FEATURE_IMPORTANCE_SPLIT, &feature_importance_split[0]);  
+      if(res != 0) {
+        assert(false);
+      }
+      double feauture_importance_gain[50];
+      res = LGBM_BoosterFeatureImportance(*new_model, 0, C_API_FEATURE_IMPORTANCE_GAIN, &feauture_importance_gain[0]);
+      if(res != 0) {
+        assert(false);
+      }
+      for(int i=0; i < 50; i++) {
+        ROCKS_LOG_INFO(immutable_db_options_.info_log, "feature %d, split: %lf, gain: %lf", i, feature_importance_split[i], feauture_importance_gain[i]);
+      }
+
       uint64_t duration_sec = (end_time - start_time) / 1000000;
       assert(s.ok());
       // uint64_t num_class = std::stoi(training_params_["num_class"]);
