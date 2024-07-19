@@ -156,6 +156,8 @@ fi
 # target_file_size_base=${TARGET_FILE_SIZE_BASE:-$write_buffer_size}
 max_bytes_for_level_base=${MAX_BYTES_FOR_LEVEL_BASE:-$((8 * target_file_size_base))}
 
+cache_size=${CACHE_SIZE:-$((16 * G))}
+
 echo "======================== Benchmark setup ========================"
 echo -e "Job ID:\t\t\t\t\t$job_id"
 echo -e "Data directory:\t\t\t\t$db_dir"
@@ -205,7 +207,9 @@ ENV_VARS="\
   IS_REPLAY=$is_replay \
   MODEL_PATH=$model_path \
   FEATURES_FILE_PATH=$features_file_path \
-  PARANOID_FILE_CHECKS=$paranoid_file_checks "
+  PARANOID_FILE_CHECKS=$paranoid_file_checks \
+  CACHE_SIZE=$cache_size "
+
 # model_path=${MODEL_PATH:-""} 
 # features_file_path=${FEATURES_FILE_PATH:-""}
 

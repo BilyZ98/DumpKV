@@ -2369,6 +2369,9 @@ void DBImpl::RefreshShortLifetimeThreshold() {
   uint64_t p95 =static_cast<uint64_t>(histogram_.Percentile(95));
   uint64_t p99 =static_cast<uint64_t>(histogram_.Percentile(99));
   
+  // This can be updated? 
+  // Maybe periodically updated so that the db is more dependent on 
+  // recent gc invalid ratio
   double gc_invalid_rate = GetGCInvalidRatio();
 
 // void DBImpl::GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const {
@@ -2384,16 +2387,18 @@ void DBImpl::RefreshShortLifetimeThreshold() {
   uint64_t new_low_p_value = static_cast<uint64_t>(histogram_.Percentile(new_low_p));
 
   uint64_t histogram_mode_point = static_cast<uint64_t>(histogram_.GetModePoint());
-  uint64_t short_lifetime_threshold = new_low_p_value;
-  short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
+  uint64_t short_lifetime_threshold = std::min(new_low_p_value, GetLongLifetimeThreshold());
+  if(invalid_ratio[0] > 0.01) {
+    short_lifetime_threshold_.store(short_lifetime_threshold, std::memory_order_relaxed);
+  }
 
   RefreshDefaultLifetimeThreshold();
-  (*lifetime_sequence_)[0] = short_lifetime_threshold;
+  (*lifetime_sequence_)[0] = GetShortLifetimeThreshold();
   size_t left = 0;
   size_t right = n_edc_feature;
   while (left < right) {
     size_t mid = left + (right - left) / 2;
-    if (edc_windows[mid] < short_lifetime_threshold_.load(std::memory_order_relaxed)) {
+    if (edc_windows[mid] < GetShortLifetimeThreshold()) {
       left = mid + 1;
     } else {
       right = mid;
@@ -2444,7 +2449,7 @@ void DBImpl::RefreshLongLifetimeThreshold() {
   RefreshDefaultLifetimeThreshold();
 
   
-  (*lifetime_sequence_)[1] = long_lifetime_threshold;
+  (*lifetime_sequence_)[1] = GetLongLifetimeThreshold();
   size_t left = 0;
   size_t right = n_edc_feature;
   left = 0;

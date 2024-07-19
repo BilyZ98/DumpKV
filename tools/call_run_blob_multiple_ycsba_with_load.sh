@@ -1,4 +1,10 @@
 #!/bin/bash
+K=1024
+M=$((1024 * K))
+G=$((1024 * M))
+T=$((1024 * G))
+
+
 function call_run_blob() {
   local wal_dir num_keys db_dir output_dir enable_blob_file enable_blob_gc
   wal_dir=$1
@@ -28,10 +34,14 @@ function call_run_blob() {
    YCSB_A_RUN_PATH=${ycsb_a_run_path} \
    YCSB_A_LOAD_PATH=${ycsb_a_load_path} \
    VALUE_SIZE=$cur_value_size \
-   USE_BLOB_CACHE=0 \
+   USE_BLOB_CACHE=1 \
+   USE_SHARED_BLOCK_AND_BLOB_CACHE=1 \
    BLOB_FILE_STARTING_LEVEL=0 \
    PARANOID_FILE_CHECKS=0 \
    BLOB_FILE_SIZE=$blob_file_size \
+   DEFAULT_LIFETIME=$default_lifetime \
+   BLOB_CACHE_SIZE=$((32 * G)) \
+   CACHE_SIZE=$((32 * G)) \
    ./run_blob_bench_large_target_sst.sh
 
  # COMPRESSION_TYPE=none BLOB_COMPRESSION_TYPE=none WAL_DIR=/tmp/test_blob \
@@ -115,6 +125,8 @@ function run_with_gc_dbbench {
     ycsb_a_run_path=${ycsb_a_folder}/${ycsb_a_run_file}
     ycsb_a_load_path=${ycsb_a_folder}/${ycsb_a_load_file}
 
+    default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')
+    echo "default_lifetime: $default_lifetime"
     # extract 0.2 from workloada_100M_0.2_zipfian.log_run.formated
     zipfian_value=`echo $ycsb_a_run_file | awk -F"_" '{print $3}'`
     write_count=`echo $ycsb_a_run_file | awk -F"_" '{print $2}'`
