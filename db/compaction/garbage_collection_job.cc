@@ -446,6 +446,8 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
     double prob = dis(gen);
     if(prob < sample_add_prob_) {
 
+      bool add_sample = (past_distances_count == 0 );
+      // bool add_sample = true;
       uint64_t lifetime_idx = 0;
       if(past_distances_count == 0) {
         data_to_train.emplace_back(1.0);
@@ -456,8 +458,9 @@ uint64_t GarbageCollectionJob::GetNewLifetimeIndex(InternalIterator* iter) {
         data_to_train.emplace_back(static_cast<double>(new_label ));
         data_to_train.emplace_back(static_cast<double>(lifetime_idx));
       }
-      s = db_->AddGCTrainingSample(data_to_train);
-
+      if(add_sample) {
+        s = db_->AddGCTrainingSample(data_to_train);
+      }
       assert(s.ok());
     }
 

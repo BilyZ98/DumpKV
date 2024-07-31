@@ -48,8 +48,8 @@ if [ "$run_name" == "" ]; then
 fi
 
 # with_gc and without_gc
-db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
-# db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
+# db_dir=/mnt/nvme0n1/mlsm/test_blob_with_model_with_dedicated_gc
+db_dir=/mnt/nvme/mlsm/test_blob_with_model_with_dedicated_gc
 ycsb_a_run_path=/mnt/nvme/YCSB-C/data/workloada-load-10000000-100000000.log_run.formated
 ycsb_a_load_path=""
 ycsb_a_run_files=(
@@ -57,8 +57,9 @@ ycsb_a_run_files=(
 #workloada_200GB_0.99_4096_zipfian.log_run.formated
 # workloada_200GB_0.99_16384_zipfian.log_run.formated
 # workloada_200GB_0.99_65536_zipfian.log_run.formated
-workloadanew_50M_0.2_zipfian.log_run.formated
-workloadanew_50M_0.5_zipfian.log_run.formated
+#
+# workloadanew_50M_0.2_zipfian.log_run.formated
+# workloadanew_50M_0.5_zipfian.log_run.formated
 workloadanew_50M_0.9_zipfian.log_run.formated
 #
 # workloada_50M_0.2_zipfian.log_run.formated
@@ -66,7 +67,7 @@ workloadanew_50M_0.9_zipfian.log_run.formated
 # workloada_50M_0.9_zipfian.log_run.formated
 )
 ycsb_a_folder="/mnt/nvme/YCSB-C/data/"
-ycsb_a_folder="/mnt/nvme0n1/YCSB-C/data/"
+# ycsb_a_folder="/mnt/nvme0n1/YCSB-C/data/"
 if [ ! -d $db_dir ]; then
   mkdir -p $db_dir
 fi
@@ -102,7 +103,7 @@ function run_with_gc_dbbench {
 
     value_size=4096
 
-    default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.1}')
+    default_lifetime=$(wc -l $ycsb_a_run_path | awk '{print $1*0.05}')
     echo "default_lifetime: $default_lifetime"
     # exit 0
 

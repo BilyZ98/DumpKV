@@ -1,0 +1,10 @@
+total_size: 36K
+total_size_with_trace: 36K
+total_size: 36K
+total_size_with_trace: 36K
+total_size: 200K
+total_size_with_trace: 200K
+total_size: 4.2M
+total_size_with_trace: 4.2M
+total_size: 115M
+total_size_with_trace: 115M

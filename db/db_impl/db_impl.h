@@ -678,6 +678,9 @@ class DBImpl : public DB {
   void GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const;
   void HistogramAddLifetime(uint64_t lifetime);
   void GCHistogramAddLifetime(uint64_t lifetime);
+  
+  void InitLifetime(const DBOptions& options);
+  uint64_t GetLifetimeIdx(uint64_t lifetime) const; 
   void RefreshShortLifetimeThreshold();
   void RefreshLongLifetimeThreshold();
   void RefreshDefaultLifetimeThreshold();

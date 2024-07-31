@@ -302,15 +302,6 @@ DBImpl::DBImpl(const DBOptions& options, const std::string& dbname,
   if (write_buffer_manager_) {
     wbm_stall_.reset(new WBMStallInterface());
   }
-  uint64_t default_lifetime = options.default_lifetime;
-  std::vector<SequenceNumber> ini_lifetime_sequence = {default_lifetime, default_lifetime}  ;
-  lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
-  short_lifetime_threshold_ = ini_lifetime_sequence[0];
-  long_lifetime_threshold_ = ini_lifetime_sequence[1];
-  default_lifetime_threshold_ = default_lifetime;
-  ROCKS_LOG_INFO(immutable_db_options_.info_log,
-                 "DBImpl::DBImpl: default_lifetime_threshold_ %lu",
-                 default_lifetime);
   new_lifetimes_ = std::make_shared<std::vector<uint64_t>>();
   new_lifetimes_->reserve(lifetime_cdf_threshold_);
   versions_->SetDBImpl(this);
@@ -2358,7 +2349,46 @@ void DBImpl::GCHistogramAddLifetime(uint64_t lifetime) {
 
 }
 
+// This has to be run after init_hash_edc()
+void DBImpl::InitLifetime(const DBOptions& options) {
+  uint64_t default_lifetime = options.default_lifetime;
+  uint64_t manual_default_lifetime = 2000000;
+  uint64_t manual_short_lifetime = 2000000; 
+  uint64_t manual_long_lifetime = 10000000;
+  std::vector<SequenceNumber> ini_lifetime_sequence = {manual_short_lifetime   , manual_long_lifetime}  ;
+  lifetime_sequence_ = std::make_shared<std::vector<SequenceNumber>>(ini_lifetime_sequence);
+  short_lifetime_threshold_ = ini_lifetime_sequence[0];
+  long_lifetime_threshold_ = ini_lifetime_sequence[1];
+  default_lifetime_threshold_ = manual_default_lifetime;
+  short_lifetime_idx_.store(GetLifetimeIdx(short_lifetime_threshold_), std::memory_order_relaxed);  
+  long_lifetime_idx_.store(GetLifetimeIdx(long_lifetime_threshold_), std::memory_order_relaxed);
+  ROCKS_LOG_INFO(immutable_db_options_.info_log,
+                 "DBImpl::DBImpl: default_lifetime_threshold_ %lu\n"
+                 "short_lifetime_threshold_ %lu\n"
+                 "long_lifetime_threshold_ %lu\n"
+                 "short_lifetime_idx_ %lu\n"
+                 "long_lifetime_idx_ %lu\n",
+                 default_lifetime_threshold_.load(), 
+                 short_lifetime_threshold_.load(), 
+                 long_lifetime_threshold_.load(), 
+                 short_lifetime_idx_.load(), 
+                 long_lifetime_idx_.load());
+}
+uint64_t DBImpl::GetLifetimeIdx(uint64_t lifetime) const {
+  size_t left = 0;
+  size_t right = n_edc_feature;
+  while (left < right) {
+    size_t mid = left + (right - left) / 2;
+    if (edc_windows[mid] < lifetime) {
+      left = mid + 1;
+    } else {
+      right = mid;
+    }
+  }
+  return left;
+}
 void DBImpl::RefreshShortLifetimeThreshold() {
+  return;
   std::unique_lock<std::shared_mutex> lock(lifetime_sequence_mutex_);
   uint64_t p50 =static_cast<uint64_t>(histogram_.Percentile(50)); 
   uint64_t p60 =static_cast<uint64_t>(histogram_.Percentile(60));
@@ -2374,7 +2404,6 @@ void DBImpl::RefreshShortLifetimeThreshold() {
   // recent gc invalid ratio
   double gc_invalid_rate = GetGCInvalidRatio();
 
-// void DBImpl::GetGCSubClassInvalidRatio(std::vector<double>& invalid_ratio, std::vector<uint64_t>& gc_input_subclass_blob, std::vector<uint64_t>& gc_dropped_subclass_blobs) const {
   std::vector<double> invalid_ratio;
   std::vector<uint64_t> gc_input_subclass_blob;
   std::vector<uint64_t> gc_dropped_subclass_blobs;
@@ -2394,18 +2423,8 @@ void DBImpl::RefreshShortLifetimeThreshold() {
 
   RefreshDefaultLifetimeThreshold();
   (*lifetime_sequence_)[0] = GetShortLifetimeThreshold();
-  size_t left = 0;
-  size_t right = n_edc_feature;
-  while (left < right) {
-    size_t mid = left + (right - left) / 2;
-    if (edc_windows[mid] < GetShortLifetimeThreshold()) {
-      left = mid + 1;
-    } else {
-      right = mid;
-    }
-  }
-  short_lifetime_idx_.store(left, std::memory_order_relaxed);
-
+  uint64_t slt_idx = GetLifetimeIdx(GetShortLifetimeThreshold());
+  short_lifetime_idx_.store(slt_idx, std::memory_order_relaxed);
 
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, short mode point: %lu",
                  p50, p60, p70, p75, p80, p90, p95, p99, new_low_p_value, new_low_p, histogram_mode_point);
@@ -2417,6 +2436,7 @@ void DBImpl::RefreshShortLifetimeThreshold() {
                  default_lifetime_threshold_.load(std::memory_order_relaxed));
 }
 void DBImpl::RefreshLongLifetimeThreshold() {
+  return;
   std::unique_lock<std::shared_mutex> lock(gc_lifetime_sequence_mutex_);
   uint64_t p50 =static_cast<uint64_t>(gc_histogram_.Percentile(50)); 
   uint64_t p60 =static_cast<uint64_t>(gc_histogram_.Percentile(60));
@@ -2450,20 +2470,8 @@ void DBImpl::RefreshLongLifetimeThreshold() {
 
   
   (*lifetime_sequence_)[1] = GetLongLifetimeThreshold();
-  size_t left = 0;
-  size_t right = n_edc_feature;
-  left = 0;
-  right = n_edc_feature;
-  while (left < right) {
-    size_t mid = left + (right - left) / 2;
-    if (edc_windows[mid] < long_lifetime_threshold_.load(std::memory_order_relaxed)) {
-      left = mid + 1;
-    } else {
-      right = mid;
-    }
-  }
-  long_lifetime_idx_.store(left, std::memory_order_relaxed);
-
+  uint64_t long_lifetime_idx = GetLifetimeIdx(GetLongLifetimeThreshold());
+  long_lifetime_idx_.store(long_lifetime_idx, std::memory_order_relaxed);
 
 
   ROCKS_LOG_INFO(immutable_db_options_.info_log, "GC Lifetime sequence updated to p50: %lu, p60: %lu, p70: %lu, p75: %lu, p80: %lu, p90: %lu, p95: %lu, p99: %lu, newp value: %lu, newp: %lu, long lifetime threshold: %lu, long mode point: %lu",

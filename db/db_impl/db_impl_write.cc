@@ -775,7 +775,7 @@ uint64_t DBImpl::GetNewLabel(const std::vector<float>& edc,uint64_t *lifetime_id
   // } else {
   //   return 0;
   // }
-  *lifetime_idx = short_lifetime_idx_.load(std::memory_order_relaxed);
+  *lifetime_idx = long_lifetime_idx_.load(std::memory_order_relaxed);
   if(edc[*lifetime_idx] > 1.0) {
     return 0;
   } else {

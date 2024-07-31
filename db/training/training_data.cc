@@ -90,15 +90,17 @@ Status TrainingData::AddGCTrainingSample(const std::vector<double>& data, const 
 
   // uint64_t new_label = double_label - random_access_time;
   if(label_uint64_t > 0) {
-    if(GetLongLabelGCCount() < GetGCLongLabelLimit()) {
-      gc_long_label_count_++;
+    if(GetLongLabelGCCount() < GetGCLongLabelLimit() && GetLongLabelCount() < GetLongLabelLimit() ){
+      IncreaseGCLongLabelCount();
+      IncreaseLongLabelCount();
       numeric_labels_.emplace_back(1);
     } else{
       return Status::OK();
     }
   } else {
-    if(GetShortLabelGCCount() < GetGCShortLabelLimit()) {
-      gc_short_label_count_++;
+    if(GetShortLabelGCCount() < GetGCShortLabelLimit() && GetShortLabelCount() < GetShortLabelLimit()){
+      IncreaseGCShortLabelCount();
+      IncreaseShortLabelCount();
       numeric_labels_.emplace_back(0);
     } else {
       return Status::OK();
@@ -154,15 +156,17 @@ Status TrainingData::AddTrainingSample(const std::vector<double>& data, const do
 
   uint64_t new_label = label_uint64_t - random_access_time;
   if(new_label > short_lifetime_threshold) {
-    if(GetLongLabelCount() < GetLongLabelLimit()) {
-      long_label_count_++;
+    if(GetLongLabelCount() < GetLongLabelLimit() && GetCompactionLongLabelCount() < GetCompactionLongLabelLimit()) {
+      IncreaseLongLabelCount();
+      IncreaseCompactionLongLabelCount();
       numeric_labels_.emplace_back(1);
     } else{
       return Status::OK();
     }
   } else {
-    if(GetShortLabelCount() < GetShortLabelLimit()) {
-      short_label_count_++;
+    if(GetShortLabelCount() < GetShortLabelLimit() && GetCompactionShortLabelCount() < GetCompactionShortLabelLimit()) {
+      IncreaseShortLabelCount();
+      IncreaseCompactionShortLabelCount();
       numeric_labels_.emplace_back(0);
     } else {
       return Status::OK();

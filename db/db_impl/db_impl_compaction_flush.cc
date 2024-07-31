@@ -3061,6 +3061,8 @@ void DBImpl::BackgroundCallDataCollection() {
   // training_data_->SetGCShortLabelLimit(0);
   training_data_->SetLongLabelLimit(threshold/2 + 1);
   training_data_->SetShortLabelLimit(threshold/2 + 1);
+  training_data_->SetCompactionShortLabelLimit(threshold/2 + 1);
+  training_data_->SetCompactionLongLabelLimit(threshold/2 + 1);
   training_data_->SetGCLongLabelLimit(threshold/4 + 1);
   training_data_->SetGCShortLabelLimit(threshold/4 + 1);
 

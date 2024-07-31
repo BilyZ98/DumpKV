@@ -34,6 +34,14 @@ public:
   Status TrainModel(BoosterHandle* new_model,  const std::unordered_map<std::string, std::string>& training_params ); 
   // Status AddTrainingSample()
 
+  void SetCompactionShortLabelLimit(uint64_t short_lifetime_threshold) {
+    compaction_short_label_count_limit_ = short_lifetime_threshold;
+  }
+
+  void SetCompactionLongLabelLimit(uint64_t long_lifetime_threshold) {
+    compaction_long_label_count_limit_ = long_lifetime_threshold;
+  }
+
   void SetShortLabelLimit(uint64_t short_lifetime_threshold) {
     short_label_count_limit_ = short_lifetime_threshold;
   }
@@ -53,6 +61,21 @@ public:
   uint64_t GetLongLabelLimit() const {
     return long_label_count_limit_;
   }
+  uint64_t GetShortLabelCount() const {
+    return short_label_count_;
+  }
+  uint64_t GetLongLabelCount() const {
+    return long_label_count_;
+  }
+
+  void IncreaseShortLabelCount() {
+    short_label_count_++;
+  }
+  void IncreaseLongLabelCount() {
+    long_label_count_++;
+  }
+
+
   uint64_t GetGCShortLabelLimit() const {
     return gc_short_label_limit_;
   }
@@ -66,12 +89,35 @@ public:
     return gc_long_label_count_;
   }
 
-  uint64_t GetShortLabelCount() const {
-    return short_label_count_;
+  void IncreaseGCShortLabelCount() {
+    gc_short_label_count_++;
   }
-  uint64_t GetLongLabelCount() const {
-    return long_label_count_;
+  void IncreaseGCLongLabelCount() {
+    gc_long_label_count_++;
   }
+
+
+  uint64_t GetCompactionShortLabelLimit() const {
+    return compaction_short_label_count_limit_;
+  }
+  uint64_t GetCompactionLongLabelLimit() const {
+    return compaction_long_label_count_limit_;
+  }
+  uint64_t GetCompactionShortLabelCount() const {
+    return compaction_short_label_count_;
+  }
+
+  uint64_t GetCompactionLongLabelCount() const {
+    return compaction_long_label_count_;
+  }
+
+  void IncreaseCompactionLongLabelCount() {
+    compaction_long_label_count_++;
+  }
+  void IncreaseCompactionShortLabelCount() {
+    compaction_short_label_count_++;
+  }
+
 
   uint64_t GetGCCount() const {
     return gc_sample_count_;
@@ -149,10 +195,16 @@ private:
   std::vector<float> weights_;
   std::vector<int32_t> label_count_;
 
+
   uint64_t short_label_count_limit_ = 0;
   uint64_t long_label_count_limit_ = 0;
   uint64_t short_label_count_ = 0;
   uint64_t long_label_count_ = 0;
+
+  uint64_t compaction_short_label_count_limit_ = 0;
+  uint64_t compaction_long_label_count_limit_ = 0;
+  uint64_t compaction_short_label_count_ = 0;
+  uint64_t compaction_long_label_count_ = 0;
 
   uint64_t gc_short_label_limit_ = 0;
   uint64_t gc_long_label_limit_ = 0;

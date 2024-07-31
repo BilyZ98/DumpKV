@@ -1760,9 +1760,9 @@ IOStatus DBImpl::CreateWAL(uint64_t log_file_num, uint64_t recycle_log_number,
 }
 
 
- uint8_t max_n_past_timestamps = 2;
- uint8_t max_n_past_distances = 1;
- uint8_t n_edc_feature = 1;
+ uint8_t max_n_past_timestamps = 32;
+ uint8_t max_n_past_distances = 31;
+ uint8_t n_edc_feature = 10;
  std::vector<double> hash_edc;
  uint32_t max_hash_edc_idx;
 // set memory window to cur_max_sequence * 2?
@@ -2137,6 +2137,8 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
                  max_n_past_timestamps, max_n_past_distances, n_edc_feature);
   init_hash_edc();
   init_edc_windows();
+  impl->InitLifetime(db_options);
+
   // std::once_flag once_hash_edc;
   // std::once_flag once_edc_windows;
   // std::call_once(once_hash_edc,init_hash_edc);
